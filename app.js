@@ -179,16 +179,16 @@ window.toast = (msg, err=false) => {
   t.classList.add('on');
   setTimeout(() => t.classList.remove('on'), 2800);
 }
-window.togSB(){ qs('#sb').classList.toggle('open'); }
-window.clSBmob(){ if(window.innerWidth<=768) qs('#sb')?.classList.remove('open'); }
-window.togTheme(){
+window.togSB = () => { qs('#sb').classList.toggle('open'); }
+window.clSBmob = () => { if(window.innerWidth<=768) qs('#sb')?.classList.remove('open'); }
+window.togTheme = () => {
   const d = document.documentElement;
   d.toggleAttribute('dark');
   localStorage.setItem('tt_theme', d.hasAttribute('dark') ? 'dark' : 'light');
 }
 
 // ─── FOTOĞRAF SIKIŞTURMA ──────────────────────────────────────────
-window.compressImg(file, maxKB=150, q=0.82){
+window.compressImg = (file, maxKB=150, q=0.82) => {
   return new Promise(resolve => {
     const r = new FileReader();
     r.onload = ev => {
@@ -209,9 +209,9 @@ window.compressImg(file, maxKB=150, q=0.82){
 }
 
 // ─── TOPRAK NEM MODELİ ───────────────────────────────────────────
-window.agrd(crop){ return CROP_AGR[crop] || CROP_AGR.default; }
+window.agrd = (crop) => { return CROP_AGR[crop] || CROP_AGR.default; }
 
-window.calcSoil(field){
+window.calcSoil = (field) => {
   const key = field.id + '_' + tstr();
   if(SC[key]) return SC[key];
   const a = agrd(field.crop);
@@ -240,10 +240,10 @@ window.calcSoil(field){
   SC[key] = result;
   return result;
 }
-window.invSoil(fid){ Object.keys(SC).filter(k=>k.startsWith(fid+'_')).forEach(k=>delete SC[k]); }
-window.invSoilAll(){ Object.keys(SC).forEach(k=>delete SC[k]); }
+window.invSoil = (fid) => { Object.keys(SC).filter(k=>k.startsWith(fid+'_')).forEach(k=>delete SC[k]); }
+window.invSoilAll = () => { Object.keys(SC).forEach(k=>delete SC[k]); }
 
-window.scl(pct){
+window.scl = (pct) => {
   if(pct>78) return {l:'Islak',  tag:'tb', color:'var(--blue)',   bg:'var(--bbg)'};
   if(pct>58) return {l:'Nemli',  tag:'tg', color:'var(--green2)', bg:'var(--glt)'};
   if(pct>38) return {l:'Yeterli',tag:'tgr',color:'var(--text2)',  bg:'var(--bg3)'};
@@ -252,7 +252,7 @@ window.scl(pct){
 }
 
 // ─── FENOLOJİ & HASAT TAHMİNİ ────────────────────────────────────
-window.calcGDD(field){
+window.calcGDD = (field) => {
   const a = agrd(field.crop);
   if(!field.plantDate) return null;
   const wx = WXC[field.id]?.days || simWX(field.lat, field.lon);
@@ -263,7 +263,7 @@ window.calcGDD(field){
   return Math.round(acc);
 }
 
-window.calcPheno(field){
+window.calcPheno = (field) => {
   const a = agrd(field.crop);
   const gdd = calcGDD(field);
   if(gdd===null) return null;
@@ -277,7 +277,7 @@ window.calcPheno(field){
   return {gdd, si, stage:a.st[si]||'Olgunluk', stagePct, totPct, days, a};
 }
 
-window.calcHarvest(field){
+window.calcHarvest = (field) => {
   const a = agrd(field.crop);
   const gdd = calcGDD(field);
   if(!field.plantDate){
@@ -303,7 +303,7 @@ window.calcHarvest(field){
   return {estDate:est.toISOString().slice(0,10), daysLeft:blend, conf, gddAcc:gdd||0, gddTarget, gddPct, manDate:field.harvestDate||null, dev, already:blend<=0};
 }
 
-window.calcSolar(field){
+window.calcSolar = (field) => {
   const wx = WXC[field.id]?.days || simWX(field.lat, field.lon);
   const td = wx.find(d=>d.date===tstr()); if(!td) return null;
   const doy = Math.floor((Date.now()-new Date(new Date().getFullYear(),0,0))/(864e5));
@@ -319,12 +319,12 @@ window.calcSolar(field){
 }
 
 // ─── HAVA DURUMU ─────────────────────────────────────────────────
-window.wicon(c){
+window.wicon = (c) => {
   if(c===undefined) return'🌤️';if(c<=1)return'☀️';if(c<=3)return'⛅';
   if(c<=49)return'🌫️';if(c<=67)return'🌧️';if(c<=77)return'❄️';if(c<=82)return'🌦️';return'⛈️';
 }
 
-window.simWX(lat, lon){
+window.simWX = (lat, lon) => {
   const days=[]; const now=new Date();
   for(let i=-7;i<=7;i++){
     const d=new Date(now); d.setDate(now.getDate()+i);
@@ -337,7 +337,7 @@ window.simWX(lat, lon){
   return days;
 }
 
-window.setBadge(barId, id, cls, lbl){
+window.setBadge = (barId, id, cls, lbl) => {
   const bar = qs('#'+barId); if(!bar) return;
   let el = qs('#wb-'+barId+'-'+id);
   if(!el){ el=document.createElement('span'); el.id='wb-'+barId+'-'+id; el.className='wxbadge'; bar.appendChild(el); }
@@ -345,7 +345,7 @@ window.setBadge(barId, id, cls, lbl){
   el.innerHTML = (cls==='load' ? '<span class="spin"></span>' : '') + lbl;
 }
 
-async window.fetchWX(field){
+async window.fetchWX = (field) => {
   field = field||CUR; if(!field) return;
   const id=field.id, lat=field.lat, lon=field.lon;
   setBadge('wxsrc','om','load','Open-Meteo…');
@@ -391,7 +391,7 @@ async window.fetchWX(field){
   }
 }
 
-window.renderWX(field){
+window.renderWX = (field) => {
   const data=WXC[field.id]; if(!data) return;
   const days=data.days, today=tstr();
   const past=days.filter(d=>d.date<today), futD=days.filter(d=>d.date>today), todayD=days.find(d=>d.date===today);
@@ -426,7 +426,7 @@ window.renderWX(field){
 }
 
 // ─── UYDU MOTORİ ─────────────────────────────────────────────────
-window.ndviCls(v){
+window.ndviCls = (v) => {
   const n=parseFloat(v);
   if(n>0.7) return {l:'Çok İyi',   tag:'tg', color:'var(--green2)', bar:'#2d6a4f'};
   if(n>0.5) return {l:'İyi',       tag:'tg', color:'var(--green2)', bar:'#40916c'};
@@ -435,7 +435,7 @@ window.ndviCls(v){
   return           {l:'Çok Zayıf', tag:'tr', color:'var(--red)',    bar:'#e74c3c'};
 }
 
-async window.fetchSat(field){
+async window.fetchSat = (field) => {
   field = field||CUR; if(!field) return;
   const id=field.id, lat=field.lat, lon=field.lon;
   const sb=(sid,cls,lbl)=>setBadge('sat-src',sid,cls,lbl);
@@ -513,7 +513,7 @@ async window.fetchSat(field){
   renderSat(field, R);
 }
 
-window.renderSat(field, R){
+window.renderSat = (field, R) => {
   if(!R) return;
   const nc=ndviCls(R.ndvi);
   const bar=(v,max,color)=>`<div style="height:7px;border-radius:4px;background:var(--bg3);overflow:hidden;margin-top:5px;"><div style="height:100%;width:${Math.min(100,Math.max(0,(parseFloat(v)+0.5)/(max+0.5)*100))}%;background:${color};border-radius:4px;"></div></div>`;
@@ -572,14 +572,14 @@ window.renderSat(field, R){
   }
 }
 
-window.satCtxStr(field){
+window.satCtxStr = (field) => {
   const R=SATC[field?.id]?.data;
   if(!R) return 'Uydu verisi henüz alınmadı (🛰️ Uydu sekmesinden güncelleyin).';
   return `NDVI:${R.ndvi}(${ndviCls(R.ndvi).l}) EVI:${R.evi} NDWI:${R.ndwi} LST/ToplakSıc:${R.lst}°C ET₀:${R.et0||'—'}mm Solar:${R.solar||'—'}MJ/m² SoilMoist3-9cm:${R.soilM3?(parseFloat(R.soilM3)*100).toFixed(0)+'%':'—'} VPD:${R.vpd||'—'}kPa NASA30gYağış:${R.nasaRain30||'—'}mm S2geçiş:${R.s2count||0}(son:${R.s2date||'—'}) Kaynak:${R.isEst?'ModelTahmini':'GerçekUydu'}`;
 }
 
 // ─── TOPRAK RENDER ────────────────────────────────────────────────
-window.renderSoil(field){
+window.renderSoil = (field) => {
   const s=calcSoil(field); const sc=scl(s.pct);
   const wx=WXC[field.id]?.days||simWX(field.lat,field.lon);
   const futR=wx.filter(d=>d.date>tstr()).slice(0,7).reduce((t,d)=>t+d.rain,0);
@@ -600,7 +600,7 @@ window.renderSoil(field){
 }
 
 // ─── HARİTA ──────────────────────────────────────────────────────
-window.initMap(lat, lon, field){
+window.initMap = (lat, lon, field) => {
   if(lmap){ lmap.remove(); lmap=null; }
   const el=qs('#lmap'); if(!el) return;
   const osm=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:19});
@@ -617,7 +617,7 @@ window.initMap(lat, lon, field){
   });
 }
 
-window.renderLocInfo(field){
+window.renderLocInfo = (field) => {
   const el=qs('#fp-locinfo'); if(!el) return;
   el.innerHTML=`<table class="tbl">
     <tr><td style="color:var(--text3);">Enlem</td><td>${field.lat?.toFixed(5)}°N</td></tr>
@@ -639,7 +639,7 @@ window.renderLocInfo(field){
 }
 
 // ─── OLAYLAR ─────────────────────────────────────────────────────
-window.updEF(){
+window.updEF = () => {
   const type=qs('#e-type').value, df=qs('#e-dynfields');
   const ql=qs('#e-qlbl'), cl=qs('#e-clbl'), us=qs('#e-unit');
   if(type==='sulama'){
@@ -697,7 +697,7 @@ window.updEF(){
   }
 }
 
-window.openEM(editId){
+window.openEM = (editId) => {
   qs('#e-eid').value=editId||'';
   qs('#em-title').textContent=editId?'Olayı Düzenle':'Olay / Maliyet Kaydı';
   if(editId&&CUR){
@@ -717,7 +717,7 @@ window.openEM(editId){
   qs('#m-event').classList.add('on');
 }
 
-async window.saveEvent(){
+async window.saveEvent = () => {
   const dt=qs('#e-date').value; if(!dt){ toast('Tarih zorunludur',true); return; }
   if(!CUR) return;
   const eid=qs('#e-eid').value;
@@ -738,7 +738,7 @@ async window.saveEvent(){
   toast(eid?'Güncellendi':'Kaydedildi');
 }
 
-async window.delEv(id){
+async window.delEv = (id) => {
   if(!CUR||!confirm('Bu kaydı silmek istediğinizden emin misiniz?')) return;
   CUR.events=(CUR.events||[]).filter(e=>e.id!==id);
   invSoil(CUR.id);
@@ -747,7 +747,7 @@ async window.delEv(id){
   renderEvTab(CUR); renderDash(); toast('Silindi');
 }
 
-window.renderEvTab(field){
+window.renderEvTab = (field) => {
   const tb=qs('#ev-tbody'); if(!tb) return;
   const evs=field.events||[];
   if(!evs.length){ tb.innerHTML=`<tr><td colspan="7" style="text-align:center;padding:22px;color:var(--text3);">Kayıt yok.</td></tr>`; const cc=qs('#ev-cost'); if(cc) cc.innerHTML=''; return; }
@@ -773,7 +773,7 @@ window.renderEvTab(field){
 }
 
 // ─── ÖNERİLER ────────────────────────────────────────────────────
-window.buildAutoRecs(field){
+window.buildAutoRecs = (field) => {
   const recs=[];
   const s=calcSoil(field);
   const wx=WXC[field.id]?.days||simWX(field.lat,field.lon);
@@ -804,7 +804,7 @@ window.buildAutoRecs(field){
   return recs;
 }
 
-window.renderRecTab(field){
+window.renderRecTab = (field) => {
   // Fenoloji + Hasat Tahmini
   const ph=calcPheno(field);
   const he=calcHarvest(field);
@@ -884,7 +884,7 @@ window.renderRecTab(field){
 
 // ─── YAPAY ZEKA (GEMINI 2.5 FLASH) ───────────────────────────────
 // Tüm verileri harmanlayarak TEK BÜTÜNsel analiz yapar
-async window.runAI(){
+async window.runAI = () => {
   if(!CUR) return;
 
   // Hava verisi yoksa önce çek
@@ -1030,7 +1030,7 @@ KURALLAR:
   }catch(e){ rmLoad(); addB('bot','❌ '+e.message); }
 }
 
-async window.sendChat(){
+async window.sendChat = () => {
   const inp=qs('#ai-inp'); const msg=inp.value.trim(); if(!msg) return;
   inp.value=''; addB('user',msg); addB('load','');
   aiHist.push({role:'user',content:msg});
@@ -1053,7 +1053,7 @@ async window.sendChat(){
   }catch(e){ rmLoad(); addB('bot','❌ '+e.message); }
 }
 
-window.addB(role, text){
+window.addB = (role, text) => {
   const chat=qs('#ai-chat'); if(!chat) return;
   if(role==='load'){
     const el=document.createElement('div'); el.id='ai-load'; el.className='bubble bb';
@@ -1068,10 +1068,10 @@ window.addB(role, text){
   }
   chat.scrollTop=chat.scrollHeight;
 }
-window.rmLoad(){ const el=qs('#ai-load'); if(el) el.remove(); }
-window.clrChat(){ const c=qs('#ai-chat'); if(c) c.innerHTML=''; aiHist=[]; }
+window.rmLoad = () => { const el=qs('#ai-load'); if(el) el.remove(); }
+window.clrChat = () => { const c=qs('#ai-chat'); if(c) c.innerHTML=''; aiHist=[]; }
 
-async window.analyzePhoto(){
+async window.analyzePhoto = () => {
   if(!pendPh){ toast('Fotoğraf seçin',true); return; }
   const el=qs('#p-ai-res');
   el.innerHTML='<div class="bubble bs"><span style="display:inline-flex;gap:3px;"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.3;animation:dl 1.2s infinite;"></span><span style="width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.3;animation:dl 1.2s .2s infinite;"></span><span style="width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.3;animation:dl 1.2s .4s infinite;"></span></span> Görsel + tarla bağlamı analiz ediliyor...</div>';
@@ -1108,7 +1108,7 @@ Türkçe, uzman görüşü:
 }
 
 // ─── FOTOĞRAF YÖNETİMİ ────────────────────────────────────────────
-async window.prevPhoto(e){
+async window.prevPhoto = (e) => {
   const file=e.target.files[0]; if(!file) return;
   const si=qs('#p-size-info'); if(si) si.textContent='Sıkıştırılıyor...';
   pendPh=await compressImg(file,150,0.82);
@@ -1116,8 +1116,8 @@ async window.prevPhoto(e){
   qs('#p-prev').innerHTML=`<img src="${pendPh}" style="width:100%;max-height:140px;object-fit:cover;border-radius:var(--r);margin-top:6px;"/>`;
   if(si) si.textContent=`~${kb} KB (sıkıştırıldı)`;
 }
-window.openPhM(){ pendPh=null; qs('#p-prev').innerHTML=''; qs('#p-ai-res').innerHTML=''; qs('#p-date').value=tstr(); qs('#p-note').value=''; if(qs('#p-size-info'))qs('#p-size-info').textContent=''; qs('#p-file').value=''; qs('#m-photo').classList.add('on'); }
-async window.savePhoto(){
+window.openPhM = () => { pendPh=null; qs('#p-prev').innerHTML=''; qs('#p-ai-res').innerHTML=''; qs('#p-date').value=tstr(); qs('#p-note').value=''; if(qs('#p-size-info'))qs('#p-size-info').textContent=''; qs('#p-file').value=''; qs('#m-photo').classList.add('on'); }
+async window.savePhoto = () => {
   if(!pendPh){ toast('Fotoğraf seçin',true); return; } if(!CUR) return;
   CUR.photos=CUR.photos||[];
   const aiText=qs('#p-ai-res')?.innerText||'';
@@ -1126,7 +1126,7 @@ async window.savePhoto(){
   await saveFieldToDB(CUR);
   closeM('photo'); pendPh=null; renderPhTab(CUR); toast('Fotoğraf kaydedildi');
 }
-window.renderPhTab(field){
+window.renderPhTab = (field) => {
   const grid=qs('#ph-grid'); if(!grid) return;
   if(!field.photos?.length){ grid.innerHTML='<div style="grid-column:1/-1;"><div class="empty">📷<br/>Fotoğraf yok</div></div>'; return; }
   grid.innerHTML=field.photos.map((p,idx)=>`
@@ -1139,15 +1139,15 @@ window.renderPhTab(field){
       <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.55);color:#fff;font-size:9px;padding:3px 5px;">${fd(p.date)} · ${p.type}</div>
     </div>`).join('');
 }
-window.openPhV(idx){
+window.openPhV = (idx) => {
   if(!CUR?.photos?.[idx]) return;
   curPhIdx=idx; const p=CUR.photos[idx];
   qs('#phv-img').src=p.data;
   qs('#phv-info').textContent=`${fd(p.date)} · ${p.type}${p.note?' · '+p.note:''}${p.ai&&p.ai.length>10?'\n🤖 '+p.ai.slice(0,150)+'...':''}`;
   qs('#phv').classList.add('on');
 }
-window.closePhV(){ qs('#phv')?.classList.remove('on'); curPhIdx=null; }
-window.editPhNote(){
+window.closePhV = () => { qs('#phv')?.classList.remove('on'); curPhIdx=null; }
+window.editPhNote = () => {
   if(curPhIdx===null||!CUR?.photos?.[curPhIdx]) return;
   const p=CUR.photos[curPhIdx];
   const n=prompt('Notu düzenle:',p.note||''); if(n===null) return;
@@ -1155,14 +1155,14 @@ window.editPhNote(){
   qs('#phv-info').textContent=`${fd(p.date)} · ${p.type}${p.note?' · '+p.note:''}`;
   renderPhTab(CUR); toast('Not güncellendi');
 }
-async window.delCurPh(){
+async window.delCurPh = () => {
   if(curPhIdx===null||!CUR?.photos) return;
   if(!confirm('Bu fotoğrafı silmek istediğinizden emin misiniz?')) return;
   CUR.photos.splice(curPhIdx,1);
   const fi=DB.fields.findIndex(f=>f.id===CUR.id); if(fi>=0) DB.fields[fi]=CUR;
   await saveFieldToDB(CUR); closePhV(); renderPhTab(CUR); toast('Silindi');
 }
-async window.delPhoto(idx){
+async window.delPhoto = (idx) => {
   if(!CUR?.photos||!confirm('Bu fotoğrafı silmek istediğinizden emin misiniz?')) return;
   CUR.photos.splice(idx,1);
   const fi=DB.fields.findIndex(f=>f.id===CUR.id); if(fi>=0) DB.fields[fi]=CUR;
@@ -1170,7 +1170,7 @@ async window.delPhoto(idx){
 }
 
 // ─── TARLA CRUD ──────────────────────────────────────────────────
-window.fillCrops(){
+window.fillCrops = () => {
   const cat=qs('#f-cat').value; const list=CROPS[cat]||[];
   const sel=qs('#f-crop');
   sel.innerHTML=list.length?list.map(c=>`<option value="${c}">${c}</option>`).join(''):'<option>Kategori seçin</option>';
@@ -1180,7 +1180,7 @@ window.fillCrops(){
   else lbl.textContent='Miktar';
 }
 
-window.openFM(editId){
+window.openFM = (editId) => {
   qs('#f-eid').value=editId||'';
   qs('#fm-title').textContent=editId?'Tarla Düzenle':'Yeni Tarla Ekle';
   qs('#f-prev').style.display='none';
@@ -1205,7 +1205,7 @@ window.openFM(editId){
   qs('#m-field').classList.add('on');
 }
 
-async window.saveField(){
+async window.saveField = () => {
   const name=qs('#f-name').value.trim(); if(!name){ toast('Tarla adı zorunlu',true); return; }
   const eid=qs('#f-eid').value; const ex=eid?DB.fields.find(f=>f.id===eid):null;
   const f={
@@ -1226,7 +1226,7 @@ async window.saveField(){
   toast(ex?'Tarla güncellendi':'Tarla eklendi');
 }
 
-async window.delField(id){
+async window.delField = (id) => {
   if(!id||!confirm('Bu tarla ve tüm verileri silinecek. Emin misiniz?')) return;
   DB.fields=DB.fields.filter(f=>f.id!==id);
   await deleteFieldFromDB(id);
@@ -1236,7 +1236,7 @@ async window.delField(id){
 }
 
 // ─── DOSYA İMPORT (JSON/GeoJSON/KML) ─────────────────────────────
-async window.importFF(e){
+async window.importFF = (e) => {
   const file=e.target.files[0]; if(!file) return;
   const name=file.name.toLowerCase();
   const reader=new FileReader();
@@ -1257,7 +1257,7 @@ async window.importFF(e){
   reader.readAsText(file);
 }
 
-window.parseGeoJSON(d){
+window.parseGeoJSON = (d) => {
   const R={}; let geom=null, props={};
   if(d.type==='FeatureCollection'&&d.features?.length){ geom=d.features[0].geometry; props=d.features[0].properties||{}; }
   else if(d.type==='Feature'){ geom=d.geometry; props=d.properties||{}; }
@@ -1276,7 +1276,7 @@ window.parseGeoJSON(d){
   return R;
 }
 
-window.parseKML(kmlText){
+window.parseKML = (kmlText) => {
   const parser=new DOMParser(); const doc=parser.parseFromString(kmlText,'text/xml');
   const R={};
   const nameEl=doc.querySelector('Placemark > name, Document > name'); if(nameEl) R.name=nameEl.textContent.trim();
@@ -1296,7 +1296,7 @@ window.parseKML(kmlText){
   return R;
 }
 
-window.calcPolyArea(ring){
+window.calcPolyArea = (ring) => {
   if(!ring||ring.length<3) return 0;
   const Rm=6371000; let area=0;
   for(let i=0;i<ring.length-1;i++){
@@ -1307,7 +1307,7 @@ window.calcPolyArea(ring){
 }
 
 // ─── FİREBASE / YEREL DEPOLAMA ───────────────────────────────────
-async window.saveFieldToDB(field){
+async window.saveFieldToDB = (field) => {
   // Firebase'e kaydetmeden önce önbelleklenmiş geçici verileri temizle
   const clean=JSON.parse(JSON.stringify(field));
   delete clean._soilCache;
@@ -1315,12 +1315,12 @@ async window.saveFieldToDB(field){
   if(uid&&window.FB_MODE){ try{ await window.fbSaveField(uid,clean); }catch(e){ toast('DB kayıt hatası: '+e.message,true); } }
   saveLocalDB();
 }
-async window.deleteFieldFromDB(fieldId){
+async window.deleteFieldFromDB = (fieldId) => {
   const uid=window.FB_USER?.uid;
   if(uid&&window.FB_MODE){ try{ await window.fbDeleteField(uid,fieldId); }catch(e){ toast('DB silme hatası: '+e.message,true); } }
   saveLocalDB();
 }
-async window.syncDB(){
+async window.syncDB = () => {
   const uid=window.FB_USER?.uid; if(!uid||!window.FB_MODE) return;
   try{
     const fields=await window.fbLoadFields(uid);
@@ -1334,28 +1334,28 @@ async window.syncDB(){
     toast('Veriler güncellendi ✓');
   }catch(e){ toast('Senkronizasyon hatası: '+e.message,true); }
 }
-window.saveLocalDB(){ try{ localStorage.setItem('tt_fields',JSON.stringify(DB.fields)); }catch(e){} }
-window.loadLocalDB(){ try{ const d=localStorage.getItem('tt_fields'); if(d) DB.fields=JSON.parse(d)||[]; }catch(e){} }
-window.saveSettings(){ DB.s.acuKey=qs('#acu-key')?.value||''; localStorage.setItem('tt_s',JSON.stringify(DB.s)); toast('Kaydedildi'); }
-window.loadSettings(){
+window.saveLocalDB = () => { try{ localStorage.setItem('tt_fields',JSON.stringify(DB.fields)); }catch(e){} }
+window.loadLocalDB = () => { try{ const d=localStorage.getItem('tt_fields'); if(d) DB.fields=JSON.parse(d)||[]; }catch(e){} }
+window.saveSettings = () => { DB.s.acuKey=qs('#acu-key')?.value||''; localStorage.setItem('tt_s',JSON.stringify(DB.s)); toast('Kaydedildi'); }
+window.loadSettings = () => {
   try{ const s=localStorage.getItem('tt_s'); if(s){ const p=JSON.parse(s); DB.s={...DB.s,...p}; } }catch(e){}
   if(qs('#acu-key')) qs('#acu-key').value=DB.s.acuKey||'';
 }
-window.expData(){ const a=document.createElement('a'); a.href='data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify({fields:DB.fields},null,2)); a.download='tarim_'+tstr()+'.json'; a.click(); }
-window.impData(e){ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=ev=>{ try{ const d=JSON.parse(ev.target.result); if(d.fields){ DB.fields=d.fields; saveLocalDB(); renderAll(); toast('İçe aktarıldı'); } }catch{ toast('Geçersiz JSON',true); } }; r.readAsText(f); }
+window.expData = () => { const a=document.createElement('a'); a.href='data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify({fields:DB.fields},null,2)); a.download='tarim_'+tstr()+'.json'; a.click(); }
+window.impData = (e) => { const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=ev=>{ try{ const d=JSON.parse(ev.target.result); if(d.fields){ DB.fields=d.fields; saveLocalDB(); renderAll(); toast('İçe aktarıldı'); } }catch{ toast('Geçersiz JSON',true); } }; r.readAsText(f); }
 
 // ─── KULLANICI GİRİŞİ ────────────────────────────────────────────
-window.swAuth(tab, el){
+window.swAuthTab = (tab, el) => {
   qs('#auth-screen .auth-pane.on')?.classList.remove('on');
   qs('#ap-'+tab)?.classList.add('on');
   qs('#auth-screen .auth-tab.on')?.classList.remove('on');
   el.classList.add('on');
 }
-async window.doGoogle(){
+async window.signGoogle = () => {
   if(!window.FB_MODE){ noFBNotice(); return; }
   try{ await window.fbGoogle(); }catch(e){ showAErr('login',e.message); }
 }
-async window.doEmail(mode){
+async window.signEmail = (mode) => {
   if(!window.FB_MODE){ noFBNotice(); return; }
   const em=qs('#'+mode[0]+'e')?.value; const pw=qs('#'+mode[0]+'p')?.value;
   try{
@@ -1363,10 +1363,10 @@ async window.doEmail(mode){
     else await window.fbRegister(em,pw);
   }catch(e){ showAErr(mode,e.message); }
 }
-window.showAErr(m,msg){ const el=qs('#'+m[0]+'err'); if(el){ el.style.display='block'; el.textContent=msg; } }
-window.noFBNotice(){ qs('#no-fb-note').style.display='block'; qs('#auth-form').style.display='none'; }
-window.enterLocal(){ LOCAL=true; qs('#auth-screen').classList.add('hidden'); loadLocalDB(); DB.fields.forEach(f=>fetchWX(f)); renderAll(); toast('Yerel modda çalışıyorsunuz'); }
-async window.doSignOut(){ if(window.FB_MODE&&window.FB_USER) await window.fbOut(); else{ LOCAL=false; DB.fields=[]; } qs('#auth-screen')?.classList.remove('hidden'); }
+window.showAErr = (m,msg) => { const el=qs('#'+m[0]+'err'); if(el){ el.style.display='block'; el.textContent=msg; } }
+window.noFBNotice = () => { qs('#no-fb-note').style.display='block'; qs('#auth-form').style.display='none'; }
+window.enterLocal = () => { LOCAL=true; qs('#auth-screen').classList.add('hidden'); loadLocalDB(); DB.fields.forEach(f=>fetchWX(f)); renderAll(); toast('Yerel modda çalışıyorsunuz'); }
+async window.doSignOut = () => { if(window.FB_MODE&&window.FB_USER) await window.fbOut(); else{ LOCAL=false; DB.fields=[]; } qs('#auth-screen')?.classList.remove('hidden'); }
 
 window.onAuthChange=async(user)=>{
   if(user){
@@ -1377,7 +1377,7 @@ window.onAuthChange=async(user)=>{
     if(!LOCAL) qs('#auth-screen')?.classList.remove('hidden');
   }
 };
-window.updateChip(user){
+window.updateChip = (user) => {
   if(!user) return;
   const av=qs('#user-avatar'); const nm=qs('#user-name');
   if(user.photoURL) av.innerHTML=`<img src="${user.photoURL}" style="width:22px;height:22px;border-radius:50%;"/>`;
@@ -1388,9 +1388,9 @@ window.updateChip(user){
 }
 
 // ─── RENDER FONKSİYONLARI ────────────────────────────────────────
-window.renderAll(){ renderSB(); renderDash(); renderCal(); renderRep(); }
+window.renderAll = () => { renderSB(); renderDash(); renderCal(); renderRep(); }
 
-window.renderSB(){
+window.renderSB = () => {
   const el=qs('#sb-list'); if(!el) return; el.innerHTML='';
   DB.fields.forEach(f=>{
     invSoil(f.id);
@@ -1402,7 +1402,7 @@ window.renderSB(){
   });
 }
 
-window.renderFKPIs(field){
+window.renderFKPIs = (field) = {
   invSoil(field.id);
   const s=calcSoil(field); const sc=scl(s.pct);
   const tc=(field.events||[]).reduce((t,e)=>t+(e.total||(e.cost*(e.qty||1))),0);
@@ -1424,7 +1424,7 @@ window.renderFKPIs(field){
     <div class="kpi"><div class="kpi-l">Toplam Maliyet</div><div class="kpi-v">${Math.round(tc).toLocaleString('tr-TR')}<small>₺</small></div><div class="kpi-s">${(field.events||[]).length} kayıt</div></div>`;
 }
 
-window.renderDash(){
+window.renderDash = () => {
   const now=new Date();
   qs('#ddate').textContent=now.toLocaleDateString('tr-TR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   const ta=DB.fields.reduce((s,f)=>s+(f.area||0),0);
@@ -1461,21 +1461,21 @@ window.renderDash(){
   qs('#dplanned').innerHTML=planned.slice(0,4).map(e=>`<div class="evrow"><div class="evico" style="background:${e.fc||'#40916c'}22;font-size:13px;">${EVI[e.type]||'📝'}</div><div class="evbody"><div class="evtitle">${e.fn} — ${e.type}</div><div class="evsub">${fd(e.date)}</div></div></div>`).join('')||'<div style="color:var(--text3);font-size:13px;">Planlanan görev yok.</div>';
 }
 
-window.showField(id){
+window.showField = (id) => {
   CUR=DB.fields.find(f=>f.id===id); if(!CUR) return;
   aiHist=[]; curTab='map';
   goPage('field'); renderSB(); renderFieldPage(CUR);
   if(!WXC[CUR.id]) fetchWX(CUR);
 }
 
-window.renderFieldPage(field){
+window.renderFieldPage = (field) => {
   CUR=field;
   qs('#fp-name').textContent=field.name;
   renderFKPIs(field);
   goTab('map');
 }
 
-window.goTab(t){
+window.goTab = (t) => {
   curTab=t;
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
   document.querySelectorAll('.tp').forEach(x=>x.classList.remove('on'));
@@ -1502,9 +1502,9 @@ window.goTab(t){
 }
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>goTab(t.dataset.t)));
 
-window.closeM(id){ qs('#m-'+id)?.classList.remove('on'); }
+window.closeM = (id) => { qs('#m-'+id)?.classList.remove('on'); }
 
-window.goPage(p){
+window.goPage = (p) => {
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('on'));
   qs('#page-'+p)?.classList.add('on');
   document.querySelectorAll('.tn').forEach(b=>b.classList.remove('on'));
@@ -1516,7 +1516,7 @@ window.goPage(p){
   clSBmob();
 }
 
-window.renderCal(){
+window.renderCal = () => {
   const now=new Date(); const y=now.getFullYear(), m=now.getMonth();
   const MO=['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
   qs('#cal-hdr').textContent=MO[m]+' '+y;
@@ -1534,7 +1534,7 @@ window.renderCal(){
   qs('#cal-ai').innerHTML=aiS.length?aiS.map(s=>`<div class="ritem" style="background:var(--glt);"><div class="rico" style="background:var(--gbg);color:var(--green2);">🤖</div><div class="rbody"><div class="rtitle">${s.fn}</div><div class="rsub">${s.text}</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">${fd(s.date)}</div></div></div>`).join(''):'<div style="color:var(--text3);font-size:13px;">AI analizi çalıştırarak öneri alın.</div>';
 }
 
-window.renderRep(){
+window.renderRep = () => {
   const rc=qs('#rep-content'); if(!rc) return;
   if(!DB.fields.length){ rc.innerHTML='<div class="empty">📊<br/>Tarla ekleyin.</div>'; return; }
   const total=DB.fields.reduce((s,f)=>s+(f.events||[]).reduce((c,e)=>c+(e.total||(e.cost*(e.qty||1))),0),0);
