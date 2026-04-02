@@ -345,7 +345,7 @@ window.setBadge = (barId, id, cls, lbl) => {
   el.innerHTML = (cls==='load' ? '<span class="spin"></span>' : '') + lbl;
 }
 
-async window.fetchWX = (field) => {
+window.fetchWX = async (field) => {
   field = field||CUR; if(!field) return;
   const id=field.id, lat=field.lat, lon=field.lon;
   setBadge('wxsrc','om','load','Open-Meteo…');
