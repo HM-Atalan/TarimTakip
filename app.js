@@ -4,6 +4,10 @@ import { getAuth, onAuthStateChanged, signInWithPopup, signInWithEmailAndPasswor
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import { getFirestore, doc, collection, getDocs, setDoc, deleteDoc, onSnapshot, query, orderBy }
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+const qs = (s) => document.querySelector(s);
+window.qs = qs; // Eğer HTML içinde script kullanacaksan qs'i de dışarı aç
+
 // ═══════════════════════════════════════════════════════════════════
 // TarlaTakip — Ana Script (Temiz Versiyon)
 // Gemini 2.5 Flash · Firebase Firestore · Open-Meteo · NASA · Sentinel-2
@@ -171,7 +175,7 @@ const qs = s => document.querySelector(s);
 const gid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
 const tstr = () => new Date().toISOString().slice(0,10);
 const fd = s => s ? new Date(s+'T12:00:00').toLocaleDateString('tr-TR',{day:'numeric',month:'short',year:'numeric'}) : '—';
-window.toast(msg, err=false){
+window.toast = (msg, err=false) => {
   const t = qs('#toast'); if(!t) return;
   t.textContent = msg;
   t.style.borderLeftColor = err ? 'var(--red)' : 'var(--green2)';
