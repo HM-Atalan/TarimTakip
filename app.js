@@ -1,6 +1,8 @@
 // import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 // import { getAuth, onAuthStateChanged, signInWithPopup, signInWithEmailAndPassword,
 //         createUserWithEmailAndPassword, GoogleAuthProvider, signOut }
+// Remote Config'i içe aktar
+import { getRemoteConfig, getValue, fetchAndActivate } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-remote-config.js";
 //  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 // import { getFirestore, doc, collection, getDocs, setDoc, deleteDoc, onSnapshot, query, orderBy }
 //  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
@@ -11,7 +13,30 @@ window.CUR = null;
 // Gemini 2.5 Flash · Firebase Firestore · Open-Meteo · NASA · Sentinel-2
 // ═══════════════════════════════════════════════════════════════════
 
-const GK = "AIzaSyAbIVU2RHeTF6eo-GrqDwszewEEyPgsffs"; // Gemini API Key
+window.askGemini = async (prompt) => {
+  // Önce anahtarı Firebase'den çek
+  const activeKey = await window.getGeminiKey();
+  
+  if (!activeKey) {
+    alert("Hata: API anahtarı doğrulanamadı.");
+    return;
+  }
+
+  try {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${activeKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }]
+      })
+    });
+    
+    const data = await response.json();
+    return data.candidates[0].content.parts[0].text;
+  } catch (e) {
+    console.error("Gemini Hatası:", e);
+  }
+};
 
 // ─── VERİ TABLOLARI ───────────────────────────────────────────────
 const CROPS = {
@@ -999,7 +1024,7 @@ KURALLAR:
       }
     });
 
-    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GK}`;
+    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${GK}`;
     const resp=await fetch(url,{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({contents:[{role:'user',parts}],generationConfig:{temperature:0.62,maxOutputTokens:8192}})
@@ -1045,7 +1070,7 @@ window.sendChat = async () => {
   const contents=aiHist.slice(-12).map(m=>({role:m.role==='assistant'?'model':'user',parts:[{text:m.content}]}));
   contents.push({role:'user',parts:[{text:`[Sistem: ${sys}]\n\n${msg}`}]});
   try{
-    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GK}`;
+    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${GK}`;
     const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents,generationConfig:{temperature:0.72,maxOutputTokens:4096}})});
     if(!r.ok){ const e=await r.json(); throw new Error(e.error?.message||'Gemini '+r.status); }
     const d=await r.json();
@@ -1099,7 +1124,7 @@ Türkçe, uzman görüşü:
 5. Acil müdahale gerektiren durum (varsa)
 6. Hasat olgunluğu değerlendirmesi`}
     ];
-    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GK}`;
+    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${GK}`;
     const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts}],generationConfig:{maxOutputTokens:2000}})});
     if(!r.ok){ const e=await r.json(); throw new Error(e.error?.message||r.status); }
     const d=await r.json();
