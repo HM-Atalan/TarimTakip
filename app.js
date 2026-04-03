@@ -1182,29 +1182,56 @@ window.fillCrops = () => {
 }
 
 window.openFM = (editId) => {
-  qs('#f-eid').value=editId||'';
-  qs('#fm-title').textContent=editId?'Tarla Düzenle':'Yeni Tarla Ekle';
-  qs('#f-prev').style.display='none';
-  if(editId){
-    const f = window.DB.fields.find(x=>x.id===editId); if(!f) return;
-    qs('#f-lat').value=f.lat||''; qs('#f-lon').value=f.lon||'';
-    qs('#f-name').value=f.name||''; qs('#f-loc').value=f.location||'';
-    qs('#f-area').value=f.area||''; qs('#f-aunit').value=f.areaUnit||'dönüm';
-    qs('#f-soil').value=f.soilType||'killiTin';
-    qs('#f-cat').value=f.category||''; fillCrops();
-    if(f.crop) qs('#f-crop').value=f.crop;
-    qs('#f-qty').value=f.qty||''; qs('#f-qunit').value=f.qunit||'adet';
-    qs('#f-color').value=f.color||'#40916c';
-    qs('#f-plant').value=f.plantDate||''; qs('#f-harvest').value=f.harvestDate||'';
-    qs('#f-notes').value=f.notes||'';
-  }else{
-    ['f-lat','f-lon','f-name','f-loc','f-area','f-qty','f-notes','f-plant','f-harvest'].forEach(id=>{ const el=qs('#'+id); if(el) el.value=''; });
-    qs('#f-color').value='#40916c'; qs('#f-cat').value=''; qs('#f-aunit').value='dönüm';
-    if(qs('#f-file')) qs('#f-file').value='';
+  qs('#f-eid').value = editId || '';
+  qs('#fm-title').textContent = editId ? 'Tarla Düzenle' : 'Yeni Tarla Ekle';
+
+  const preview = qs('#f-import-preview');
+  if (preview) preview.style.display = 'none'; // ✅ güvenli
+
+  if (editId) {
+    const f = window.DB.fields.find(x => x.id === editId);
+    if (!f) return;
+
+    qs('#f-lat').value = f.lat || '';
+    qs('#f-lon').value = f.lon || '';
+    qs('#f-name').value = f.name || '';
+    qs('#f-loc').value = f.location || '';
+    qs('#f-area').value = f.area || '';
+    qs('#f-aunit').value = f.areaUnit || 'dönüm';
+    qs('#f-soil').value = f.soilType || 'killiTin';
+    qs('#f-cat').value = f.category || '';
+    fillCrops();
+    if (f.crop) qs('#f-crop').value = f.crop;
+
+    qs('#f-qty').value = f.qty || '';
+    qs('#f-qunit').value = f.qunit || 'adet';
+    qs('#f-color').value = f.color || '#40916c';
+    qs('#f-plant').value = f.plantDate || '';
+    qs('#f-harvest').value = f.harvestDate || '';
+    qs('#f-notes').value = f.notes || '';
+
+  } else {
+    [
+      'f-lat','f-lon','f-name','f-loc',
+      'f-area','f-qty','f-notes',
+      'f-plant','f-harvest'
+    ].forEach(id => {
+      const el = qs('#' + id);
+      if (el) el.value = '';
+    });
+
+    qs('#f-color').value = '#40916c';
+    qs('#f-cat').value = '';
+    qs('#f-aunit').value = 'dönüm';
+
+    const file = qs('#f-file');
+    if (file) file.value = '';
+
     fillCrops();
   }
+
   qs('#m-field').classList.add('on');
-}
+};
 
 window.saveField = async () => {
   const name=qs('#f-name').value.trim(); if(!name){ toast('Tarla adı zorunlu',true); return; }
