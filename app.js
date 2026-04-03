@@ -1402,7 +1402,7 @@ window.renderSB = () => {
   });
 }
 
-window.renderFKPIs = (field) = {
+window.renderFKPIs = (field) => {
   invSoil(field.id);
   const s=calcSoil(field); const sc=scl(s.pct);
   const tc=(field.events||[]).reduce((t,e)=>t+(e.total||(e.cost*(e.qty||1))),0);
