@@ -810,7 +810,7 @@ window.renderRecTab = (field) => {
   const he=calcHarvest(field);
   const sh=calcSolar(field);
   const a=agrd(field.crop);
-  const phen=qs('#rec-pheno');
+  const phen=qs('reg-emailc-pheno');
   if(phen){
     let html='';
     if(ph){
@@ -854,7 +854,7 @@ window.renderRecTab = (field) => {
 
   // Akıllı uyarılar
   const recs=buildAutoRecs(field);
-  const ar=qs('#rec-auto');
+  const ar=qs('reg-emailc-auto');
   if(ar) ar.innerHTML=recs.length
     ? recs.map(r=>`<div class="ritem" style="background:${r.bg};"><div class="rico" style="background:${r.bg};color:${r.c};font-size:15px;">${r.i}</div><div class="rbody"><div class="rtitle">${r.t}<span class="rpri" style="background:${r.c}22;color:${r.c};">${r.pr}</span></div><div class="rsub">${r.s}</div></div></div>`).join('')
     : '<div style="color:var(--green2);font-size:13px;">✅ Kritik uyarı yok.</div>';
@@ -862,7 +862,7 @@ window.renderRecTab = (field) => {
   // Gübre programı
   const fertH=(field.events||[]).filter(e=>e.type==='gübre').sort((a,b)=>b.date.localeCompare(a.date)).slice(0,3)
     .map(e=>`${fd(e.date)}: ${e.extra?.['e-ft']||''} (${e.qty||'?'}${e.unit||'kg'})`);
-  const fr=qs('#rec-fert');
+  const fr=qs('reg-emailc-fert');
   if(fr) fr.innerHTML=`<div style="font-size:13px;font-weight:600;margin-bottom:8px;">${field.crop||'Ürün seçilmemiş'} — Gübre Programı</div><div style="font-size:13px;line-height:1.7;background:var(--bg3);padding:10px 12px;border-radius:var(--r);">${a.fert}</div>${fertH.length?`<div style="font-size:11px;color:var(--text3);margin-top:8px;">Son gübrelemeler: ${fertH.join(' · ')}</div>`:''}`;
 
   // Hastalık/zararlı riski
@@ -872,11 +872,11 @@ window.renderRecTab = (field) => {
   const rl=avgR>5&&avgT>18?'YÜKSEK':avgR>2||avgT>24?'ORTA':'DÜŞÜK';
   const rc={YÜKSEK:'var(--red)',ORTA:'var(--amber)',DÜŞÜK:'var(--green2)'}[rl];
   const pests=PEST_DATA[field.crop]||PEST_DATA.default;
-  const pr=qs('#rec-pest');
+  const pr=qs('reg-emailc-pest');
   if(pr) pr.innerHTML=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;"><span style="font-size:13px;">7 günlük hava koşullarına göre risk:</span><span class="tag" style="background:${rc}22;color:${rc};">${rl}</span></div>${pests.map(p=>`<div class="ritem" style="background:var(--bg3);padding:7px 10px;margin-bottom:5px;"><div class="rico" style="background:var(--pbg);color:var(--purple);font-size:12px;">🔬</div><div class="rbody"><div class="rtitle" style="font-size:12px;">${p}</div></div></div>`).join('')}<div style="font-size:11px;color:var(--text3);margin-top:7px;">⚠️ İlaçlama öncesi zirai mühendis ve resmi etiket bilgilerine başvurun.</div>`;
 
   // Son AI analizi
-  const ar2=qs('#rec-ai');
+  const ar2=qs('reg-emailc-ai');
   if(ar2) ar2.innerHTML=field.aiRecs?.length
     ? `<div class="bubble bb" style="white-space:pre-line;">${field.aiRecs[0].text}</div><div style="font-size:10px;color:var(--text3);margin-top:4px;">${fd(field.aiRecs[0].date)} tarihli analiz</div>`
     : '<div style="color:var(--text3);font-size:13px;">🤖 AI Analiz butonu ile tüm veriler harmanlanarak bütünsel uzman yorumu oluşturulur.</div>';
@@ -1116,7 +1116,7 @@ window.prevPhoto = async (e) => {
   qs('#p-prev').innerHTML=`<img src="${pendPh}" style="width:100%;max-height:140px;object-fit:cover;border-radius:var(--r);margin-top:6px;"/>`;
   if(si) si.textContent=`~${kb} KB (sıkıştırıldı)`;
 }
-window.openPhM = () => { pendPh=null; qs('#p-prev').innerHTML=''; qs('#p-ai-res').innerHTML=''; qs('#p-date').value=tstr(); qs('#p-note').value=''; if(qs('#p-size-info'))qs('#p-size-info').textContent=''; qs('#p-file').value=''; qs('#m-photo').classList.add('on'); }
+window.openPhotoM = () => { pendPh=null; qs('#p-prev').innerHTML=''; qs('#p-ai-res').innerHTML=''; qs('#p-date').value=tstr(); qs('#p-note').value=''; if(qs('#p-size-info'))qs('#p-size-info').textContent=''; qs('#p-file').value=''; qs('#m-photo').classList.add('on'); }
 window.savePhoto = async () => {
   if(!pendPh){ toast('Fotoğraf seçin',true); return; } if(!CUR) return;
   CUR.photos=CUR.photos||[];
@@ -1142,17 +1142,17 @@ window.renderPhTab = (field) => {
 window.openPhV = (idx) => {
   if(!CUR?.photos?.[idx]) return;
   curPhIdx=idx; const p=CUR.photos[idx];
-  qs('#phv-img').src=p.data;
-  qs('#phv-info').textContent=`${fd(p.date)} · ${p.type}${p.note?' · '+p.note:''}${p.ai&&p.ai.length>10?'\n🤖 '+p.ai.slice(0,150)+'...':''}`;
-  qs('#phv').classList.add('on');
+  qs('#ph-viewer-img').src=p.data;
+  qs('#ph-viewer-info').textContent=`${fd(p.date)} · ${p.type}${p.note?' · '+p.note:''}${p.ai&&p.ai.length>10?'\n🤖 '+p.ai.slice(0,150)+'...':''}`;
+  qs('#ph-viewer').classList.add('on');
 }
-window.closePhV = () => { qs('#phv')?.classList.remove('on'); curPhIdx=null; }
+window.closePhViewer = () => { qs('#ph-viewer')?.classList.remove('on'); curPhIdx=null; }
 window.editPhNote = () => {
   if(curPhIdx===null||!CUR?.photos?.[curPhIdx]) return;
   const p=CUR.photos[curPhIdx];
   const n=prompt('Notu düzenle:',p.note||''); if(n===null) return;
   p.note=n; saveFieldToDB(CUR);
-  qs('#phv-info').textContent=`${fd(p.date)} · ${p.type}${p.note?' · '+p.note:''}`;
+  qs('#ph-viewer-info').textContent=`${fd(p.date)} · ${p.type}${p.note?' · '+p.note:''}`;
   renderPhTab(CUR); toast('Not güncellendi');
 }
 window.delCurPh = async () => {
@@ -1160,7 +1160,7 @@ window.delCurPh = async () => {
   if(!confirm('Bu fotoğrafı silmek istediğinizden emin misiniz?')) return;
   CUR.photos.splice(curPhIdx,1);
   const fi=DB.fields.findIndex(f=>f.id===CUR.id); if(fi>=0) DB.fields[fi]=CUR;
-  await saveFieldToDB(CUR); closePhV(); renderPhTab(CUR); toast('Silindi');
+  await saveFieldToDB(CUR); closePhViewer(); renderPhTab(CUR); toast('Silindi');
 }
 window.delPhoto = async (idx) => {
   if(!CUR?.photos||!confirm('Bu fotoğrafı silmek istediğinizden emin misiniz?')) return;
@@ -1320,7 +1320,7 @@ window.deleteFieldFromDB = async (fieldId) => {
   if(uid&&window.FB_MODE){ try{ await window.fbDeleteField(uid,fieldId); }catch(e){ toast('DB silme hatası: '+e.message,true); } }
   saveLocalDB();
 }
-window.syncDB = async () => {
+window.syncFromDB = async () => {
   const uid=window.FB_USER?.uid; if(!uid||!window.FB_MODE) return;
   try{
     const fields=await window.fbLoadFields(uid);
@@ -1353,26 +1353,26 @@ window.swAuthTab = (tab, el) => {
 }
 window.signGoogle = async () => {
   if(!window.FB_MODE){ noFBNotice(); return; }
-  try{ await window.fbGoogle(); }catch(e){ showAErr('login',e.message); }
+  try{ await window.fbSignInGoogle(); }catch(e){ showAErr('login',e.message); }
 }
 window.signEmail = async (mode) => {
   if(!window.FB_MODE){ noFBNotice(); return; }
   const em=qs('#'+mode[0]+'e')?.value; const pw=qs('#'+mode[0]+'p')?.value;
   try{
-    if(mode==='login') await window.fbEmail(em,pw);
-    else await window.fbRegister(em,pw);
+    if(mode==='login') await window.fbSignInEmail(em,pw);
+    else await window.fbRegisterEmail(em,pw);
   }catch(e){ showAErr(mode,e.message); }
 }
 window.showAErr = (m,msg) => { const el=qs('#'+m[0]+'err'); if(el){ el.style.display='block'; el.textContent=msg; } }
-window.noFBNotice = () => { qs('#no-fb-note').style.display='block'; qs('#auth-form').style.display='none'; }
-window.enterLocal = () => { LOCAL=true; qs('#auth-screen').classList.add('hidden'); loadLocalDB(); DB.fields.forEach(f=>fetchWX(f)); renderAll(); toast('Yerel modda çalışıyorsunuz'); }
-window.doSignOut = async () => { if(window.FB_MODE&&window.FB_USER) await window.fbOut(); else{ LOCAL=false; DB.fields=[]; } qs('#auth-screen')?.classList.remove('hidden'); }
+window.noFBNotice = () => { qs('#no-fb-note').style.display='block'; qs('#auth-form-wrap').style.display='none'; }
+window.enterLocalMode() = () => { LOCAL=true; qs('#auth-screen').classList.add('hidden'); loadLocalDB(); DB.fields.forEach(f=>fetchWX(f)); renderAll(); toast('Yerel modda çalışıyorsunuz'); }
+window.doSignOut = async () => { if(window.FB_MODE&&window.FB_USER) await window.fbSignOut(); else{ LOCAL=false; DB.fields=[]; } qs('#auth-screen')?.classList.remove('hidden'); }
 
 window.onAuthChange=async(user)=>{
   if(user){
     qs('#auth-screen').classList.add('hidden');
     updateChip(user);
-    await syncDB();
+    await syncFromDB();
   }else{
     if(!LOCAL) qs('#auth-screen')?.classList.remove('hidden');
   }
@@ -1535,7 +1535,7 @@ window.renderCal = () => {
 }
 
 window.renderRep = () => {
-  const rc=qs('#rep-content'); if(!rc) return;
+  const rc=qs('reg-emailp-content'); if(!rc) return;
   if(!DB.fields.length){ rc.innerHTML='<div class="empty">📊<br/>Tarla ekleyin.</div>'; return; }
   const total=DB.fields.reduce((s,f)=>s+(f.events||[]).reduce((c,e)=>c+(e.total||(e.cost*(e.qty||1))),0),0);
   const ta=DB.fields.reduce((s,f)=>s+(f.area||0),0);
@@ -1603,5 +1603,5 @@ document.addEventListener('DOMContentLoaded',()=>{
   loadSettings();
   setTimeout(()=>{ if(!window.FB_MODE) noFBNotice(); }, 1500);
   qs('#main')?.addEventListener('click',()=>{ if(window.innerWidth<=768) qs('#sb')?.classList.remove('open'); });
-  document.addEventListener('keydown',e=>{ if(e.key==='Escape') closePhV(); });
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape') closePhViewer(); });
 });
