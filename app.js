@@ -11,7 +11,7 @@ window.CUR = null;
 // Gemini 2.5 Flash · Firebase Firestore · Open-Meteo · NASA · Sentinel-2
 // ═══════════════════════════════════════════════════════════════════
 
-const GK = "AIzaSyAbIVU2RHeTF6eo-GrqDwszewEEyPgsffs"; // Gemini API Key
+// const GK = "AIzaSyAbIVU2RHeTF6eo-GrqDwszewEEyPgsffs"; // Gemini API Key
 
 // ─── VERİ TABLOLARI ───────────────────────────────────────────────
 const CROPS = {
