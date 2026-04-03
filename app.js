@@ -215,9 +215,9 @@ window.agrd = (crop) => { return CROP_AGR[crop] || CROP_AGR.default; }
 window.calcSoil = (field) => {
   const key = field.id + '_' + tstr();
   if(SC[key]) return SC[key];
-  const a = agrd(field.crop);
+  const a = window.agrd(field.crop);
   const fc = SOIL_FC[field.soilType] || a.fc || 80;
-  const wx = WXC[field.id]?.days || simWX(field.lat, field.lon);
+  const wx = window.WXC[field.id]?.days || simWX(field.lat, field.lon);
   const today = tstr();
   const irr = (field.events||[]).filter(e=>e.type==='sulama'&&!e.planned&&e.date<=today).map(e=>{
     const qty=parseFloat(e.qty)||0, u=e.unit||'';
