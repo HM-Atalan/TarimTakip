@@ -1,6 +1,8 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import { getAuth, onAuthStateChanged, signInWithPopup, signInWithEmailAndPassword,
          createUserWithEmailAndPassword, GoogleAuthProvider, signOut }
+// Remote Config'i içe aktar
+import { getRemoteConfig, getValue, fetchAndActivate } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-remote-config.js";
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import { getFirestore, doc, collection, getDocs, setDoc, deleteDoc, onSnapshot, query, orderBy }
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
@@ -17,7 +19,19 @@ const FB_CONFIG = {
   appId: "1:398574086576:web:b77d48009ec6049e3cce75",
   measurementId: "G-Z2PKPCNSXW"
 };
-const GEMINI_API_KEY = "AIzaSyAbIVU2RHeTF6eo-GrqDwszewEEyPgsffs";
+// Remote Config Kurulumu
+const remoteConfig = getRemoteConfig(app);
+remoteConfig.settings.minimumFetchIntervalMillis = 3600000; // 1 saat önbelleğe alır
+
+window.getGeminiKey = async () => {
+  try {
+    await fetchAndActivate(remoteConfig);
+    return getValue(remoteConfig, 'GMINIK').asString();
+  } catch (err) {
+    console.error("Key çekilemedi:", err);
+    return null;
+  }
+};
 let app=null, auth=null, db=null;
 let FB_READY = false;
 
