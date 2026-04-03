@@ -4,7 +4,8 @@
 //  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 // import { getFirestore, doc, collection, getDocs, setDoc, deleteDoc, onSnapshot, query, orderBy }
 //  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-
+window.DB = { fields: [], s: { acuKey: '' } };
+window.CUR = null;
 // ═══════════════════════════════════════════════════════════════════
 // TarlaTakip — Ana Script (Temiz Versiyon)
 // Gemini 2.5 Flash · Firebase Firestore · Open-Meteo · NASA · Sentinel-2
@@ -155,17 +156,17 @@ const EVI = {ekim:'🌱',dikim:'🪴',sulama:'💧',gübre:'🧪',ilaç:'🔬',�
 const EVC = {ekim:'#d8f3dc',dikim:'#d8f3dc',sulama:'#d6eaf8',gübre:'#fef3cd',ilaç:'#e8daef',çapa:'#f0ebe0',hasat:'#d8f3dc',budama:'#fde8d8',toprak:'#eee',analiz:'#fadbd8',yakıt:'#fff3cd',işçilik:'#e8f4fd',diğer:'#f0f0f0'};
 
 // ─── DURUM DEĞİŞKENLERİ ───────────────────────────────────────────
-let DB = {fields:[], s:{acuKey:''}};
-let CUR = null;        // aktif tarla
-let WXC = {};          // hava önbelleği {fieldId: {days, src, at}}
-let SATC = {};         // uydu önbelleği {fieldId: {data, at}}
-let SC = {};           // toprak nem önbelleği {fieldId_date: result}
-let lmap = null;       // leaflet harita
-let aiHist = [];       // AI sohbet geçmişi
-let pendPh = null;     // bekleyen fotoğraf (base64)
-let curTab = 'map';    // aktif sekme
-let curPhIdx = null;   // görüntülenen fotoğraf indeksi
-let LOCAL = false;     // yerel mod
+window.DB = {fields:[], s:{acuKey:''}};
+window.CUR = null;        // aktif tarla
+window.WXC = {};          // hava önbelleği {fieldId: {days, src, at}}
+window.SATC = {};         // uydu önbelleği {fieldId: {data, at}}
+window.SC = {};           // toprak nem önbelleği {fieldId_date: result}
+window.lmap = null;       // leaflet harita
+window.aiHist = [];       // AI sohbet geçmişi
+window.pendPh = null;     // bekleyen fotoğraf (base64)
+window.curTab = 'map';    // aktif sekme
+window.curPhIdx = null;   // görüntülenen fotoğraf indeksi
+window.LOCAL = false;     // yerel mod
 
 // ─── YARDIMCI FONKSİYONLAR ───────────────────────────────────────
 const qs = s => document.querySelector(s);
@@ -1185,7 +1186,7 @@ window.openFM = (editId) => {
   qs('#fm-title').textContent=editId?'Tarla Düzenle':'Yeni Tarla Ekle';
   qs('#f-prev').style.display='none';
   if(editId){
-    const f=DB.fields.find(x=>x.id===editId); if(!f) return;
+    const f = window.DB.fields.find(x=>x.id===editId); if(!f) return;
     qs('#f-lat').value=f.lat||''; qs('#f-lon').value=f.lon||'';
     qs('#f-name').value=f.name||''; qs('#f-loc').value=f.location||'';
     qs('#f-area').value=f.area||''; qs('#f-aunit').value=f.areaUnit||'dönüm';
@@ -1592,7 +1593,7 @@ setInterval(async()=>{
   if(window.FB_USER&&window.FB_MODE){
     try{
       const fields=await window.fbLoadFields(window.FB_USER.uid);
-      if(fields?.length){ DB.fields=fields; saveLocalDB(); invSoilAll(); renderSB(); renderDash(); if(CUR){const u=DB.fields.find(f=>f.id===CUR.id);if(u)CUR=u;} }
+      if(fields?.length){ window.DB.fields=fields; saveLocalDB(); invSoilAll(); renderSB(); renderDash(); if(window.CUR){const u = window.DB.fields.find(f=>f.id===window.CUR.id);if(u)window.CUR=u;} }
     }catch(e){}
   }
 }, 300000);
