@@ -1,15 +1,17 @@
-import { getAuth, onAuthStateChanged, signInWithPopup, signInWithEmailAndPassword,
-         createUserWithEmailAndPassword, GoogleAuthProvider, signOut }
-  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-import { getFirestore, doc, collection, getDocs, setDoc, deleteDoc, onSnapshot, query, orderBy }
-  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-
+// import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+// import { getAuth, onAuthStateChanged, signInWithPopup, signInWithEmailAndPassword,
+//         createUserWithEmailAndPassword, GoogleAuthProvider, signOut }
+//  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+// import { getFirestore, doc, collection, getDocs, setDoc, deleteDoc, onSnapshot, query, orderBy }
+//  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+window.DB = { fields: [], s: { acuKey: '' } };
+window.CUR = null;
 // ═══════════════════════════════════════════════════════════════════
 // TarlaTakip — Ana Script (Temiz Versiyon)
 // Gemini 2.5 Flash · Firebase Firestore · Open-Meteo · NASA · Sentinel-2
 // ═══════════════════════════════════════════════════════════════════
 
-const GK = "AIzaSyAbIVU2RHeTF6eo-GrqDwszewEEyPgsffs"; // Gemini API Key
+// const GK = "AIzaSyAbIVU2RHeTF6eo-GrqDwszewEEyPgsffs"; // Gemini API Key
 
 // ─── VERİ TABLOLARI ───────────────────────────────────────────────
 const CROPS = {
@@ -154,22 +156,22 @@ const EVI = {ekim:'🌱',dikim:'🪴',sulama:'💧',gübre:'🧪',ilaç:'🔬',�
 const EVC = {ekim:'#d8f3dc',dikim:'#d8f3dc',sulama:'#d6eaf8',gübre:'#fef3cd',ilaç:'#e8daef',çapa:'#f0ebe0',hasat:'#d8f3dc',budama:'#fde8d8',toprak:'#eee',analiz:'#fadbd8',yakıt:'#fff3cd',işçilik:'#e8f4fd',diğer:'#f0f0f0'};
 
 // ─── DURUM DEĞİŞKENLERİ ───────────────────────────────────────────
-let DB = {fields:[], s:{acuKey:''}};
-let CUR = null;        // aktif tarla
-let WXC = {};          // hava önbelleği {fieldId: {days, src, at}}
-let SATC = {};         // uydu önbelleği {fieldId: {data, at}}
-let SC = {};           // toprak nem önbelleği {fieldId_date: result}
-let lmap = null;       // leaflet harita
-let aiHist = [];       // AI sohbet geçmişi
-let pendPh = null;     // bekleyen fotoğraf (base64)
-let curTab = 'map';    // aktif sekme
-let curPhIdx = null;   // görüntülenen fotoğraf indeksi
-let LOCAL = false;     // yerel mod
+window.DB = {fields:[], s:{acuKey:''}};
+window.CUR = null;        // aktif tarla
+window.WXC = {};          // hava önbelleği {fieldId: {days, src, at}}
+window.SATC = {};         // uydu önbelleği {fieldId: {data, at}}
+window.SC = {};           // toprak nem önbelleği {fieldId_date: result}
+window.lmap = null;       // leaflet harita
+window.aiHist = [];       // AI sohbet geçmişi
+window.pendPh = null;     // bekleyen fotoğraf (base64)
+window.curTab = 'map';    // aktif sekme
+window.curPhIdx = null;   // görüntülenen fotoğraf indeksi
+window.LOCAL = false;     // yerel mod
 
 // ─── YARDIMCI FONKSİYONLAR ───────────────────────────────────────
 const qs = s => document.querySelector(s);
 const gid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
-const tstr = () => new Date().toISOString().slice(0,10);
+window.tstr = () => new Date().toISOString().slice(0,10);
 const fd = s => s ? new Date(s+'T12:00:00').toLocaleDateString('tr-TR',{day:'numeric',month:'short',year:'numeric'}) : '—';
 window.toast = (msg, err=false) => {
   const t = qs('#toast'); if(!t) return;
@@ -213,9 +215,9 @@ window.agrd = (crop) => { return CROP_AGR[crop] || CROP_AGR.default; }
 window.calcSoil = (field) => {
   const key = field.id + '_' + tstr();
   if(SC[key]) return SC[key];
-  const a = agrd(field.crop);
+  const a = window.agrd(field.crop);
   const fc = SOIL_FC[field.soilType] || a.fc || 80;
-  const wx = WXC[field.id]?.days || simWX(field.lat, field.lon);
+  const wx = window.WXC[field.id]?.days || simWX(field.lat, field.lon);
   const today = tstr();
   const irr = (field.events||[]).filter(e=>e.type==='sulama'&&!e.planned&&e.date<=today).map(e=>{
     const qty=parseFloat(e.qty)||0, u=e.unit||'';
@@ -252,9 +254,9 @@ window.scl = (pct) => {
 
 // ─── FENOLOJİ & HASAT TAHMİNİ ────────────────────────────────────
 window.calcGDD = (field) => {
-  const a = agrd(field.crop);
+  const a = window.agrd(field.crop);
   if(!field.plantDate) return null;
-  const wx = WXC[field.id]?.days || simWX(field.lat, field.lon);
+  const wx = window.WXC[field.id]?.days || simWX(field.lat, field.lon);
   let acc = 0;
   wx.filter(d=>d.date>=field.plantDate && d.date<=tstr()).forEach(d=>{
     acc += Math.max(0, Math.min((d.tmax+d.tmin)/2, a.tm) - a.tb);
@@ -263,8 +265,8 @@ window.calcGDD = (field) => {
 }
 
 window.calcPheno = (field) => {
-  const a = agrd(field.crop);
-  const gdd = calcGDD(field);
+  const a = window.agrd(field.crop);
+  const gdd = window.calcGDD(field);
   if(gdd===null) return null;
   const days = field.plantDate ? Math.round((Date.now()-new Date(field.plantDate+'T00:00:00'))/(864e5)) : 0;
   let si = a.st.length-1;
@@ -277,8 +279,8 @@ window.calcPheno = (field) => {
 }
 
 window.calcHarvest = (field) => {
-  const a = agrd(field.crop);
-  const gdd = calcGDD(field);
+  const a = window.agrd(field.crop);
+  const gdd = window.calcGDD(field);
   if(!field.plantDate){
     return field.harvestDate
       ? {estDate:field.harvestDate, daysLeft:Math.round((new Date(field.harvestDate)-Date.now())/(864e5)), conf:'manuel', gddPct:null}
@@ -286,7 +288,7 @@ window.calcHarvest = (field) => {
   }
   const gddTarget = a.gd[a.gd.length-1];
   const remain = Math.max(0, gddTarget - (gdd||0));
-  const wx = WXC[field.id]?.days || simWX(field.lat, field.lon);
+  const wx = window.WXC[field.id]?.days || simWX(field.lat, field.lon);
   const fut = wx.filter(d=>d.date>tstr()).slice(0,14);
   const avgDGDD = fut.length>0
     ? fut.reduce((s,d)=>s+Math.max(0, Math.min((d.tmax+d.tmin)/2,a.tm)-a.tb),0)/fut.length
@@ -295,7 +297,7 @@ window.calcHarvest = (field) => {
   const dCal = Math.max(0, a.td - Math.round((Date.now()-new Date(field.plantDate+'T00:00:00'))/(864e5)));
   const blend = Math.round(dGDD*0.65 + dCal*0.35);
   const est = new Date(); est.setDate(est.getDate()+blend);
-  const conf = WXC[field.id]&&fut.length>=7?'yüksek':fut.length>=3?'orta':'düşük';
+  const conf = window.WXC[field.id]&&fut.length>=7?'yüksek':fut.length>=3?'orta':'düşük';
   const gddPct = Math.min(100, Math.round((gdd||0)/gddTarget*100));
   let dev = null;
   if(field.harvestDate) dev = blend - Math.round((new Date(field.harvestDate)-Date.now())/(864e5));
@@ -303,7 +305,7 @@ window.calcHarvest = (field) => {
 }
 
 window.calcSolar = (field) => {
-  const wx = WXC[field.id]?.days || simWX(field.lat, field.lon);
+  const wx = window.WXC[field.id]?.days || simWX(field.lat, field.lon);
   const td = wx.find(d=>d.date===tstr()); if(!td) return null;
   const doy = Math.floor((Date.now()-new Date(new Date().getFullYear(),0,0))/(864e5));
   const decl = 23.45 * Math.sin((284+doy)*Math.PI/180);
@@ -312,7 +314,7 @@ window.calcSolar = (field) => {
   const cf = code<=1?1.0:code<=3?0.82:code<=49?0.5:code<=80?0.35:0.2;
   const sunH = Math.round(maxSun*cf*10)/10;
   const rad = Math.round(sunH*2.5*cf*10)/10;
-  const a = agrd(field.crop);
+  const a = window.agrd(field.crop);
   const hs = td.tmax>a.tm?'stres':td.tmax>a.to+6?'uyarı':td.tmax<a.mn+5?'soğuk':'normal';
   return {sunH, rad, cf, hs, topt:a.to, tmaxLim:a.tm, minT:a.mn, actMax:td.tmax};
 }
@@ -357,7 +359,7 @@ window.fetchWX = async (field) => {
       rain:+(d.daily.precipitation_sum[i]||0).toFixed(1),wind:Math.round(d.daily.windspeed_10m_max[i]),
       code:d.daily.weathercode[i],et0:+(d.daily.et0_fao_evapotranspiration?.[i]||0).toFixed(1)
     }));
-    WXC[id]={days,src:'om',at:Date.now()};
+    window.WXC[id]={days,src:'om',at:Date.now()};
     setBadge('wxsrc','om','ok','Open-Meteo ✓');
     invSoil(id);
     renderWX(field);
@@ -369,7 +371,7 @@ window.fetchWX = async (field) => {
     renderWX(field);
   }
   // AccuWeather (opsiyonel)
-  const ak = DB.s.acuKey;
+  const ak = window.DB.s.acuKey;
   if(ak){
     setBadge('wxsrc','acu','load','AccuWeather…');
     try{
@@ -809,7 +811,7 @@ window.renderRecTab = (field) => {
   const he=calcHarvest(field);
   const sh=calcSolar(field);
   const a=agrd(field.crop);
-  const phen=qs('#rec-pheno');
+  const phen=qs('reg-emailc-pheno');
   if(phen){
     let html='';
     if(ph){
@@ -853,7 +855,7 @@ window.renderRecTab = (field) => {
 
   // Akıllı uyarılar
   const recs=buildAutoRecs(field);
-  const ar=qs('#rec-auto');
+  const ar=qs('reg-emailc-auto');
   if(ar) ar.innerHTML=recs.length
     ? recs.map(r=>`<div class="ritem" style="background:${r.bg};"><div class="rico" style="background:${r.bg};color:${r.c};font-size:15px;">${r.i}</div><div class="rbody"><div class="rtitle">${r.t}<span class="rpri" style="background:${r.c}22;color:${r.c};">${r.pr}</span></div><div class="rsub">${r.s}</div></div></div>`).join('')
     : '<div style="color:var(--green2);font-size:13px;">✅ Kritik uyarı yok.</div>';
@@ -861,7 +863,7 @@ window.renderRecTab = (field) => {
   // Gübre programı
   const fertH=(field.events||[]).filter(e=>e.type==='gübre').sort((a,b)=>b.date.localeCompare(a.date)).slice(0,3)
     .map(e=>`${fd(e.date)}: ${e.extra?.['e-ft']||''} (${e.qty||'?'}${e.unit||'kg'})`);
-  const fr=qs('#rec-fert');
+  const fr=qs('reg-emailc-fert');
   if(fr) fr.innerHTML=`<div style="font-size:13px;font-weight:600;margin-bottom:8px;">${field.crop||'Ürün seçilmemiş'} — Gübre Programı</div><div style="font-size:13px;line-height:1.7;background:var(--bg3);padding:10px 12px;border-radius:var(--r);">${a.fert}</div>${fertH.length?`<div style="font-size:11px;color:var(--text3);margin-top:8px;">Son gübrelemeler: ${fertH.join(' · ')}</div>`:''}`;
 
   // Hastalık/zararlı riski
@@ -871,11 +873,11 @@ window.renderRecTab = (field) => {
   const rl=avgR>5&&avgT>18?'YÜKSEK':avgR>2||avgT>24?'ORTA':'DÜŞÜK';
   const rc={YÜKSEK:'var(--red)',ORTA:'var(--amber)',DÜŞÜK:'var(--green2)'}[rl];
   const pests=PEST_DATA[field.crop]||PEST_DATA.default;
-  const pr=qs('#rec-pest');
+  const pr=qs('reg-emailc-pest');
   if(pr) pr.innerHTML=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;"><span style="font-size:13px;">7 günlük hava koşullarına göre risk:</span><span class="tag" style="background:${rc}22;color:${rc};">${rl}</span></div>${pests.map(p=>`<div class="ritem" style="background:var(--bg3);padding:7px 10px;margin-bottom:5px;"><div class="rico" style="background:var(--pbg);color:var(--purple);font-size:12px;">🔬</div><div class="rbody"><div class="rtitle" style="font-size:12px;">${p}</div></div></div>`).join('')}<div style="font-size:11px;color:var(--text3);margin-top:7px;">⚠️ İlaçlama öncesi zirai mühendis ve resmi etiket bilgilerine başvurun.</div>`;
 
   // Son AI analizi
-  const ar2=qs('#rec-ai');
+  const ar2=qs('reg-emailc-ai');
   if(ar2) ar2.innerHTML=field.aiRecs?.length
     ? `<div class="bubble bb" style="white-space:pre-line;">${field.aiRecs[0].text}</div><div style="font-size:10px;color:var(--text3);margin-top:4px;">${fd(field.aiRecs[0].date)} tarihli analiz</div>`
     : '<div style="color:var(--text3);font-size:13px;">🤖 AI Analiz butonu ile tüm veriler harmanlanarak bütünsel uzman yorumu oluşturulur.</div>';
@@ -1072,7 +1074,7 @@ window.clrChat = () => { const c=qs('#ai-chat'); if(c) c.innerHTML=''; aiHist=[]
 
 window.analyzePhoto = async () => {
   if(!pendPh){ toast('Fotoğraf seçin',true); return; }
-  const el=qs('#p-ai');
+  const el=qs('#p-ai-res');
   el.innerHTML='<div class="bubble bs"><span style="display:inline-flex;gap:3px;"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.3;animation:dl 1.2s infinite;"></span><span style="width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.3;animation:dl 1.2s .2s infinite;"></span><span style="width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.3;animation:dl 1.2s .4s infinite;"></span></span> Görsel + tarla bağlamı analiz ediliyor...</div>';
   try{
     const b64=pendPh.split(',')[1]; const mime=pendPh.split(';')[0].split(':')[1]||'image/jpeg';
@@ -1115,11 +1117,11 @@ window.prevPhoto = async (e) => {
   qs('#p-prev').innerHTML=`<img src="${pendPh}" style="width:100%;max-height:140px;object-fit:cover;border-radius:var(--r);margin-top:6px;"/>`;
   if(si) si.textContent=`~${kb} KB (sıkıştırıldı)`;
 }
-window.openPhotoM = () => { pendPh=null; qs('#p-prev').innerHTML=''; qs('#p-ai').innerHTML=''; qs('#p-date').value=tstr(); qs('#p-note').value=''; if(qs('#p-size-info'))qs('#p-size-info').textContent=''; qs('#p-file').value=''; qs('#m-photo').classList.add('on'); }
+window.openPhotoM = () => { pendPh=null; qs('#p-prev').innerHTML=''; qs('#p-ai-res').innerHTML=''; qs('#p-date').value=tstr(); qs('#p-note').value=''; if(qs('#p-size-info'))qs('#p-size-info').textContent=''; qs('#p-file').value=''; qs('#m-photo').classList.add('on'); }
 window.savePhoto = async () => {
   if(!pendPh){ toast('Fotoğraf seçin',true); return; } if(!CUR) return;
   CUR.photos=CUR.photos||[];
-  const aiText=qs('#p-ai')?.innerText||'';
+  const aiText=qs('#p-ai-res')?.innerText||'';
   CUR.photos.push({id:gid(),date:qs('#p-date').value||tstr(),type:qs('#p-type').value,note:qs('#p-note').value,data:pendPh,ai:aiText.length>10?aiText:''});
   const fi=DB.fields.findIndex(f=>f.id===CUR.id); if(fi>=0) DB.fields[fi]=CUR;
   await saveFieldToDB(CUR);
@@ -1129,16 +1131,16 @@ window.renderPhTab = (field) => {
   const grid=qs('#ph-grid'); if(!grid) return;
   if(!field.photos?.length){ grid.innerHTML='<div style="grid-column:1/-1;"><div class="empty">📷<br/>Fotoğraf yok</div></div>'; return; }
   grid.innerHTML=field.photos.map((p,idx)=>`
-    <div style="aspect-ratio:1;border-radius:var(--r);overflow:hidden;background:var(--bg3);border:1px solid var(--bdr);position:relative;cursor:pointer;" onclick="openPhViewer(${idx})">
+    <div style="aspect-ratio:1;border-radius:var(--r);overflow:hidden;background:var(--bg3);border:1px solid var(--bdr);position:relative;cursor:pointer;" onclick="openPhV(${idx})">
       <img src="${p.data}" alt="${p.type}" loading="lazy" style="width:100%;height:100%;object-fit:cover;"/>
       <div class="ph-thumb-ov">
-        <button class="btn btns" onclick="event.stopPropagation();openPhViewer(${idx})">🔍</button>
+        <button class="btn btns" onclick="event.stopPropagation();openPhV(${idx})">🔍</button>
         <button class="btn btns btnd" onclick="event.stopPropagation();delPhoto(${idx})">🗑️</button>
       </div>
       <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.55);color:#fff;font-size:9px;padding:3px 5px;">${fd(p.date)} · ${p.type}</div>
     </div>`).join('');
 }
-window.openPhViewer = (idx) => {
+window.openPhV = (idx) => {
   if(!CUR?.photos?.[idx]) return;
   curPhIdx=idx; const p=CUR.photos[idx];
   qs('#ph-viewer-img').src=p.data;
@@ -1154,7 +1156,7 @@ window.editPhNote = () => {
   qs('#ph-viewer-info').textContent=`${fd(p.date)} · ${p.type}${p.note?' · '+p.note:''}`;
   renderPhTab(CUR); toast('Not güncellendi');
 }
-window.deleteCurrentPh = async () => {
+window.delCurPh = async () => {
   if(curPhIdx===null||!CUR?.photos) return;
   if(!confirm('Bu fotoğrafı silmek istediğinizden emin misiniz?')) return;
   CUR.photos.splice(curPhIdx,1);
@@ -1180,29 +1182,56 @@ window.fillCrops = () => {
 }
 
 window.openFM = (editId) => {
-  qs('#f-eid').value=editId||'';
-  qs('#fm-title').textContent=editId?'Tarla Düzenle':'Yeni Tarla Ekle';
-  qs('#f-import-preview').style.display='none';
-  if(editId){
-    const f=DB.fields.find(x=>x.id===editId); if(!f) return;
-    qs('#f-lat').value=f.lat||''; qs('#f-lon').value=f.lon||'';
-    qs('#f-name').value=f.name||''; qs('#f-loc').value=f.location||'';
-    qs('#f-area').value=f.area||''; qs('#f-aunit').value=f.areaUnit||'dönüm';
-    qs('#f-soil').value=f.soilType||'killiTin';
-    qs('#f-cat').value=f.category||''; fillCrops();
-    if(f.crop) qs('#f-crop').value=f.crop;
-    qs('#f-qty').value=f.qty||''; qs('#f-qunit').value=f.qunit||'adet';
-    qs('#f-color').value=f.color||'#40916c';
-    qs('#f-plant').value=f.plantDate||''; qs('#f-harvest').value=f.harvestDate||'';
-    qs('#f-notes').value=f.notes||'';
-  }else{
-    ['f-lat','f-lon','f-name','f-loc','f-area','f-qty','f-notes','f-plant','f-harvest'].forEach(id=>{ const el=qs('#'+id); if(el) el.value=''; });
-    qs('#f-color').value='#40916c'; qs('#f-cat').value=''; qs('#f-aunit').value='dönüm';
-    if(qs('#f-file')) qs('#f-file').value='';
+  qs('#f-eid').value = editId || '';
+  qs('#fm-title').textContent = editId ? 'Tarla Düzenle' : 'Yeni Tarla Ekle';
+
+  const preview = qs('#f-import-preview');
+  if (preview) preview.style.display = 'none'; // ✅ güvenli
+
+  if (editId) {
+    const f = window.DB.fields.find(x => x.id === editId);
+    if (!f) return;
+
+    qs('#f-lat').value = f.lat || '';
+    qs('#f-lon').value = f.lon || '';
+    qs('#f-name').value = f.name || '';
+    qs('#f-loc').value = f.location || '';
+    qs('#f-area').value = f.area || '';
+    qs('#f-aunit').value = f.areaUnit || 'dönüm';
+    qs('#f-soil').value = f.soilType || 'killiTin';
+    qs('#f-cat').value = f.category || '';
+    fillCrops();
+    if (f.crop) qs('#f-crop').value = f.crop;
+
+    qs('#f-qty').value = f.qty || '';
+    qs('#f-qunit').value = f.qunit || 'adet';
+    qs('#f-color').value = f.color || '#40916c';
+    qs('#f-plant').value = f.plantDate || '';
+    qs('#f-harvest').value = f.harvestDate || '';
+    qs('#f-notes').value = f.notes || '';
+
+  } else {
+    [
+      'f-lat','f-lon','f-name','f-loc',
+      'f-area','f-qty','f-notes',
+      'f-plant','f-harvest'
+    ].forEach(id => {
+      const el = qs('#' + id);
+      if (el) el.value = '';
+    });
+
+    qs('#f-color').value = '#40916c';
+    qs('#f-cat').value = '';
+    qs('#f-aunit').value = 'dönüm';
+
+    const file = qs('#f-file');
+    if (file) file.value = '';
+
     fillCrops();
   }
+
   qs('#m-field').classList.add('on');
-}
+};
 
 window.saveField = async () => {
   const name=qs('#f-name').value.trim(); if(!name){ toast('Tarla adı zorunlu',true); return; }
@@ -1235,7 +1264,7 @@ window.delField = async (id) => {
 }
 
 // ─── DOSYA İMPORT (JSON/GeoJSON/KML) ─────────────────────────────
-window.importFieldFile = async (e) => {
+window.importFF = async (e) => {
   const file=e.target.files[0]; if(!file) return;
   const name=file.name.toLowerCase();
   const reader=new FileReader();
@@ -1249,7 +1278,7 @@ window.importFieldFile = async (e) => {
     if(R.area){ qs('#f-area').value=R.area.toFixed(4); if(R.areaUnit) qs('#f-aunit').value=R.areaUnit; }
     if(R.description) qs('#f-notes').value=(qs('#f-notes').value?qs('#f-notes').value+'\n':'')+R.description;
     if(R.location) qs('#f-loc').value=R.location;
-    const prev=qs('#f-import-preview');
+    const prev=qs('#f-prev');
     if(prev){ prev.style.display='block'; prev.innerHTML=`✅ <strong>Dosyadan:</strong> ${R.name||'İsimsiz'} · ${R.lat?.toFixed(4)}, ${R.lon?.toFixed(4)}${R.area?' · Alan: '+R.area.toFixed(1)+' '+(R.areaUnit||'m²'):''}${R.description?' · '+R.description.slice(0,80):''}`; }
     toast('Dosya verisi yüklendi ✓');
   };
@@ -1356,13 +1385,13 @@ window.signGoogle = async () => {
 }
 window.signEmail = async (mode) => {
   if(!window.FB_MODE){ noFBNotice(); return; }
-  const em=qs(mode==='login'?'#login-email':'#reg-email')?.value; const pw=qs(mode==='login'?'#login-pass':'#reg-pass')?.value;
+  const em=qs('#'+mode[0]+'e')?.value; const pw=qs('#'+mode[0]+'p')?.value;
   try{
     if(mode==='login') await window.fbSignInEmail(em,pw);
     else await window.fbRegisterEmail(em,pw);
   }catch(e){ showAErr(mode,e.message); }
 }
-window.showAErr = (m,msg) => { const el=qs('#'+m+'-err'); if(el){ el.style.display='block'; el.textContent=msg; } }
+window.showAErr = (m,msg) => { const el=qs('#'+m[0]+'err'); if(el){ el.style.display='block'; el.textContent=msg; } }
 window.noFBNotice = () => { qs('#no-fb-note').style.display='block'; qs('#auth-form-wrap').style.display='none'; }
 window.enterLocalMode = () => { LOCAL=true; qs('#auth-screen').classList.add('hidden'); loadLocalDB(); DB.fields.forEach(f=>fetchWX(f)); renderAll(); toast('Yerel modda çalışıyorsunuz'); }
 window.doSignOut = async () => { if(window.FB_MODE&&window.FB_USER) await window.fbSignOut(); else{ LOCAL=false; DB.fields=[]; } qs('#auth-screen')?.classList.remove('hidden'); }
@@ -1401,7 +1430,7 @@ window.renderSB = () => {
   });
 }
 
-window.renderFKPIs = (field) = {
+window.renderFKPIs = (field) => {
   invSoil(field.id);
   const s=calcSoil(field); const sc=scl(s.pct);
   const tc=(field.events||[]).reduce((t,e)=>t+(e.total||(e.cost*(e.qty||1))),0);
@@ -1534,7 +1563,7 @@ window.renderCal = () => {
 }
 
 window.renderRep = () => {
-  const rc=qs('#rep-content'); if(!rc) return;
+  const rc=qs('reg-emailp-content'); if(!rc) return;
   if(!DB.fields.length){ rc.innerHTML='<div class="empty">📊<br/>Tarla ekleyin.</div>'; return; }
   const total=DB.fields.reduce((s,f)=>s+(f.events||[]).reduce((c,e)=>c+(e.total||(e.cost*(e.qty||1))),0),0);
   const ta=DB.fields.reduce((s,f)=>s+(f.area||0),0);
@@ -1591,7 +1620,7 @@ setInterval(async()=>{
   if(window.FB_USER&&window.FB_MODE){
     try{
       const fields=await window.fbLoadFields(window.FB_USER.uid);
-      if(fields?.length){ DB.fields=fields; saveLocalDB(); invSoilAll(); renderSB(); renderDash(); if(CUR){const u=DB.fields.find(f=>f.id===CUR.id);if(u)CUR=u;} }
+      if(fields?.length){ window.DB.fields=fields; saveLocalDB(); invSoilAll(); renderSB(); renderDash(); if(window.CUR){const u = window.DB.fields.find(f=>f.id===window.CUR.id);if(u)window.CUR=u;} }
     }catch(e){}
   }
 }, 300000);
