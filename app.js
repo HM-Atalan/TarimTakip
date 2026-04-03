@@ -1,9 +1,9 @@
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-import { getAuth, onAuthStateChanged, signInWithPopup, signInWithEmailAndPassword,
-         createUserWithEmailAndPassword, GoogleAuthProvider, signOut }
-  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-import { getFirestore, doc, collection, getDocs, setDoc, deleteDoc, onSnapshot, query, orderBy }
-  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+// import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+// import { getAuth, onAuthStateChanged, signInWithPopup, signInWithEmailAndPassword,
+//         createUserWithEmailAndPassword, GoogleAuthProvider, signOut }
+//  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+// import { getFirestore, doc, collection, getDocs, setDoc, deleteDoc, onSnapshot, query, orderBy }
+//  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 // ═══════════════════════════════════════════════════════════════════
 // TarlaTakip — Ana Script (Temiz Versiyon)
