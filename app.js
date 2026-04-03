@@ -171,7 +171,7 @@ window.LOCAL = false;     // yerel mod
 // ─── YARDIMCI FONKSİYONLAR ───────────────────────────────────────
 const qs = s => document.querySelector(s);
 const gid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
-const tstr = () => new Date().toISOString().slice(0,10);
+window.tstr = () => new Date().toISOString().slice(0,10);
 const fd = s => s ? new Date(s+'T12:00:00').toLocaleDateString('tr-TR',{day:'numeric',month:'short',year:'numeric'}) : '—';
 window.toast = (msg, err=false) => {
   const t = qs('#toast'); if(!t) return;
