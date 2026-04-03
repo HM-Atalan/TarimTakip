@@ -11,7 +11,7 @@ window.CUR = null;
 // Gemini 2.5 Flash · Firebase Firestore · Open-Meteo · NASA · Sentinel-2
 // ═══════════════════════════════════════════════════════════════════
 
-// const GK = "AIzaSyAbIVU2RHeTF6eo-GrqDwszewEEyPgsffs"; // Gemini API Key
+const GK = "AIzaSyAbIVU2RHeTF6eo-GrqDwszewEEyPgsffs"; // Gemini API Key
 
 // ─── VERİ TABLOLARI ───────────────────────────────────────────────
 const CROPS = {
@@ -811,7 +811,7 @@ window.renderRecTab = (field) => {
   const he=calcHarvest(field);
   const sh=calcSolar(field);
   const a=agrd(field.crop);
-  const phen=qs('reg-emailc-pheno');
+  const phen=qs('#rec-pheno');
   if(phen){
     let html='';
     if(ph){
@@ -855,7 +855,7 @@ window.renderRecTab = (field) => {
 
   // Akıllı uyarılar
   const recs=buildAutoRecs(field);
-  const ar=qs('reg-emailc-auto');
+  const ar=qs('#rec-auto');
   if(ar) ar.innerHTML=recs.length
     ? recs.map(r=>`<div class="ritem" style="background:${r.bg};"><div class="rico" style="background:${r.bg};color:${r.c};font-size:15px;">${r.i}</div><div class="rbody"><div class="rtitle">${r.t}<span class="rpri" style="background:${r.c}22;color:${r.c};">${r.pr}</span></div><div class="rsub">${r.s}</div></div></div>`).join('')
     : '<div style="color:var(--green2);font-size:13px;">✅ Kritik uyarı yok.</div>';
@@ -863,7 +863,7 @@ window.renderRecTab = (field) => {
   // Gübre programı
   const fertH=(field.events||[]).filter(e=>e.type==='gübre').sort((a,b)=>b.date.localeCompare(a.date)).slice(0,3)
     .map(e=>`${fd(e.date)}: ${e.extra?.['e-ft']||''} (${e.qty||'?'}${e.unit||'kg'})`);
-  const fr=qs('reg-emailc-fert');
+  const fr=qs('#rec-fert');
   if(fr) fr.innerHTML=`<div style="font-size:13px;font-weight:600;margin-bottom:8px;">${field.crop||'Ürün seçilmemiş'} — Gübre Programı</div><div style="font-size:13px;line-height:1.7;background:var(--bg3);padding:10px 12px;border-radius:var(--r);">${a.fert}</div>${fertH.length?`<div style="font-size:11px;color:var(--text3);margin-top:8px;">Son gübrelemeler: ${fertH.join(' · ')}</div>`:''}`;
 
   // Hastalık/zararlı riski
@@ -873,11 +873,11 @@ window.renderRecTab = (field) => {
   const rl=avgR>5&&avgT>18?'YÜKSEK':avgR>2||avgT>24?'ORTA':'DÜŞÜK';
   const rc={YÜKSEK:'var(--red)',ORTA:'var(--amber)',DÜŞÜK:'var(--green2)'}[rl];
   const pests=PEST_DATA[field.crop]||PEST_DATA.default;
-  const pr=qs('reg-emailc-pest');
+  const pr=qs('#rec-pest');
   if(pr) pr.innerHTML=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;"><span style="font-size:13px;">7 günlük hava koşullarına göre risk:</span><span class="tag" style="background:${rc}22;color:${rc};">${rl}</span></div>${pests.map(p=>`<div class="ritem" style="background:var(--bg3);padding:7px 10px;margin-bottom:5px;"><div class="rico" style="background:var(--pbg);color:var(--purple);font-size:12px;">🔬</div><div class="rbody"><div class="rtitle" style="font-size:12px;">${p}</div></div></div>`).join('')}<div style="font-size:11px;color:var(--text3);margin-top:7px;">⚠️ İlaçlama öncesi zirai mühendis ve resmi etiket bilgilerine başvurun.</div>`;
 
   // Son AI analizi
-  const ar2=qs('reg-emailc-ai');
+  const ar2=qs('#rec-ai');
   if(ar2) ar2.innerHTML=field.aiRecs?.length
     ? `<div class="bubble bb" style="white-space:pre-line;">${field.aiRecs[0].text}</div><div style="font-size:10px;color:var(--text3);margin-top:4px;">${fd(field.aiRecs[0].date)} tarihli analiz</div>`
     : '<div style="color:var(--text3);font-size:13px;">🤖 AI Analiz butonu ile tüm veriler harmanlanarak bütünsel uzman yorumu oluşturulur.</div>';
@@ -1074,7 +1074,7 @@ window.clrChat = () => { const c=qs('#ai-chat'); if(c) c.innerHTML=''; aiHist=[]
 
 window.analyzePhoto = async () => {
   if(!pendPh){ toast('Fotoğraf seçin',true); return; }
-  const el=qs('#p-ai-res');
+  const el=qs('#p-ai');
   el.innerHTML='<div class="bubble bs"><span style="display:inline-flex;gap:3px;"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.3;animation:dl 1.2s infinite;"></span><span style="width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.3;animation:dl 1.2s .2s infinite;"></span><span style="width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.3;animation:dl 1.2s .4s infinite;"></span></span> Görsel + tarla bağlamı analiz ediliyor...</div>';
   try{
     const b64=pendPh.split(',')[1]; const mime=pendPh.split(';')[0].split(':')[1]||'image/jpeg';
@@ -1117,11 +1117,11 @@ window.prevPhoto = async (e) => {
   qs('#p-prev').innerHTML=`<img src="${pendPh}" style="width:100%;max-height:140px;object-fit:cover;border-radius:var(--r);margin-top:6px;"/>`;
   if(si) si.textContent=`~${kb} KB (sıkıştırıldı)`;
 }
-window.openPhotoM = () => { pendPh=null; qs('#p-prev').innerHTML=''; qs('#p-ai-res').innerHTML=''; qs('#p-date').value=tstr(); qs('#p-note').value=''; if(qs('#p-size-info'))qs('#p-size-info').textContent=''; qs('#p-file').value=''; qs('#m-photo').classList.add('on'); }
+window.openPhotoM = () => { pendPh=null; qs('#p-prev').innerHTML=''; qs('#p-ai').innerHTML=''; qs('#p-date').value=tstr(); qs('#p-note').value=''; if(qs('#p-size-info'))qs('#p-size-info').textContent=''; qs('#p-file').value=''; qs('#m-photo').classList.add('on'); }
 window.savePhoto = async () => {
   if(!pendPh){ toast('Fotoğraf seçin',true); return; } if(!CUR) return;
   CUR.photos=CUR.photos||[];
-  const aiText=qs('#p-ai-res')?.innerText||'';
+  const aiText=qs('#p-ai')?.innerText||'';
   CUR.photos.push({id:gid(),date:qs('#p-date').value||tstr(),type:qs('#p-type').value,note:qs('#p-note').value,data:pendPh,ai:aiText.length>10?aiText:''});
   const fi=DB.fields.findIndex(f=>f.id===CUR.id); if(fi>=0) DB.fields[fi]=CUR;
   await saveFieldToDB(CUR);
@@ -1186,7 +1186,7 @@ window.openFM = (editId) => {
   qs('#fm-title').textContent = editId ? 'Tarla Düzenle' : 'Yeni Tarla Ekle';
 
   const preview = qs('#f-import-preview');
-  if (preview) preview.style.display = 'none'; // ✅ güvenli
+  if (preview) preview.style.display = 'none';
 
   if (editId) {
     const f = window.DB.fields.find(x => x.id === editId);
@@ -1278,7 +1278,7 @@ window.importFF = async (e) => {
     if(R.area){ qs('#f-area').value=R.area.toFixed(4); if(R.areaUnit) qs('#f-aunit').value=R.areaUnit; }
     if(R.description) qs('#f-notes').value=(qs('#f-notes').value?qs('#f-notes').value+'\n':'')+R.description;
     if(R.location) qs('#f-loc').value=R.location;
-    const prev=qs('#f-prev');
+    const prev=qs('#f-import-preview');
     if(prev){ prev.style.display='block'; prev.innerHTML=`✅ <strong>Dosyadan:</strong> ${R.name||'İsimsiz'} · ${R.lat?.toFixed(4)}, ${R.lon?.toFixed(4)}${R.area?' · Alan: '+R.area.toFixed(1)+' '+(R.areaUnit||'m²'):''}${R.description?' · '+R.description.slice(0,80):''}`; }
     toast('Dosya verisi yüklendi ✓');
   };
@@ -1563,7 +1563,7 @@ window.renderCal = () => {
 }
 
 window.renderRep = () => {
-  const rc=qs('reg-emailp-content'); if(!rc) return;
+  const rc=qs('#rep-content'); if(!rc) return;
   if(!DB.fields.length){ rc.innerHTML='<div class="empty">📊<br/>Tarla ekleyin.</div>'; return; }
   const total=DB.fields.reduce((s,f)=>s+(f.events||[]).reduce((c,e)=>c+(e.total||(e.cost*(e.qty||1))),0),0);
   const ta=DB.fields.reduce((s,f)=>s+(f.area||0),0);
@@ -1624,6 +1624,10 @@ setInterval(async()=>{
     }catch(e){}
   }
 }, 300000);
+
+// Alias for HTML onclick compatibility
+window.importFieldFile = window.importFF;
+window.deleteCurrentPh = window.delCurPh;
 
 // ─── BAŞLATMA ────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded',()=>{
