@@ -254,9 +254,9 @@ window.scl = (pct) => {
 
 // ─── FENOLOJİ & HASAT TAHMİNİ ────────────────────────────────────
 window.calcGDD = (field) => {
-  const a = agrd(field.crop);
+  const a = window.agrd(field.crop);
   if(!field.plantDate) return null;
-  const wx = WXC[field.id]?.days || simWX(field.lat, field.lon);
+  const wx = window.WXC[field.id]?.days || simWX(field.lat, field.lon);
   let acc = 0;
   wx.filter(d=>d.date>=field.plantDate && d.date<=tstr()).forEach(d=>{
     acc += Math.max(0, Math.min((d.tmax+d.tmin)/2, a.tm) - a.tb);
@@ -265,8 +265,8 @@ window.calcGDD = (field) => {
 }
 
 window.calcPheno = (field) => {
-  const a = agrd(field.crop);
-  const gdd = calcGDD(field);
+  const a = window.agrd(field.crop);
+  const gdd = window.calcGDD(field);
   if(gdd===null) return null;
   const days = field.plantDate ? Math.round((Date.now()-new Date(field.plantDate+'T00:00:00'))/(864e5)) : 0;
   let si = a.st.length-1;
@@ -279,8 +279,8 @@ window.calcPheno = (field) => {
 }
 
 window.calcHarvest = (field) => {
-  const a = agrd(field.crop);
-  const gdd = calcGDD(field);
+  const a = window.agrd(field.crop);
+  const gdd = window.calcGDD(field);
   if(!field.plantDate){
     return field.harvestDate
       ? {estDate:field.harvestDate, daysLeft:Math.round((new Date(field.harvestDate)-Date.now())/(864e5)), conf:'manuel', gddPct:null}
@@ -288,7 +288,7 @@ window.calcHarvest = (field) => {
   }
   const gddTarget = a.gd[a.gd.length-1];
   const remain = Math.max(0, gddTarget - (gdd||0));
-  const wx = WXC[field.id]?.days || simWX(field.lat, field.lon);
+  const wx = window.WXC[field.id]?.days || simWX(field.lat, field.lon);
   const fut = wx.filter(d=>d.date>tstr()).slice(0,14);
   const avgDGDD = fut.length>0
     ? fut.reduce((s,d)=>s+Math.max(0, Math.min((d.tmax+d.tmin)/2,a.tm)-a.tb),0)/fut.length
@@ -297,7 +297,7 @@ window.calcHarvest = (field) => {
   const dCal = Math.max(0, a.td - Math.round((Date.now()-new Date(field.plantDate+'T00:00:00'))/(864e5)));
   const blend = Math.round(dGDD*0.65 + dCal*0.35);
   const est = new Date(); est.setDate(est.getDate()+blend);
-  const conf = WXC[field.id]&&fut.length>=7?'yüksek':fut.length>=3?'orta':'düşük';
+  const conf = window.WXC[field.id]&&fut.length>=7?'yüksek':fut.length>=3?'orta':'düşük';
   const gddPct = Math.min(100, Math.round((gdd||0)/gddTarget*100));
   let dev = null;
   if(field.harvestDate) dev = blend - Math.round((new Date(field.harvestDate)-Date.now())/(864e5));
@@ -305,7 +305,7 @@ window.calcHarvest = (field) => {
 }
 
 window.calcSolar = (field) => {
-  const wx = WXC[field.id]?.days || simWX(field.lat, field.lon);
+  const wx = window.WXC[field.id]?.days || simWX(field.lat, field.lon);
   const td = wx.find(d=>d.date===tstr()); if(!td) return null;
   const doy = Math.floor((Date.now()-new Date(new Date().getFullYear(),0,0))/(864e5));
   const decl = 23.45 * Math.sin((284+doy)*Math.PI/180);
@@ -314,7 +314,7 @@ window.calcSolar = (field) => {
   const cf = code<=1?1.0:code<=3?0.82:code<=49?0.5:code<=80?0.35:0.2;
   const sunH = Math.round(maxSun*cf*10)/10;
   const rad = Math.round(sunH*2.5*cf*10)/10;
-  const a = agrd(field.crop);
+  const a = window.agrd(field.crop);
   const hs = td.tmax>a.tm?'stres':td.tmax>a.to+6?'uyarı':td.tmax<a.mn+5?'soğuk':'normal';
   return {sunH, rad, cf, hs, topt:a.to, tmaxLim:a.tm, minT:a.mn, actMax:td.tmax};
 }
@@ -359,7 +359,7 @@ window.fetchWX = async (field) => {
       rain:+(d.daily.precipitation_sum[i]||0).toFixed(1),wind:Math.round(d.daily.windspeed_10m_max[i]),
       code:d.daily.weathercode[i],et0:+(d.daily.et0_fao_evapotranspiration?.[i]||0).toFixed(1)
     }));
-    WXC[id]={days,src:'om',at:Date.now()};
+    window.WXC[id]={days,src:'om',at:Date.now()};
     setBadge('wxsrc','om','ok','Open-Meteo ✓');
     invSoil(id);
     renderWX(field);
@@ -371,7 +371,7 @@ window.fetchWX = async (field) => {
     renderWX(field);
   }
   // AccuWeather (opsiyonel)
-  const ak = DB.s.acuKey;
+  const ak = window.DB.s.acuKey;
   if(ak){
     setBadge('wxsrc','acu','load','AccuWeather…');
     try{
