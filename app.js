@@ -609,7 +609,7 @@ window.initMap = (lat, lon, field) => {
   lmap=L.map('lmap',{zoomControl:true}).setView([lat,lon],14);
   osm.addTo(lmap);
   L.control.layers({'🗺️ Standart (OSM)':osm,'🛰️ Uydu (Esri)':sat,'🏔️ Topografik':topo},{}).addTo(lmap);
-  window.DB.fields.forEach(f=>{
+  DB.fields.forEach(f=>{
     const c=L.circleMarker([f.lat,f.lon],{radius:f.id===field?.id?11:7,color:f.color||'#40916c',fillColor:f.color||'#40916c',fillOpacity:0.7,weight:f.id===field?.id?3:1.5});
     c.bindPopup(`<b>${f.name}</b><br/>${f.crop||'—'} · ${f.area} ${f.areaUnit||'dönüm'}`);
     c.addTo(lmap);
@@ -732,7 +732,7 @@ window.saveEvent = async () => {
   else (CUR.events=CUR.events||[]).push(ev);
   CUR.events.sort((a,b)=>b.date.localeCompare(a.date));
   invSoil(CUR.id);
-  const fi=window.DB.fields.findIndex(f=>f.id===CUR.id); if(fi>=0) window.DB.fields[fi]=CUR;
+  const fi=DB.fields.findIndex(f=>f.id===CUR.id); if(fi>=0) DB.fields[fi]=CUR;
   await saveFieldToDB(CUR);
   closeM('event'); renderFieldPage(CUR); renderSB(); renderDash();
   toast(eid?'Güncellendi':'Kaydedildi');
@@ -742,7 +742,7 @@ window.delEv = async (id) => {
   if(!CUR||!confirm('Bu kaydı silmek istediğinizden emin misiniz?')) return;
   CUR.events=(CUR.events||[]).filter(e=>e.id!==id);
   invSoil(CUR.id);
-  const fi=window.DB.fields.findIndex(f=>f.id===CUR.id); if(fi>=0) window.DB.fields[fi]=CUR;
+  const fi=DB.fields.findIndex(f=>f.id===CUR.id); if(fi>=0) DB.fields[fi]=CUR;
   await saveFieldToDB(CUR);
   renderEvTab(CUR); renderDash(); toast('Silindi');
 }
@@ -1023,7 +1023,7 @@ KURALLAR:
     qs('#ai-chat').scrollTop=qs('#ai-chat').scrollHeight;
 
     CUR.aiRecs=[{date:today,text}];
-    const fi=window.DB.fields.findIndex(f=>f.id===CUR.id); if(fi>=0) window.DB.fields[fi]=CUR;
+    const fi=DB.fields.findIndex(f=>f.id===CUR.id); if(fi>=0) DB.fields[fi]=CUR;
     await saveFieldToDB(CUR);
     renderRecTab(CUR);
     toast('✓ Bütünsel AI analizi tamamlandı');
@@ -1122,7 +1122,7 @@ window.savePhoto = async () => {
   CUR.photos=CUR.photos||[];
   const aiText=qs('#p-ai-res')?.innerText||'';
   CUR.photos.push({id:gid(),date:qs('#p-date').value||tstr(),type:qs('#p-type').value,note:qs('#p-note').value,data:pendPh,ai:aiText.length>10?aiText:''});
-  const fi=window.DB.fields.findIndex(f=>f.id===CUR.id); if(fi>=0) window.DB.fields[fi]=CUR;
+  const fi=DB.fields.findIndex(f=>f.id===CUR.id); if(fi>=0) DB.fields[fi]=CUR;
   await saveFieldToDB(CUR);
   closeM('photo'); pendPh=null; renderPhTab(CUR); toast('Fotoğraf kaydedildi');
 }
@@ -1159,13 +1159,13 @@ window.delCurPh = async () => {
   if(curPhIdx===null||!CUR?.photos) return;
   if(!confirm('Bu fotoğrafı silmek istediğinizden emin misiniz?')) return;
   CUR.photos.splice(curPhIdx,1);
-  const fi=window.DB.fields.findIndex(f=>f.id===CUR.id); if(fi>=0) window.DB.fields[fi]=CUR;
+  const fi=DB.fields.findIndex(f=>f.id===CUR.id); if(fi>=0) DB.fields[fi]=CUR;
   await saveFieldToDB(CUR); closePhViewer(); renderPhTab(CUR); toast('Silindi');
 }
 window.delPhoto = async (idx) => {
   if(!CUR?.photos||!confirm('Bu fotoğrafı silmek istediğinizden emin misiniz?')) return;
   CUR.photos.splice(idx,1);
-  const fi=window.DB.fields.findIndex(f=>f.id===CUR.id); if(fi>=0) window.DB.fields[fi]=CUR;
+  const fi=DB.fields.findIndex(f=>f.id===CUR.id); if(fi>=0) DB.fields[fi]=CUR;
   await saveFieldToDB(CUR); renderPhTab(CUR); toast('Silindi');
 }
 
@@ -1185,7 +1185,7 @@ window.openFM = (editId) => {
   qs('#fm-title').textContent=editId?'Tarla Düzenle':'Yeni Tarla Ekle';
   qs('#f-prev').style.display='none';
   if(editId){
-    const f=window.DB.fields.find(x=>x.id===editId); if(!f) return;
+    const f=DB.fields.find(x=>x.id===editId); if(!f) return;
     qs('#f-lat').value=f.lat||''; qs('#f-lon').value=f.lon||'';
     qs('#f-name').value=f.name||''; qs('#f-loc').value=f.location||'';
     qs('#f-area').value=f.area||''; qs('#f-aunit').value=f.areaUnit||'dönüm';
@@ -1207,7 +1207,7 @@ window.openFM = (editId) => {
 
 window.saveField = async () => {
   const name=qs('#f-name').value.trim(); if(!name){ toast('Tarla adı zorunlu',true); return; }
-  const eid=qs('#f-eid').value; const ex=eid?window.DB.fields.find(f=>f.id===eid):null;
+  const eid=qs('#f-eid').value; const ex=eid?DB.fields.find(f=>f.id===eid):null;
   const f={
     id:ex?ex.id:gid(), name,
     lat:parseFloat(qs('#f-lat').value)||36.8, lon:parseFloat(qs('#f-lon').value)||30.7,
@@ -1219,7 +1219,7 @@ window.saveField = async () => {
     color:qs('#f-color').value||'#40916c', notes:qs('#f-notes').value,
     events:ex?ex.events:[], photos:ex?ex.photos:[], aiRecs:ex?ex.aiRecs:[]
   };
-  if(ex){ window.DB.fields[window.DB.fields.indexOf(ex)]=f; }else window.DB.fields.push(f);
+  if(ex){ DB.fields[DB.fields.indexOf(ex)]=f; }else DB.fields.push(f);
   await saveFieldToDB(f);
   WXC[f.id]=null; invSoil(f.id);
   closeM('field'); renderAll(); showField(f.id);
@@ -1228,7 +1228,7 @@ window.saveField = async () => {
 
 window.delField = async (id) => {
   if(!id||!confirm('Bu tarla ve tüm verileri silinecek. Emin misiniz?')) return;
-  window.DB.fields=window.DB.fields.filter(f=>f.id!==id);
+  DB.fields=DB.fields.filter(f=>f.id!==id);
   await deleteFieldFromDB(id);
   delete WXC[id]; delete SATC[id]; invSoil(id);
   if(CUR?.id===id){ CUR=null; goPage('dash'); }
@@ -1324,25 +1324,25 @@ window.syncFromDB = async () => {
   const uid=window.FB_USER?.uid; if(!uid||!window.FB_MODE) return;
   try{
     const fields=await window.fbLoadFields(uid);
-    window.DB.fields=fields||[];
+    DB.fields=fields||[];
     saveLocalDB();
     invSoilAll();
     // Hava verisi olmayan tarlalar için çek
-    window.DB.fields.forEach(f=>{ if(!WXC[f.id]) fetchWX(f); });
+    DB.fields.forEach(f=>{ if(!WXC[f.id]) fetchWX(f); });
     renderAll();
-    if(CUR){ const u=window.DB.fields.find(f=>f.id===CUR.id); if(u){ CUR=u; if(qs('#page-field.on')) renderFieldPage(CUR); }else{ CUR=null; goPage('dash'); } }
+    if(CUR){ const u=DB.fields.find(f=>f.id===CUR.id); if(u){ CUR=u; if(qs('#page-field.on')) renderFieldPage(CUR); }else{ CUR=null; goPage('dash'); } }
     toast('Veriler güncellendi ✓');
   }catch(e){ toast('Senkronizasyon hatası: '+e.message,true); }
 }
-window.saveLocalDB = () => { try{ localStorage.setItem('tt_fields',JSON.stringify(window.DB.fields)); }catch(e){} }
-window.loadLocalDB = () => { try{ const d=localStorage.getItem('tt_fields'); if(d) window.DB.fields=JSON.parse(d)||[]; }catch(e){} }
+window.saveLocalDB = () => { try{ localStorage.setItem('tt_fields',JSON.stringify(DB.fields)); }catch(e){} }
+window.loadLocalDB = () => { try{ const d=localStorage.getItem('tt_fields'); if(d) DB.fields=JSON.parse(d)||[]; }catch(e){} }
 window.saveSettings = () => { DB.s.acuKey=qs('#acu-key')?.value||''; localStorage.setItem('tt_s',JSON.stringify(DB.s)); toast('Kaydedildi'); }
 window.loadSettings = () => {
   try{ const s=localStorage.getItem('tt_s'); if(s){ const p=JSON.parse(s); DB.s={...DB.s,...p}; } }catch(e){}
   if(qs('#acu-key')) qs('#acu-key').value=DB.s.acuKey||'';
 }
-window.expData = () => { const a=document.createElement('a'); a.href='data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify({fields:window.DB.fields},null,2)); a.download='tarim_'+tstr()+'.json'; a.click(); }
-window.impData = (e) => { const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=ev=>{ try{ const d=JSON.parse(ev.target.result); if(d.fields){ window.DB.fields=d.fields; saveLocalDB(); renderAll(); toast('İçe aktarıldı'); } }catch{ toast('Geçersiz JSON',true); } }; r.readAsText(f); }
+window.expData = () => { const a=document.createElement('a'); a.href='data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify({fields:DB.fields},null,2)); a.download='tarim_'+tstr()+'.json'; a.click(); }
+window.impData = (e) => { const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=ev=>{ try{ const d=JSON.parse(ev.target.result); if(d.fields){ DB.fields=d.fields; saveLocalDB(); renderAll(); toast('İçe aktarıldı'); } }catch{ toast('Geçersiz JSON',true); } }; r.readAsText(f); }
 
 // ─── KULLANICI GİRİŞİ ────────────────────────────────────────────
 window.swAuthTab = (tab, el) => {
@@ -1365,8 +1365,8 @@ window.signEmail = async (mode) => {
 }
 window.showAErr = (m,msg) => { const el=qs('#'+m[0]+'err'); if(el){ el.style.display='block'; el.textContent=msg; } }
 window.noFBNotice = () => { qs('#no-fb-note').style.display='block'; qs('#auth-form-wrap').style.display='none'; }
-window.enterLocalMode = () => { LOCAL=true; qs('#auth-screen').classList.add('hidden'); loadLocalDB(); window.DB.fields.forEach(f=>fetchWX(f)); renderAll(); toast('Yerel modda çalışıyorsunuz'); }
-window.doSignOut = async () => { if(window.FB_MODE&&window.FB_USER) await window.fbSignOut(); else{ LOCAL=false; window.DB.fields=[]; } qs('#auth-screen')?.classList.remove('hidden'); }
+window.enterLocalMode() = () => { LOCAL=true; qs('#auth-screen').classList.add('hidden'); loadLocalDB(); DB.fields.forEach(f=>fetchWX(f)); renderAll(); toast('Yerel modda çalışıyorsunuz'); }
+window.doSignOut = async () => { if(window.FB_MODE&&window.FB_USER) await window.fbSignOut(); else{ LOCAL=false; DB.fields=[]; } qs('#auth-screen')?.classList.remove('hidden'); }
 
 window.onAuthChange=async(user)=>{
   if(user){
@@ -1392,7 +1392,7 @@ window.renderAll = () => { renderSB(); renderDash(); renderCal(); renderRep(); }
 
 window.renderSB = () => {
   const el=qs('#sb-list'); if(!el) return; el.innerHTML='';
-  window.DB.fields.forEach(f=>{
+  DB.fields.forEach(f=>{
     invSoil(f.id);
     const s=calcSoil(f); const sc=scl(s.pct);
     const d=document.createElement('div'); d.className='fi'+(f.id===CUR?.id?' on':'');
@@ -1427,16 +1427,16 @@ window.renderFKPIs = (field) => {
 window.renderDash = () => {
   const now=new Date();
   qs('#ddate').textContent=now.toLocaleDateString('tr-TR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  const ta=window.DB.fields.reduce((s,f)=>s+(f.area||0),0);
-  const tc=window.DB.fields.reduce((s,f)=>s+(f.events||[]).reduce((c,e)=>c+(e.total||(e.cost*(e.qty||1))),0),0);
+  const ta=DB.fields.reduce((s,f)=>s+(f.area||0),0);
+  const tc=DB.fields.reduce((s,f)=>s+(f.events||[]).reduce((c,e)=>c+(e.total||(e.cost*(e.qty||1))),0),0);
   qs('#dkpis').innerHTML=`
-    <div class="kpi"><div class="kpi-l">Tarla</div><div class="kpi-v">${window.DB.fields.length}</div></div>
+    <div class="kpi"><div class="kpi-l">Tarla</div><div class="kpi-v">${DB.fields.length}</div></div>
     <div class="kpi"><div class="kpi-l">Toplam Alan</div><div class="kpi-v">${ta.toFixed(1)}</div></div>
     <div class="kpi"><div class="kpi-l">Toplam Maliyet</div><div class="kpi-v">${Math.round(tc).toLocaleString('tr-TR')}</div><div class="kpi-s">₺</div></div>
-    <div class="kpi"><div class="kpi-l">Ekili Tarla</div><div class="kpi-v">${window.DB.fields.filter(f=>f.crop).length}<small>/${window.DB.fields.length}</small></div></div>`;
+    <div class="kpi"><div class="kpi-l">Ekili Tarla</div><div class="kpi-v">${DB.fields.filter(f=>f.crop).length}<small>/${DB.fields.length}</small></div></div>`;
   const df=qs('#dfields');
-  if(!window.DB.fields.length){ df.innerHTML='<div class="empty">🌾<br/>Tarla yok.<br/>"+ Yeni Tarla" ile başlayın.</div>'; qs('#devents').innerHTML=''; qs('#dplanned').innerHTML=''; return; }
-  df.innerHTML=window.DB.fields.map(f=>{
+  if(!DB.fields.length){ df.innerHTML='<div class="empty">🌾<br/>Tarla yok.<br/>"+ Yeni Tarla" ile başlayın.</div>'; qs('#devents').innerHTML=''; qs('#dplanned').innerHTML=''; return; }
+  df.innerHTML=DB.fields.map(f=>{
     invSoil(f.id);
     const s=calcSoil(f); const sc=scl(s.pct);
     const ph=calcPheno(f); const he=calcHarvest(f);
@@ -1453,16 +1453,16 @@ window.renderDash = () => {
       </div>
     </div>`;
   }).join('');
-  const allEvs=[];window.DB.fields.forEach(f=>(f.events||[]).filter(e=>!e.planned).forEach(e=>allEvs.push({...e,fn:f.name})));
+  const allEvs=[];DB.fields.forEach(f=>(f.events||[]).filter(e=>!e.planned).forEach(e=>allEvs.push({...e,fn:f.name})));
   allEvs.sort((a,b)=>b.date.localeCompare(a.date));
   qs('#devents').innerHTML=allEvs.slice(0,4).map(e=>`<div class="evrow"><div class="evico" style="background:${EVC[e.type]||'#eee'};font-size:12px;">${EVI[e.type]||'📝'}</div><div class="evbody"><div class="evtitle">${e.fn} — ${e.type}</div><div class="evsub">${fd(e.date)}${e.notes?' · '+e.notes.slice(0,40):''}</div></div>${e.total?`<span class="evcost">${Math.round(e.total).toLocaleString()}₺</span>`:''}</div>`).join('')||'<div style="color:var(--text3);font-size:13px;">Kayıt yok.</div>';
-  const planned=[];window.DB.fields.forEach(f=>(f.events||[]).filter(e=>e.planned&&e.date>=tstr()).forEach(e=>planned.push({...e,fn:f.name,fc:f.color})));
+  const planned=[];DB.fields.forEach(f=>(f.events||[]).filter(e=>e.planned&&e.date>=tstr()).forEach(e=>planned.push({...e,fn:f.name,fc:f.color})));
   planned.sort((a,b)=>a.date.localeCompare(b.date));
   qs('#dplanned').innerHTML=planned.slice(0,4).map(e=>`<div class="evrow"><div class="evico" style="background:${e.fc||'#40916c'}22;font-size:13px;">${EVI[e.type]||'📝'}</div><div class="evbody"><div class="evtitle">${e.fn} — ${e.type}</div><div class="evsub">${fd(e.date)}</div></div></div>`).join('')||'<div style="color:var(--text3);font-size:13px;">Planlanan görev yok.</div>';
 }
 
 window.showField = (id) => {
-  CUR=window.DB.fields.find(f=>f.id===id); if(!CUR) return;
+  CUR=DB.fields.find(f=>f.id===id); if(!CUR) return;
   aiHist=[]; curTab='map';
   goPage('field'); renderSB(); renderFieldPage(CUR);
   if(!WXC[CUR.id]) fetchWX(CUR);
@@ -1523,33 +1523,33 @@ window.renderCal = () => {
   qs('#cal-heads').innerHTML=['Pt','Sa','Ça','Pe','Cu','Ct','Pz'].map(d=>`<div style="text-align:center;font-size:10px;font-weight:700;color:var(--text3);padding:3px 0;">${d}</div>`).join('');
   const first=(new Date(y,m,1).getDay()+6)%7, dc=new Date(y,m+1,0).getDate();
   const mon=now.toISOString().slice(0,7);
-  const ed=new Set(); window.DB.fields.forEach(f=>(f.events||[]).forEach(e=>{ if(e.date.startsWith(mon)) ed.add(+e.date.slice(8,10)); }));
+  const ed=new Set(); DB.fields.forEach(f=>(f.events||[]).forEach(e=>{ if(e.date.startsWith(mon)) ed.add(+e.date.slice(8,10)); }));
   let html=Array(first).fill('<div></div>').join('');
   for(let i=1;i<=dc;i++){ const isTd=i===now.getDate(); html+=`<div style="aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:12px;border-radius:7px;background:${isTd?'var(--gbg)':'transparent'};color:${isTd?'var(--green2)':'inherit'};font-weight:${isTd?700:400};position:relative;">${i}${ed.has(i)?`<span style="width:4px;height:4px;background:var(--green2);border-radius:50%;position:absolute;bottom:2px;"></span>`:''}</div>`; }
   qs('#cal-cells').innerHTML=html;
-  const me=[]; window.DB.fields.forEach(f=>(f.events||[]).filter(e=>e.date.startsWith(mon)).forEach(e=>me.push({...e,fn:f.name})));
+  const me=[]; DB.fields.forEach(f=>(f.events||[]).filter(e=>e.date.startsWith(mon)).forEach(e=>me.push({...e,fn:f.name})));
   me.sort((a,b)=>a.date.localeCompare(b.date));
   qs('#cal-evs').innerHTML=me.length?me.map(e=>`<div class="evrow"><div class="evico" style="background:${EVC[e.type]||'#eee'};font-size:12px;">${EVI[e.type]||'📝'}</div><div class="evbody"><div class="evtitle">${e.fn}</div><div class="evsub">${e.type} · ${fd(e.date)}</div></div>${e.total?`<span class="evcost">${Math.round(e.total).toLocaleString()}₺</span>`:''}</div>`).join(''):'<div style="color:var(--text3);font-size:13px;">Bu ay olay yok.</div>';
-  const aiS=[]; window.DB.fields.forEach(f=>{ if(f.aiRecs?.length) aiS.push({fn:f.name,text:f.aiRecs[0].text.slice(0,130)+'...',date:f.aiRecs[0].date}); });
+  const aiS=[]; DB.fields.forEach(f=>{ if(f.aiRecs?.length) aiS.push({fn:f.name,text:f.aiRecs[0].text.slice(0,130)+'...',date:f.aiRecs[0].date}); });
   qs('#cal-ai').innerHTML=aiS.length?aiS.map(s=>`<div class="ritem" style="background:var(--glt);"><div class="rico" style="background:var(--gbg);color:var(--green2);">🤖</div><div class="rbody"><div class="rtitle">${s.fn}</div><div class="rsub">${s.text}</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">${fd(s.date)}</div></div></div>`).join(''):'<div style="color:var(--text3);font-size:13px;">AI analizi çalıştırarak öneri alın.</div>';
 }
 
 window.renderRep = () => {
   const rc=qs('reg-emailp-content'); if(!rc) return;
-  if(!window.DB.fields.length){ rc.innerHTML='<div class="empty">📊<br/>Tarla ekleyin.</div>'; return; }
-  const total=window.DB.fields.reduce((s,f)=>s+(f.events||[]).reduce((c,e)=>c+(e.total||(e.cost*(e.qty||1))),0),0);
-  const ta=window.DB.fields.reduce((s,f)=>s+(f.area||0),0);
-  const byCat={}; window.DB.fields.forEach(f=>(f.events||[]).filter(e=>e.cost>0).forEach(e=>{ const t=e.total||(e.cost*(e.qty||1)); byCat[e.type]=(byCat[e.type]||0)+t; }));
+  if(!DB.fields.length){ rc.innerHTML='<div class="empty">📊<br/>Tarla ekleyin.</div>'; return; }
+  const total=DB.fields.reduce((s,f)=>s+(f.events||[]).reduce((c,e)=>c+(e.total||(e.cost*(e.qty||1))),0),0);
+  const ta=DB.fields.reduce((s,f)=>s+(f.area||0),0);
+  const byCat={}; DB.fields.forEach(f=>(f.events||[]).filter(e=>e.cost>0).forEach(e=>{ const t=e.total||(e.cost*(e.qty||1)); byCat[e.type]=(byCat[e.type]||0)+t; }));
   rc.innerHTML=`
     <div class="krow">
       <div class="kpi"><div class="kpi-l">Toplam Yatırım</div><div class="kpi-v">${Math.round(total).toLocaleString('tr-TR')}</div><div class="kpi-s">₺</div></div>
       <div class="kpi"><div class="kpi-l">Alan Başı</div><div class="kpi-v">${ta?Math.round(total/ta).toLocaleString():0}</div><div class="kpi-s">₺/birim</div></div>
-      <div class="kpi"><div class="kpi-l">Tarla</div><div class="kpi-v">${window.DB.fields.length}</div></div>
+      <div class="kpi"><div class="kpi-l">Tarla</div><div class="kpi-v">${DB.fields.length}</div></div>
       <div class="kpi"><div class="kpi-l">Toplam Alan</div><div class="kpi-v">${ta.toFixed(1)}</div></div>
     </div>
     <div class="g2">
       <div class="card"><div class="ct">Tarla Bazlı Maliyet</div>
-        ${window.DB.fields.map(f=>{const fc=(f.events||[]).reduce((s,e)=>s+(e.total||(e.cost*(e.qty||1))),0);return`<div class="pr"><span class="prl" style="display:flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border-radius:50%;background:${f.color};flex-shrink:0;"></span>${f.name}</span><div class="prt"><div class="prf" style="width:${total?Math.round(fc/total*100):0}%;background:${f.color};"></div></div><span class="prv">${Math.round(fc).toLocaleString()}₺</span></div>`;}).join('')}
+        ${DB.fields.map(f=>{const fc=(f.events||[]).reduce((s,e)=>s+(e.total||(e.cost*(e.qty||1))),0);return`<div class="pr"><span class="prl" style="display:flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border-radius:50%;background:${f.color};flex-shrink:0;"></span>${f.name}</span><div class="prt"><div class="prf" style="width:${total?Math.round(fc/total*100):0}%;background:${f.color};"></div></div><span class="prv">${Math.round(fc).toLocaleString()}₺</span></div>`;}).join('')}
         <div style="display:flex;justify-content:space-between;font-weight:700;font-size:14px;padding-top:9px;margin-top:5px;border-top:1px solid var(--bdr);"><span>Toplam</span><span>${Math.round(total).toLocaleString('tr-TR')} ₺</span></div>
       </div>
       <div class="card"><div class="ct">İşlem Bazlı Dağılım</div>
@@ -1558,7 +1558,7 @@ window.renderRep = () => {
     </div>
     <div class="card"><div class="ct">Tarla Özet Tablosu</div>
       <div style="overflow-x:auto;"><table class="tbl"><thead><tr><th>Tarla</th><th>Ürün</th><th>Alan</th><th>Dönem</th><th>Nem</th><th>Hasat</th><th>Maliyet</th></tr></thead>
-      <tbody>${window.DB.fields.map(f=>{
+      <tbody>${DB.fields.map(f=>{
         invSoil(f.id); const s=calcSoil(f); const sc=scl(s.pct);
         const fc=(f.events||[]).reduce((c,e)=>c+(e.total||(e.cost*(e.qty||1))),0);
         const ph=calcPheno(f); const he=calcHarvest(f);
@@ -1577,7 +1577,7 @@ window.renderRep = () => {
 // Her 10 dakikada bir: toprak önbelleğini temizle + hava verisini yenile
 setInterval(async()=>{
   invSoilAll();
-  const toFetch=window.DB.fields.filter(f=>!WXC[f.id]||(Date.now()-WXC[f.id].at>1800000));
+  const toFetch=DB.fields.filter(f=>!WXC[f.id]||(Date.now()-WXC[f.id].at>1800000));
   await Promise.allSettled(toFetch.map(f=>fetchWX(f)));
   renderSB(); renderDash();
   if(CUR&&qs('#page-field.on')){
@@ -1592,7 +1592,7 @@ setInterval(async()=>{
   if(window.FB_USER&&window.FB_MODE){
     try{
       const fields=await window.fbLoadFields(window.FB_USER.uid);
-      if(fields?.length){ window.DB.fields=fields; saveLocalDB(); invSoilAll(); renderSB(); renderDash(); if(CUR){const u=window.DB.fields.find(f=>f.id===CUR.id);if(u)CUR=u;} }
+      if(fields?.length){ DB.fields=fields; saveLocalDB(); invSoilAll(); renderSB(); renderDash(); if(CUR){const u=DB.fields.find(f=>f.id===CUR.id);if(u)CUR=u;} }
     }catch(e){}
   }
 }, 300000);
