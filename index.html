@@ -5,17 +5,18 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>Tarla Takip</title>
+<title>TarlaTakip</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-<!--Firebase-->
+<!-- Firebase Config -->
 <script type="module" src="firebase-config.js"></script>
-<!--Style CSS Bağlantı-->
+<!-- Stylesheet -->
 <link rel="stylesheet" href="style.css">
 
 </head>
 <body>
+
 <!-- ══ AUTH SCREEN ══ -->
 <div id="auth-screen">
   <div class="auth-box">
@@ -25,29 +26,29 @@
     </div>
     <div id="no-fb-note" style="display:none;">
       ⚠️ Firebase yapılandırılmamış. Ayarlar > Firebase Kurulumu bölümünden config girin veya yerel modda kullanmaya devam edin.
-      <br/><br/><button class="btn btnp" onclick="window.enterLocalMode()" style="width:100%;justify-content:center;">Yerel Modda Kullan</button>
+      <br/><br/><button class="btn btnp" onclick="enterLocalMode()" style="width:100%;justify-content:center;">Yerel Modda Kullan</button>
     </div>
     <div id="auth-form-wrap">
       <div class="auth-tabs">
-        <div class="auth-tab on" onclick="window.swAuthTab('login',this)">Giriş Yap</div>
-        <div class="auth-tab" onclick="window.swAuthTab('register',this)">Kayıt Ol</div>
+        <div class="auth-tab on" onclick="swAuthTab('login',this)">Giriş Yap</div>
+        <div class="auth-tab" onclick="swAuthTab('register',this)">Kayıt Ol</div>
       </div>
       <div class="auth-pane on" id="ap-login">
-        <button class="btn btnp" onclick="window.signGoogle()" style="width:100%;justify-content:center;margin-bottom:10px;">
+        <button class="btn btnp" onclick="signGoogle()" style="width:100%;justify-content:center;margin-bottom:10px;">
           <svg width="16" height="16" viewBox="0 0 24 24"><path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
           Google ile Giriş
         </button>
         <div class="auth-sep">veya e-posta ile</div>
         <div class="fg"><label>E-posta</label><input type="email" id="login-email" placeholder="ornek@email.com"/></div>
-        <div class="fg"><label>Şifre</label><input type="password" id="login-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')window.signEmail('login')"/></div>
+        <div class="fg"><label>Şifre</label><input type="password" id="login-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')signEmail('login')"/></div>
         <div class="auth-err" id="login-err"></div>
-        <button class="btn btnp" onclick="window.signEmail('login')" style="width:100%;justify-content:center;margin-top:4px;">Giriş Yap</button>
+        <button class="btn btnp" onclick="signEmail('login')" style="width:100%;justify-content:center;margin-top:4px;">Giriş Yap</button>
       </div>
       <div class="auth-pane" id="ap-register">
         <div class="fg"><label>E-posta</label><input type="email" id="reg-email" placeholder="ornek@email.com"/></div>
-        <div class="fg"><label>Şifre (min 6 karakter)</label><input type="password" id="reg-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')window.signEmail('register')"/></div>
+        <div class="fg"><label>Şifre (min 6 karakter)</label><input type="password" id="reg-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')signEmail('register')"/></div>
         <div class="auth-err" id="reg-err"></div>
-        <button class="btn btnp" onclick="window.signEmail('register')" style="width:100%;justify-content:center;margin-top:4px;">Hesap Oluştur</button>
+        <button class="btn btnp" onclick="signEmail('register')" style="width:100%;justify-content:center;margin-top:4px;">Hesap Oluştur</button>
       </div>
     </div>
   </div>
@@ -55,20 +56,20 @@
 
 <!-- ══ TOPBAR ══ -->
 <div id="top">
-  <button class="ibtn" id="mbtn" onclick="window.togSB()">☰</button>
+  <button class="ibtn" id="mbtn" onclick="togSB()">☰</button>
   <div class="logo">
     <svg viewBox="0 0 26 26" fill="none"><rect x="2" y="14" width="8" height="10" rx="1.5" fill="currentColor" opacity=".55"/><rect x="11" y="9" width="8" height="15" rx="1.5" fill="currentColor"/><path d="M6 14Q8 8 13 6Q18 4 20 10" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"/></svg>
     <span>TarlaTakip</span>
   </div>
   <div id="tnav">
-    <button class="tn on" onclick="window.goPage('dash')">🏠 Genel</button>
-    <button class="tn" onclick="window.goPage('cal')">📅 Takvim</button>
-    <button class="tn" onclick="window.goPage('rep')">📊 Rapor</button>
-    <button class="tn" onclick="window.goPage('cfg')">⚙️ Ayarlar</button>
+    <button class="tn on" onclick="goPage('dash')">🏠 Genel</button>
+    <button class="tn" onclick="goPage('cal')">📅 Takvim</button>
+    <button class="tn" onclick="goPage('rep')">📊 Rapor</button>
+    <button class="tn" onclick="goPage('cfg')">⚙️ Ayarlar</button>
   </div>
   <div id="tright">
-    <button class="ibtn" onclick="window.togTheme()">🌓</button>
-    <div id="user-chip" onclick="window.goPage('cfg')">
+    <button class="ibtn" onclick="togTheme()">🌓</button>
+    <div id="user-chip" onclick="goPage('cfg')">
       <div id="user-avatar">?</div>
       <span id="user-name" style="font-size:12px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
     </div>
@@ -82,7 +83,7 @@
     <div class="sb-sec">TARLALARIM</div>
     <div id="sb-list"></div>
   </div>
-  <div id="sb-foot"><button class="addbtn" onclick="window.openFM()">+ Yeni Tarla Ekle</button></div>
+  <div id="sb-foot"><button class="addbtn" onclick="openFM()">+ Yeni Tarla Ekle</button></div>
 </div>
 
 <div id="main">
@@ -93,8 +94,8 @@
     <div class="ph-row">
       <div><div class="ph-title">Genel Bakış</div><div class="ph-sub" id="ddate"></div></div>
       <div class="ph-act">
-        <button class="btn btns" onclick="window.syncFromDB()" title="Verileri yenile">🔄</button>
-        <button class="btn btns btnp" onclick="window.openFM()">+ Yeni Tarla</button>
+        <button class="btn btns" onclick="syncFromDB()" title="Verileri yenile">🔄</button>
+        <button class="btn btns btnp" onclick="openFM()">+ Yeni Tarla</button>
       </div>
     </div>
   </div>
@@ -117,11 +118,11 @@
         <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:5px;" id="fp-tags"></div>
       </div>
       <div class="ph-act">
-        <button class="btn btns" onclick="window.openFM(window.CUR?.id)">✏️ Düzenle</button>
-        <button class="btn btns" onclick="window.openEM()">+ Olay</button>
-        <button class="btn btns" onclick="window.openPhotoM()">📷</button>
-        <button class="btn btns btnp" onclick="window.runAI()">🤖 AI Analiz</button>
-        <button class="btn btns btnd" onclick="window.delField(window.CUR?.id)">🗑️</button>
+        <button class="btn btns" onclick="openFM(CUR?.id)">✏️ Düzenle</button>
+        <button class="btn btns" onclick="openEM()">+ Olay</button>
+        <button class="btn btns" onclick="openPhotoM()">📷</button>
+        <button class="btn btns btnp" onclick="runAI()">🤖 AI Analiz</button>
+        <button class="btn btns btnd" onclick="delField(CUR?.id)">🗑️</button>
       </div>
     </div>
   </div>
@@ -148,7 +149,7 @@
 
   <div id="tp-wx" class="tp">
     <div class="card">
-      <div class="ct">Veri Kaynakları <button class="btn btns" onclick="window.fetchWX()">🔄 Yenile</button></div>
+      <div class="ct">Veri Kaynakları <button class="btn btns" onclick="fetchWX()">🔄 Yenile</button></div>
       <div class="wxsrc" id="wxsrc"></div>
     </div>
     <div class="card"><div class="ct">Son 7 Gün <span class="tag tgr">Gerçek/Geçmiş</span></div><div class="wxstrip wx7" id="wx-past"></div></div>
@@ -167,7 +168,7 @@
 
   <div id="tp-sat" class="tp">
     <div class="card">
-      <div class="ct">🛰️ Tarımsal Uydu Analizi <button class="btn btns btnp" onclick="window.fetchSat()">🔄 Güncelle</button></div>
+      <div class="ct">🛰️ Tarımsal Uydu Analizi <button class="btn btns btnp" onclick="fetchSat()">🔄 Güncelle</button></div>
       <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Sentinel-2 (ESA/Copernicus) · NASA POWER · Open-Meteo Agro · STAC — Ücretsiz veri kaynakları</div>
       <div class="wxsrc" id="sat-src"></div>
     </div>
@@ -185,7 +186,7 @@
   <div id="tp-ev" class="tp">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
       <span style="font-size:14px;font-weight:700;">Olay & Maliyet Kayıtları</span>
-      <button class="btn btns btnp" onclick="window.openEM()">+ Olay Ekle</button>
+      <button class="btn btns btnp" onclick="openEM()">+ Olay Ekle</button>
     </div>
     <div class="card" style="padding:0;overflow:hidden;">
       <div style="overflow-x:auto;">
@@ -211,18 +212,18 @@
   <div id="tp-ph" class="tp">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
       <span style="font-size:14px;font-weight:700;">Fotoğraflar</span>
-      <button class="btn btns btnp" onclick="window.openPhotoM()">+ Fotoğraf</button>
+      <button class="btn btns btnp" onclick="openPhotoM()">+ Fotoğraf</button>
     </div>
     <div class="ph-grid" id="ph-grid"></div>
   </div>
 
   <div id="tp-ai" class="tp">
     <div class="card">
-      <div class="ct">🤖 AI Tarım Asistanı <button class="btn btns" onclick="window.clrChat()">Temizle</button></div>
+      <div class="ct">🤖 AI Tarım Asistanı <button class="btn btns" onclick="clrChat()">Temizle</button></div>
       <div id="ai-chat" style="max-height:340px;overflow-y:auto;margin-bottom:10px;"></div>
       <div style="display:flex;gap:7px;">
-        <input type="text" id="ai-inp" placeholder="Sorunuzu yazın..." onkeydown="if(event.key==='Enter')window.sendChat()"/>
-        <button class="btn btnp" onclick="window.sendChat()">Sor</button>
+        <input type="text" id="ai-inp" placeholder="Sorunuzu yazın..." onkeydown="if(event.key==='Enter')sendChat()"/>
+        <button class="btn btnp" onclick="sendChat()">Sor</button>
       </div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:7px;" id="qqbtns"></div>
     </div>
@@ -258,7 +259,7 @@
     <div class="ct">👤 Hesap</div>
     <div id="account-info"></div>
     <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
-      <button class="btn btnd" onclick="window.doSignOut()">Çıkış Yap</button>
+      <button class="btn btnd" onclick="doSignOut()">Çıkış Yap</button>
     </div>
   </div>
   <div class="card">
@@ -271,9 +272,9 @@
   <div class="card">
     <div class="ct">💾 Veri (Yerel Yedek)</div>
     <div style="display:flex;gap:7px;flex-wrap:wrap;">
-      <button class="btn" onclick="window.expData()">⬇ JSON Dışa</button>
+      <button class="btn" onclick="expData()">⬇ JSON Dışa</button>
       <button class="btn" onclick="document.getElementById('imp').click()">⬆ JSON İçe</button>
-      <input type="file" id="imp" accept=".json" style="display:none" onchange="window.impData(event)"/>
+      <input type="file" id="imp" accept=".json" style="display:none" onchange="impData(event)"/>
     </div>
   </div>
 </div>
@@ -283,25 +284,25 @@
 
 <!-- PHOTO VIEWER -->
 <div id="ph-viewer">
-  <button id="ph-viewer-close" onclick="window.closePhViewer()">✕</button>
+  <button id="ph-viewer-close" onclick="closePhViewer()">✕</button>
   <img id="ph-viewer-img" src="" alt=""/>
   <div class="ph-viewer-info" id="ph-viewer-info"></div>
   <div class="ph-viewer-actions">
-    <button class="btn btnb" onclick="window.editPhNote()">✏️ Not Düzenle</button>
-    <button class="btn btnd" onclick="window.deleteCurrentPh()">🗑️ Sil</button>
+    <button class="btn btnb" onclick="editPhNote()">✏️ Not Düzenle</button>
+    <button class="btn btnd" onclick="deleteCurrentPh()">🗑️ Sil</button>
   </div>
 </div>
 
 <!-- FIELD MODAL -->
-<div class="mback" id="m-field" onclick="if(event.target===this)window.closeM('field')">
+<div class="mback" id="m-field" onclick="if(event.target===this)closeM('field')">
 <div class="modal">
-  <button class="mclose" onclick="window.closeM('field')">✕</button>
+  <button class="mclose" onclick="closeM('field')">✕</button>
   <div class="mtitle" id="fm-title">Yeni Tarla Ekle</div>
 
   <!-- File import -->
   <div class="fg">
     <label>JSON / KML / GeoJSON Dosyası (Otomatik veri çekimi)</label>
-    <input type="file" id="f-file" accept=".json,.geojson,.kml" onchange="window.importFieldFile(event)"/>
+    <input type="file" id="f-file" accept=".json,.geojson,.kml" onchange="importFieldFile(event)"/>
     <div class="hint">Koordinat, alan, isim ve diğer tüm veriler otomatik çekilir</div>
   </div>
   <div id="f-import-preview" style="display:none;background:var(--glt);border:1px solid var(--gbg);border-radius:var(--r);padding:10px;font-size:12px;margin-bottom:10px;"></div>
@@ -335,7 +336,7 @@
   </div>
   <div class="fr">
     <div class="fg"><label>Ürün Kategorisi</label>
-      <select id="f-cat" onchange="window.fillCrops()">
+      <select id="f-cat" onchange="fillCrops()">
         <option value="">— Seçin —</option>
         <option value="tahil">Tahıllar</option><option value="sebze">Sebzeler</option>
         <option value="meyve">Meyveler</option><option value="narenciye">Narenciye</option>
@@ -360,21 +361,21 @@
   <div class="fg"><label>Notlar</label><textarea id="f-notes" rows="2" placeholder="Tarla hakkında notlar..."></textarea></div>
   <input type="hidden" id="f-eid"/>
   <div class="mfoot">
-    <button class="btn" onclick="window.closeM('field')">İptal</button>
-    <button class="btn btnp" onclick="window.saveField()">Kaydet</button>
+    <button class="btn" onclick="closeM('field')">İptal</button>
+    <button class="btn btnp" onclick="saveField()">Kaydet</button>
   </div>
 </div>
 </div>
 
 <!-- EVENT MODAL -->
-<div class="mback" id="m-event" onclick="if(event.target===this)window.closeM('event')">
+<div class="mback" id="m-event" onclick="if(event.target===this)closeM('event')">
 <div class="modal">
-  <button class="mclose" onclick="window.closeM('event')">✕</button>
+  <button class="mclose" onclick="closeM('event')">✕</button>
   <div class="mtitle" id="em-title">Olay / Maliyet Kaydı</div>
   <div class="fr">
     <div class="fg"><label>Tarih *</label><input type="date" id="e-date"/></div>
     <div class="fg"><label>Tür *</label>
-      <select id="e-type" onchange="window.updEF()">
+      <select id="e-type" onchange="updEF()">
         <option value="ekim">🌱 Ekim</option><option value="dikim">🪴 Dikim</option>
         <option value="sulama">💧 Sulama</option><option value="gübre">🧪 Gübreleme</option>
         <option value="ilaç">🔬 İlaçlama</option><option value="çapa">⛏️ Çapalama</option>
@@ -403,20 +404,20 @@
   </div>
   <input type="hidden" id="e-eid"/>
   <div class="mfoot">
-    <button class="btn" onclick="window.closeM('event')">İptal</button>
-    <button class="btn btnp" onclick="window.saveEvent()">Kaydet</button>
+    <button class="btn" onclick="closeM('event')">İptal</button>
+    <button class="btn btnp" onclick="saveEvent()">Kaydet</button>
   </div>
 </div>
 </div>
 
 <!-- PHOTO MODAL -->
-<div class="mback" id="m-photo" onclick="if(event.target===this)window.closeM('photo')">
+<div class="mback" id="m-photo" onclick="if(event.target===this)closeM('photo')">
 <div class="modal">
-  <button class="mclose" onclick="window.closeM('photo')">✕</button>
+  <button class="mclose" onclick="closeM('photo')">✕</button>
   <div class="mtitle">Fotoğraf Ekle & Analiz Et</div>
   <div class="fg">
     <label>Fotoğraf * <span style="font-size:11px;color:var(--text3);">(Otomatik sıkıştırılır ~150KB)</span></label>
-    <input type="file" id="p-file" accept="image/*" onchange="window.prevPhoto(event)"/>
+    <input type="file" id="p-file" accept="image/*" onchange="prevPhoto(event)"/>
     <div id="p-prev" style="margin-top:6px;"></div>
     <div id="p-size-info" style="font-size:11px;color:var(--text3);margin-top:3px;"></div>
   </div>
@@ -432,14 +433,16 @@
   <div class="fg"><label>Not</label><input type="text" id="p-note" placeholder="Açıklama..."/></div>
   <div id="p-ai"></div>
   <div class="mfoot">
-    <button class="btn" onclick="window.closeM('photo')">İptal</button>
-    <button class="btn btna" onclick="window.analyzePhoto()">🤖 AI Analiz</button>
-    <button class="btn btnp" onclick="window.savePhoto()">Kaydet</button>
+    <button class="btn" onclick="closeM('photo')">İptal</button>
+    <button class="btn btna" onclick="analyzePhoto()">🤖 AI Analiz</button>
+    <button class="btn btnp" onclick="savePhoto()">Kaydet</button>
   </div>
 </div>
 </div>
 
 <div id="toast"></div>
-<script defer src="app.js"></script>
+
+<!-- ══════════════════ SCRIPT ══════════════════ -->
+<script type="module" src="app.js"></script>
 </body>
 </html>
