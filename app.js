@@ -1707,6 +1707,40 @@ window.autoFillSoilFromCoords = async () => {
   }
 };
 
+// Mevcut tüm tarlaların toprak tipini koordinatlarına göre güncelle
+window.updateAllSoilTypes = async () => {
+  if (!DB.fields.length) {
+    toast('Güncellenecek tarla yok.', true);
+    return;
+  }
+  
+  toast('Toprak tipleri güncelleniyor, lütfen bekleyin...', false);
+  let updated = 0;
+  let failed = 0;
+  
+  for (const field of DB.fields) {
+    try {
+      const newSoil = await window.fetchSoilTypeFromCoords(field.lat, field.lon);
+      if (newSoil && newSoil !== field.soilType) {
+        field.soilType = newSoil;
+        await saveFieldToDB(field);
+        updated++;
+        // Toprak önbelleğini temizle
+        window.invSoil(field.id);
+      }
+    } catch(e) {
+      console.warn(`${field.name} güncellenemedi:`, e);
+      failed++;
+    }
+  }
+  
+  // UI'ı yenile
+  window.renderAll();
+  if (window.CUR) window.renderFieldPage(window.CUR);
+  
+  toast(`✅ Güncelleme tamamlandı: ${updated} tarla güncellendi, ${failed} başarısız.`, failed > 0);
+};
+
 // ─── BAŞLATMA ────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded',()=>{
   const th=localStorage.getItem('tt_theme'); if(th==='dark') document.documentElement.setAttribute('dark','');
