@@ -1,7 +1,6 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import { getAuth, onAuthStateChanged, signInWithPopup, signInWithEmailAndPassword,
-         createUserWithEmailAndPassword, GoogleAuthProvider, signOut }
-// Remote Config'i içe aktar
+         createUserWithEmailAndPassword, GoogleAuthProvider, signOut }
 import { getRemoteConfig, getValue, fetchAndActivate } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-remote-config.js';
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import { getFirestore, doc, collection, getDocs, setDoc, deleteDoc, onSnapshot, query, orderBy }
