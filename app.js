@@ -1632,6 +1632,81 @@ setInterval(async()=>{
 window.importFieldFile = window.importFF;
 window.deleteCurrentPh = window.delCurPh;
 
+// ─── KOORDİNATLARDAN TOPRAK TİPİ TAHMİNİ (ISRIC SoilGrids) ──────────
+window.fetchSoilTypeFromCoords = async (lat, lon) => {
+  try {
+    // Texture class sorgusu (0-5cm derinlik)
+    const url = `https://rest.isric.org/soilgrids/v2.0/properties/query?lon=${lon}&lat=${lat}&property=texture_class&depth=0-5cm&value=mean`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('SoilGrids hatası: ' + res.status);
+    const data = await res.json();
+    // Texture class kodu (örn: 8 -> Clay, 5 -> Loam)
+    const textureCode = data?.properties?.layers?.[0]?.depths?.[0]?.values?.mean;
+    if (textureCode === undefined || textureCode === null) return null;
+    
+    // USDA texture sınıflandırması (kod -> isim)
+    const textureMap = {
+      1: 'Sand', 2: 'Loamy Sand', 3: 'Sandy Loam', 4: 'Silt Loam',
+      5: 'Silt', 6: 'Loam', 7: 'Sandy Clay Loam', 8: 'Silty Clay Loam',
+      9: 'Clay Loam', 10: 'Sandy Clay', 11: 'Silty Clay', 12: 'Clay'
+    };
+    const textureName = textureMap[textureCode] || 'Loam';
+    
+    // Kendi toprak tipi listenize eşleme (SOIL_FC anahtarları)
+    const soilMap = {
+      'Clay': 'killi',
+      'Silty Clay': 'killi',
+      'Silty Clay Loam': 'killiTin',
+      'Clay Loam': 'killiTin',
+      'Loam': 'tinli',
+      'Silt Loam': 'tinli',
+      'Sandy Loam': 'kumlu',
+      'Sand': 'kumlu',
+      'Silt': 'tinli',
+      'Loamy Sand': 'kumlu',
+      'Sandy Clay Loam': 'killiTin',
+      'Sandy Clay': 'killi'
+    };
+    return soilMap[textureName] || 'tinli'; // varsayılan tınlı
+  } catch(e) {
+    console.warn('SoilGrids hatası:', e);
+    return null;
+  }
+};
+
+// Koordinat alanları değişince otomatik doldur
+window.autoFillSoilFromCoords = async () => {
+  const lat = parseFloat(qs('#f-lat')?.value);
+  const lon = parseFloat(qs('#f-lon')?.value);
+  if (isNaN(lat) || isNaN(lon)) return;
+  
+  const soilSelect = qs('#f-soil');
+  if (!soilSelect) return;
+  
+  // Kullanıcıya yükleniyor bildirimi (isteğe bağlı)
+  const originalVal = soilSelect.value;
+  soilSelect.disabled = true;
+  soilSelect.style.opacity = '0.6';
+  
+  try {
+    const soilType = await window.fetchSoilTypeFromCoords(lat, lon);
+    if (soilType && soilSelect.querySelector(`option[value="${soilType}"]`)) {
+      soilSelect.value = soilType;
+      window.toast(`🌱 Toprak tipi "${soilType}" olarak tahmin edildi.`, false);
+    } else if (soilType) {
+      window.toast(`Tahmin edilen toprak tipi (${soilType}) listede yok, manuel seçin.`, true);
+    } else {
+      window.toast('Toprak tipi otomatik alınamadı, manuel seçiniz.', true);
+    }
+  } catch(e) {
+    console.error(e);
+    window.toast('Toprak tahmini sırasında hata oluştu.', true);
+  } finally {
+    soilSelect.disabled = false;
+    soilSelect.style.opacity = '';
+  }
+};
+
 // ─── BAŞLATMA ────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded',()=>{
   const th=localStorage.getItem('tt_theme'); if(th==='dark') document.documentElement.setAttribute('dark','');
