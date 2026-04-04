@@ -274,8 +274,15 @@
       <input type="file" id="imp" accept=".json" style="display:none" onchange="window.impData(event)"/>
     </div>
   </div>
+  <div class="card">
+  <div class="ct">🌍 Toprak Tipi Toplu Güncelleme</div>
+  <div style="display:flex; gap:7px; flex-wrap:wrap;">
+    <button class="btn btnp" onclick="window.updateAllSoilTypes()">🌱 Tüm Tarlaları Güncelle</button>
+    <span class="hint">ISRIC SoilGrids üzerinden koordinatlara göre toprak tipini yeniler.</span>
+  </div>
+  </div>
 </div>
-
+  
 </div><!-- /main -->
 </div><!-- /layout -->
 
@@ -306,8 +313,8 @@
   <div class="divider"></div>
 
   <div class="fr">
-    <div class="fg"><label>Enlem (Lat)</label><input type="number" id="f-lat" placeholder="36.8969" step="0.0001"/></div>
-    <div class="fg"><label>Boylam (Lon)</label><input type="number" id="f-lon" placeholder="30.7133" step="0.0001"/></div>
+    <div class="fg"><label>Enlem (Lat)</label><input type="number" id="f-lat" placeholder="36.8969" step="0.0001" onblur="window.autoFillSoilFromCoords()"/></div>
+    <div class="fg"><label>Boylam (Lon)</label><input type="number" id="f-lon" placeholder="30.7133" step="0.0001" onblur="window.autoFillSoilFromCoords()"/></div>
   </div>
   <div class="fr">
     <div class="fg"><label>Tarla Adı *</label><input type="text" id="f-name" placeholder="Örn: Doğu Tarlası"/></div>
