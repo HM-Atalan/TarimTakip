@@ -996,8 +996,9 @@ KURALLAR:
         }catch(e){ console.warn('Photo error:',e); }
       }
     });
-
-    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GK}`;
+    const apiKey = await window.getGeminiKey();
+if(!apiKey) { toast('Gemini API anahtarı alınamadı. Remote Config kontrol edin.', true); return; }
+    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${await window.getGeminiKey()}`;
     const resp=await fetch(url,{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({contents:[{role:'user',parts}],generationConfig:{temperature:0.62,maxOutputTokens:8192}})
@@ -1043,7 +1044,9 @@ window.sendChat = async () => {
   const contents=aiHist.slice(-12).map(m=>({role:m.role==='assistant'?'model':'user',parts:[{text:m.content}]}));
   contents.push({role:'user',parts:[{text:`[Sistem: ${sys}]\n\n${msg}`}]});
   try{
-    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GK}`;
+    const apiKey = await window.getGeminiKey();
+if(!apiKey) { toast('Gemini API anahtarı alınamadı. Remote Config kontrol edin.', true); return; }
+    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${await window.getGeminiKey()}`;
     const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents,generationConfig:{temperature:0.72,maxOutputTokens:4096}})});
     if(!r.ok){ const e=await r.json(); throw new Error(e.error?.message||'Gemini '+r.status); }
     const d=await r.json();
@@ -1097,7 +1100,9 @@ Türkçe, uzman görüşü:
 5. Acil müdahale gerektiren durum (varsa)
 6. Hasat olgunluğu değerlendirmesi`}
     ];
-    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GK}`;
+    const apiKey = await window.getGeminiKey();
+if(!apiKey) { toast('Gemini API anahtarı alınamadı. Remote Config kontrol edin.', true); return; }
+    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${await window.getGeminiKey()}`;
     const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts}],generationConfig:{maxOutputTokens:2000}})});
     if(!r.ok){ const e=await r.json(); throw new Error(e.error?.message||r.status); }
     const d=await r.json();
