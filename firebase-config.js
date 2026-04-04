@@ -21,19 +21,7 @@ const FB_CONFIG = {
   appId: "1:398574086576:web:b77d48009ec6049e3cce75",
   measurementId: "G-Z2PKPCNSXW"
 };
-// Remote Config Kurulumu
-const remoteConfig = getRemoteConfig(app);
-remoteConfig.settings.minimumFetchIntervalMillis = 3600000; // 1 saat önbelleğe alır
 
-window.getGeminiKey = async () => {
-  try {
-    await fetchAndActivate(remoteConfig);
-    return getValue(remoteConfig, 'GMINIK').asString();
-  } catch (err) {
-    console.error("Key çekilemedi:", err);
-    return null;
-  }
-};
 let app=null, auth=null, db=null;
 let FB_READY = false;
 
@@ -54,6 +42,20 @@ function initFirebase(){
   }catch(e){ console.warn('Firebase init error:', e); window.FB_MODE=false; }
 }
 initFirebase();
+
+// Remote Config Kurulumu
+const remoteConfig = getRemoteConfig(app);
+remoteConfig.settings.minimumFetchIntervalMillis = 3600000; // 1 saat önbelleğe alır
+
+window.getGeminiKey = async () => {
+  try {
+    await fetchAndActivate(remoteConfig);
+    return getValue(remoteConfig, 'GMINIK').asString();
+  } catch (err) {
+    console.error("Key çekilemedi:", err);
+    return null;
+  }
+};
 
 // Expose Firestore helpers globally
 window.fbSaveField = async (uid, field) => {
