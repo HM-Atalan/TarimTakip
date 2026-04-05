@@ -270,6 +270,11 @@
     </div>
   </div>
   <div class="card">
+    <div class="ct">🌱 Toprak Verisi (SoilGrids / ISRIC)</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Koordinatlara göre tüm tarlaların toprak tipini SoilGrids veritabanından otomatik günceller.</div>
+    <button class="btn btnp" onclick="updateAllSoilTypes()">🔄 Tüm Tarlaları Güncelle</button>
+  </div>
+  <div class="card">
     <div class="ct">💾 Veri (Yerel Yedek)</div>
     <div style="display:flex;gap:7px;flex-wrap:wrap;">
       <button class="btn" onclick="window.expData()">⬇ JSON Dışa</button>
@@ -333,12 +338,14 @@
         <option value="acre">Acre</option>
       </select>
     </div>
-    <div class="fg"><label>Toprak Tipi</label>
+    <div class="fg">
+      <label>Toprak Tipi <span id="soil-auto-badge" style="display:none;font-size:10px;color:var(--green2);font-weight:400;">🌱 Koordinatlardan otomatik belirlendi</span></label>
       <select id="f-soil">
         <option value="killiTin">Killi-Tın</option><option value="tinli">Tınlı</option>
         <option value="killi">Killi</option><option value="kumlu">Kumlu</option>
         <option value="humuslu">Humuslu</option><option value="kalkerli">Kalkerli</option>
       </select>
+      <div class="hint" id="soil-hint" style="color:var(--text3);">Koordinat girildiğinde SoilGrids (ISRIC) verisinden otomatik belirlenir · Manuel değiştirilebilir</div>
     </div>
   </div>
   <div class="fr">

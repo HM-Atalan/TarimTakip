@@ -922,7 +922,17 @@ window.renderRecTab = (field) => {
   const rc={YÜKSEK:'var(--red)',ORTA:'var(--amber)',DÜŞÜK:'var(--green2)'}[rl];
   const pests=PEST_DATA[field.crop]||PEST_DATA.default;
   const pr=qs('#rec-pest');
-  if(pr) pr.innerHTML=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;"><span style="font-size:13px;">7 günlük hava koşullarına göre risk:</span><span class="tag" style="background:${rc}22;color:${rc};">${rl}</span></div>${pests.map(p=>`<div class="ritem" style="background:var(--bg3);padding:7px 10px;margin-bottom:5px;"><div class="rico" style="background:var(--pbg);color:var(--purple);font-size:12px;">🔬</div><div class="rbody"><div class="rtitle" style="font-size:12px;">${p}</div></div></div>`).join('')}<div style="font-size:11px;color:var(--text3);margin-top:7px;">⚠️ İlaçlama öncesi zirai mühendis ve resmi etiket bilgilerine başvurun.</div>`;
+  if(pr){
+    const satStr = SATC[field.id]?.data ? satCtxStr(field) : null;
+    pr.innerHTML=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;">
+      <span style="font-size:13px;">7 günlük hava + uydu verilerine göre risk:</span>
+      <span class="tag" style="background:${rc}22;color:${rc};">${rl}</span>
+    </div>
+    ${pests.map(p=>`<div class="ritem" style="background:var(--bg3);padding:7px 10px;margin-bottom:5px;"><div class="rico" style="background:var(--pbg);color:var(--purple);font-size:12px;">🔬</div><div class="rbody"><div class="rtitle" style="font-size:12px;">${p}</div></div></div>`).join('')}
+    <div style="font-size:11px;color:var(--text3);margin-top:7px;">⚠️ İlaçlama öncesi zirai mühendis ve resmi etiket bilgilerine başvurun.</div>
+    <button class="btn btns btnp" style="margin-top:10px;" onclick="aiPestAnalysis('${field.id}')">🤖 AI Hastalık & Zararlı Analizi</button>
+    <div id="rec-pest-ai" style="margin-top:8px;"></div>`;
+  }
 
   // Son AI analizi
   const ar2=qs('#rec-ai');
@@ -1052,7 +1062,7 @@ KURALLAR:
     });
     const apiKey = await window.getGeminiKey();
 if(!apiKey) { toast('Gemini API anahtarı alınamadı. Remote Config kontrol edin.', true); return; }
-    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${await window.getGeminiKey()}`;
+    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${await window.getGeminiKey()}`;
     const resp=await fetch(url,{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({contents:[{role:'user',parts}],generationConfig:{temperature:0.62,maxOutputTokens:8192}})
@@ -1100,7 +1110,7 @@ window.sendChat = async () => {
   try{
     const apiKey = await window.getGeminiKey();
 if(!apiKey) { toast('Gemini API anahtarı alınamadı. Remote Config kontrol edin.', true); return; }
-    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${await window.getGeminiKey()}`;
+    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${await window.getGeminiKey()}`;
     const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents,generationConfig:{temperature:0.72,maxOutputTokens:4096}})});
     if(!r.ok){ const e=await r.json(); throw new Error(e.error?.message||'Gemini '+r.status); }
     const d=await r.json();
@@ -1156,7 +1166,7 @@ Türkçe, uzman görüşü:
     ];
     const apiKey = await window.getGeminiKey();
 if(!apiKey) { toast('Gemini API anahtarı alınamadı. Remote Config kontrol edin.', true); return; }
-    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${await window.getGeminiKey()}`;
+    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${await window.getGeminiKey()}`;
     const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts}],generationConfig:{maxOutputTokens:2000}})});
     if(!r.ok){ const e=await r.json(); throw new Error(e.error?.message||r.status); }
     const d=await r.json();
@@ -1259,6 +1269,9 @@ window.openFM = (editId) => {
 
   const preview = qs('#f-import-preview');
   if (preview) preview.style.display = 'none';
+  const soilBadge = qs('#soil-auto-badge');
+  if (soilBadge) soilBadge.style.display = 'none';
+  delete window.pendingSoilComp;
 
   if (editId) {
     const f = window.DB.fields.find(x => x.id === editId);
@@ -1302,12 +1315,32 @@ window.openFM = (editId) => {
     fillCrops();
   }
 
+  // Koordinatlar girildiğinde toprak tipini otomatik tahmin et
+  const latEl=qs('#f-lat'), lonEl=qs('#f-lon');
+  const triggerSoilFetch = () => {
+    const lt=parseFloat(latEl?.value), ln=parseFloat(lonEl?.value);
+    if(!isNaN(lt) && !isNaN(ln) && lt!==0 && ln!==0) {
+      window.autoFillSoilFromCoords();
+    }
+  };
+  if(latEl && !latEl._soilBound){
+    latEl._soilBound=true;
+    latEl.addEventListener('change', triggerSoilFetch);
+    lonEl.addEventListener('change', triggerSoilFetch);
+  }
   qs('#m-field').classList.add('on');
 };
 
 window.saveField = async () => {
   const name=qs('#f-name').value.trim(); if(!name){ toast('Tarla adı zorunlu',true); return; }
   const eid=qs('#f-eid').value; const ex=eid?DB.fields.find(f=>f.id===eid):null;
+  // Toprak tipi henüz otomatik çekilmediyse kayıt anında çek
+  const lat=parseFloat(qs('#f-lat')?.value), lon=parseFloat(qs('#f-lon')?.value);
+  if(!window.pendingSoilComp && !isNaN(lat) && !isNaN(lon) && (!ex || ex.lat!==lat || ex.lon!==lon)) {
+    try {
+      await window.autoFillSoilFromCoords();
+    } catch(e) { console.warn('Auto soil fetch failed:', e); }
+  }
   const f={
     id:ex?ex.id:gid(), name,
     lat:parseFloat(qs('#f-lat').value)||36.8, lon:parseFloat(qs('#f-lon').value)||30.7,
@@ -1317,8 +1350,10 @@ window.saveField = async () => {
     qty:parseFloat(qs('#f-qty').value)||0, qunit:qs('#f-qunit').value,
     soilType:qs('#f-soil').value, plantDate:qs('#f-plant').value, harvestDate:qs('#f-harvest').value,
     color:qs('#f-color').value||'#40916c', notes:qs('#f-notes').value,
-    events:ex?ex.events:[], photos:ex?ex.photos:[], aiRecs:ex?ex.aiRecs:[]
+    events:ex?ex.events:[], photos:ex?ex.photos:[], aiRecs:ex?ex.aiRecs:[],
+    soilComposition: window.pendingSoilComp || ex?.soilComposition || null
   };
+  if (window.pendingSoilComp) delete window.pendingSoilComp;
   if(ex){ DB.fields[DB.fields.indexOf(ex)]=f; }else DB.fields.push(f);
   await saveFieldToDB(f);
   WXC[f.id]=null; invSoil(f.id);
@@ -1490,13 +1525,13 @@ window.signGoogle = async () => {
 }
 window.signEmail = async (mode) => {
   if(!window.FB_MODE){ noFBNotice(); return; }
-  const em=qs('#'+mode[0]+'e')?.value; const pw=qs('#'+mode[0]+'p')?.value;
+  const em=qs(mode==='login'?'#login-email':'#reg-email')?.value; const pw=qs(mode==='login'?'#login-pass':'#reg-pass')?.value;
   try{
     if(mode==='login') await window.fbSignInEmail(em,pw);
     else await window.fbRegisterEmail(em,pw);
   }catch(e){ showAErr(mode,e.message); }
 }
-window.showAErr = (m,msg) => { const el=qs('#'+m[0]+'err'); if(el){ el.style.display='block'; el.textContent=msg; } }
+window.showAErr = (m,msg) => { const el=qs('#'+m+'-err'); if(el){ el.style.display='block'; el.textContent=msg; } }
 window.noFBNotice = () => { qs('#no-fb-note').style.display='block'; qs('#auth-form-wrap').style.display='none'; }
 window.enterLocalMode = () => { LOCAL=true; qs('#auth-screen').classList.add('hidden'); loadLocalDB(); DB.fields.forEach(f=>fetchWX(f)); renderAll(); toast('Yerel modda çalışıyorsunuz'); }
 window.doSignOut = async () => { if(window.FB_MODE&&window.FB_USER) await window.fbSignOut(); else{ LOCAL=false; DB.fields=[]; } qs('#auth-screen')?.classList.remove('hidden'); }
@@ -1599,6 +1634,10 @@ window.showField = (id) => {
   aiHist=[]; curTab='map';
   goPage('field'); renderSB(); renderFieldPage(CUR);
   if(!WXC[CUR.id]) fetchWX(CUR);
+  // Uydu verisi yoksa veya eskiyse arka planda güncelle
+  if(!SATC[CUR.id]||(Date.now()-SATC[CUR.id].at>3600000)) {
+    setTimeout(()=>fetchSat(CUR), 500);
+  }
 }
 
 window.renderFieldPage = (field) => {
@@ -1667,6 +1706,60 @@ window.renderCal = () => {
   qs('#cal-ai').innerHTML=aiS.length?aiS.map(s=>`<div class="ritem" style="background:var(--glt);"><div class="rico" style="background:var(--gbg);color:var(--green2);">🤖</div><div class="rbody"><div class="rtitle">${s.fn}</div><div class="rsub">${s.text}</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">${fd(s.date)}</div></div></div>`).join(''):'<div style="color:var(--text3);font-size:13px;">AI analizi çalıştırarak öneri alın.</div>';
 }
 
+
+// ─── AI HASTALIK & ZARARLI ANALİZİ ──────────────────────────────
+window.aiPestAnalysis = async (fieldId) => {
+  const field = DB.fields.find(f => f.id === fieldId);
+  if (!field) return;
+  const el = qs('#rec-pest-ai');
+  if (!el) return;
+  el.innerHTML = '<div class="bubble bs"><div style="display:inline-flex;gap:3px;"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.3;animation:dl 1.2s infinite;"></span><span style="width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.3;animation:dl 1.2s .2s infinite;"></span><span style="width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.3;animation:dl 1.2s .4s infinite;"></span></div> AI hastalık riski analiz ediliyor...</div>';
+  try {
+    const wx = WXC[field.id]?.days || simWX(field.lat, field.lon);
+    const today = tstr();
+    const futWx = wx.filter(d=>d.date>today).slice(0,7).map(d=>`${d.date.slice(5)}: ${d.tmax}°/${d.tmin}°C yağış:${d.rain}mm`).join(', ');
+    const pastWx = wx.filter(d=>d.date<=today).slice(-5).map(d=>`${d.date.slice(5)}: ${d.tmax}°/${d.tmin}°C yağış:${d.rain}mm`).join(', ');
+    const satStr = SATC[field.id]?.data ? satCtxStr(field) : 'Uydu verisi yok';
+    const lastSpray = (field.events||[]).filter(e=>e.type==='ilaç'&&!e.planned).sort((a,b)=>b.date.localeCompare(a.date))[0];
+    const ph = calcPheno(field);
+    const pests = (PEST_DATA[field.crop] || PEST_DATA.default).join(', ');
+    const s = calcSoil(field);
+    const prompt = `Sen bir Türk fitopatoloji ve entomoloji uzmanısın.
+    
+TARLA: ${field.name} | ÜRÜN: ${field.crop||'?'} | DÖNEM: ${ph?.stage||'bilinmiyor'} | Alan: ${field.area} ${field.areaUnit||'dönüm'}
+TOPRAK: ${field.soilType} | Nem: %${s.pct}
+SON 5 GÜN HAVA: ${pastWx}
+ÖNÜMÜZDEKİ 7 GÜN: ${futWx}
+UYDU VERİLERİ: ${satStr}
+BİLİNEN ZARARLILAR: ${pests}
+SON İLAÇLAMA: ${lastSpray ? lastSpray.date + ' (' + Math.round((Date.now()-new Date(lastSpray.date))/(864e5)) + ' gün önce, ' + (lastSpray.extra?.['e-pt']||'') + ')' : 'kayıt yok'}
+
+Mevcut hava koşulları, uydu indeksleri (NDWI/NDVI/nem), toprak nemi ve fenolojik döneme göre:
+1. Bu ürün için şu an en yüksek riskli hastalık ve zararlıları belirle
+2. Her biri için risk seviyesi (Düşük/Orta/Yüksek/Kritik) ve neden
+3. Somut önlem ve varsa ilaçlama önerisi (aktif madde, zamanlama)
+4. Biyolojik/organik alternatif öneriler
+Türkçe, kısa ve uygulanabilir. Maksimum 4-5 madde.`;
+    
+    const apiKey = await window.getGeminiKey();
+    if (!apiKey) { el.innerHTML = '<div style="color:var(--red);font-size:12px;">API anahtarı alınamadı.</div>'; return; }
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    const resp = await fetch(url, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({contents:[{role:'user',parts:[{text:prompt}]}], generationConfig:{temperature:0.55, maxOutputTokens:1500}})
+    });
+    if (!resp.ok) { const err = await resp.json(); throw new Error(err.error?.message||resp.status); }
+    const data = await resp.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Yanıt alınamadı';
+    const rendered = text
+      .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+      .split('\n').map(l => l.trim() ? `<div style="margin-bottom:5px;">${l}</div>` : '').join('');
+    el.innerHTML = `<div class="bubble bb" style="font-size:12px;line-height:1.6;margin-top:4px;">${rendered}</div>`;
+  } catch(e) {
+    el.innerHTML = `<div style="color:var(--red);font-size:12px;">AI Hata: ${e.message}</div>`;
+  }
+};
+
 window.renderRep = () => {
   const rc=qs('#rep-content'); if(!rc) return;
   if(!DB.fields.length){ rc.innerHTML='<div class="empty">📊<br/>Tarla ekleyin.</div>'; return; }
@@ -1708,7 +1801,7 @@ window.renderRep = () => {
           <td>${Math.round(fc).toLocaleString()}₺</td>
           <td>${Math.round(rev).toLocaleString()}₺</td>
           <td style="color:${profit>=0?'var(--green2)':'var(--red)'}">${Math.round(profit).toLocaleString()}₺</td>
-        </table>`;}).join('')}</tbody></table></div>
+        </tr>`;}).join('')}</tbody></table></div>
     </div>`;
 }
 
@@ -1740,47 +1833,58 @@ window.deleteCurrentPh = window.delCurPh;
 
 // ─── KOORDİNATLARDAN TOPRAK TİPİ TAHMİNİ (ISRIC SoilGrids) ──────────
 window.fetchSoilTypeFromCoords = async (lat, lon) => {
+  // USDA texture sınıflandırması (kod -> isim)
+  const textureMap = {
+    1:'Sand',2:'Loamy Sand',3:'Sandy Loam',4:'Silt Loam',5:'Silt',
+    6:'Loam',7:'Sandy Clay Loam',8:'Silty Clay Loam',9:'Clay Loam',
+    10:'Sandy Clay',11:'Silty Clay',12:'Clay'
+  };
+  const soilMap = {
+    'Clay':'killi','Silty Clay':'killi','Sandy Clay':'killi',
+    'Clay Loam':'killiTin','Silty Clay Loam':'killiTin','Sandy Clay Loam':'killiTin',
+    'Loam':'tinli','Silt Loam':'tinli','Silt':'tinli',
+    'Sandy Loam':'kumlu','Loamy Sand':'kumlu','Sand':'kumlu'
+  };
+  // Türkçe toprak tipi isimleri (gösterim için)
+  const soilNameTR = {
+    killi:'Killi',killiTin:'Killi-Tın',tinli:'Tınlı',kumlu:'Kumlu',humuslu:'Humuslu',kalkerli:'Kalkerli'
+  };
   try {
-    // Texture class sorgusu (0-5cm derinlik)
-    const url = `https://rest.isric.org/soilgrids/v2.0/properties/query?lon=${lon}&lat=${lat}&property=texture_class&property=clay&property=sand&property=silt&depth=0-5cm&value=mean`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('SoilGrids hatası: ' + res.status);
-    const data = await res.json();
-    // Texture class kodu (örn: 8 -> Clay, 5 -> Loam)
-    const textureCode = data?.properties?.layers?.[0]?.depths?.[0]?.values?.mean;
-    if (textureCode === undefined || textureCode === null) return null;
-    
-    // USDA texture sınıflandırması (kod -> isim)
-    const textureMap = {
-      1: 'Sand', 2: 'Loamy Sand', 3: 'Sandy Loam', 4: 'Silt Loam',
-      5: 'Silt', 6: 'Loam', 7: 'Sandy Clay Loam', 8: 'Silty Clay Loam',
-      9: 'Clay Loam', 10: 'Sandy Clay', 11: 'Silty Clay', 12: 'Clay'
-    };
-    const textureName = textureMap[textureCode] || 'Loam';
-    
-    // Kendi toprak tipi listenize eşleme (SOIL_FC anahtarları)
-    const soilMap = {
-      'Clay': 'killi',
-      'Silty Clay': 'killi',
-      'Silty Clay Loam': 'killiTin',
-      'Clay Loam': 'killiTin',
-      'Loam': 'tinli',
-      'Silt Loam': 'tinli',
-      'Sandy Loam': 'kumlu',
-      'Sand': 'kumlu',
-      'Silt': 'tinli',
-      'Loamy Sand': 'kumlu',
-      'Sandy Clay Loam': 'killiTin',
-      'Sandy Clay': 'killi'
-    };
-    // Ayrıca kum, silt, kil yüzdelerini al ve global olarak sakla (isteğe bağlı)
-    const clay = data?.properties?.layers?.[0]?.depths?.[0]?.values?.mean;
-    const sand = data?.properties?.layers?.[1]?.depths?.[0]?.values?.mean;
-    const silt = data?.properties?.layers?.[2]?.depths?.[0]?.values?.mean;
-    if (clay !== undefined && sand !== undefined && silt !== undefined) {
-      window.tempSoilComposition = { clay: clay*100, sand: sand*100, silt: silt*100 }; // yüzdeye çevir
+    // 1. Önce texture_class sorgula (hızlı)
+    const txUrl = `https://rest.isric.org/soilgrids/v2.0/properties/query?lon=${lon}&lat=${lat}&property=texture_class&depth=0-5cm&value=mean`;
+    const txRes = await fetch(txUrl);
+    let soilType = 'tinli';
+    if (txRes.ok) {
+      const txData = await txRes.json();
+      const txCode = txData?.properties?.layers?.[0]?.depths?.[0]?.values?.mean;
+      if (txCode != null) {
+        const txName = textureMap[Math.round(txCode)] || 'Loam';
+        soilType = soilMap[txName] || 'tinli';
+      }
     }
-    return soilMap[textureName] || 'tinli';
+    // 2. Kil/kum/silt yüzdelerini ayrı sorgula (hassas FC hesabı için)
+    const compUrl = `https://rest.isric.org/soilgrids/v2.0/properties/query?lon=${lon}&lat=${lat}&property=clay&property=sand&property=silt&depth=0-5cm&value=mean`;
+    const compRes = await fetch(compUrl);
+    if (compRes.ok) {
+      const compData = await compRes.json();
+      const layers = compData?.properties?.layers || [];
+      const getVal = name => {
+        const layer = layers.find(l => l.name === name);
+        const raw = layer?.depths?.[0]?.values?.mean;
+        return raw != null ? raw / 10 : null; // g/kg -> %
+      };
+      const clay = getVal('clay'), sand = getVal('sand'), silt = getVal('silt');
+      if (clay != null && sand != null && silt != null) {
+        window.tempSoilComposition = { clay, sand, silt };
+        // Bileşen oranlarına göre soilType'ı yeniden belirle (daha hassas)
+        if (clay >= 40) soilType = 'killi';
+        else if (clay >= 25 && silt >= 15) soilType = 'killiTin';
+        else if (sand >= 70) soilType = 'kumlu';
+        else if (silt >= 50) soilType = 'tinli';
+        else soilType = 'tinli';
+      }
+    }
+    return soilType;
   } catch(e) {
     console.warn('SoilGrids hatası:', e);
     return null;
@@ -1807,7 +1911,9 @@ window.autoFillSoilFromCoords = async () => {
         window.pendingSoilComp = window.tempSoilComposition;
         delete window.tempSoilComposition;
       }
-      window.toast(`🌱 Toprak tipi "${soilType}" olarak tahmin edildi.`, false);
+      const badge = qs('#soil-auto-badge');
+      if(badge) badge.style.display = 'inline';
+      window.toast(`🌱 Toprak tipi "${soilType === 'killi' ? 'Killi' : soilType === 'killiTin' ? 'Killi-Tın' : soilType === 'tinli' ? 'Tınlı' : soilType === 'kumlu' ? 'Kumlu' : soilType}" olarak belirlendi (SoilGrids)`, false);
     } else if (soilType) {
       window.toast(`Tahmin edilen toprak tipi (${soilType}) listede yok, manuel seçin.`, true);
     } else {
