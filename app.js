@@ -207,14 +207,33 @@ window.compressImg = (file, maxKB=150, q=0.82) => {
   });
 }
 
-// ─── TOPRAK NEM MODELİ ───────────────────────────────────────────
+// ─── TOPRAK NEM MODELİ (Gelişmiş - Kum/Silt/Kil bazlı) ────────────
 window.agrd = (crop) => { return CROP_AGR[crop] || CROP_AGR.default; }
+
+// Dinamik tarla kapasitesi hesaplama (kum/silt/kil yüzdelerine göre)
+window.calcFieldCapacity = (soilType, clayPct, sandPct, siltPct) => {
+  // Varsayılan değerler
+  let base = SOIL_FC[soilType] || 80;
+  if (clayPct !== undefined && sandPct !== undefined) {
+    // Saubhagya et al. (2020) yaklaşımı: FC (mm/10cm) = 0.2*clay + 0.05*silt + 0.01*sand
+    // 10cm için mm cinsinden, biz fc'yi mm olarak kullanıyoruz (toprak profili 100cm varsayımı? mevcut modelde fc mm cinsinden)
+    // Mevcut fc değerleri genelde 100mm civarında. Oranı koruyalım.
+    let fcCalc = (0.2 * clayPct + 0.05 * siltPct + 0.01 * sandPct) * 2.5; // kabaca 100mm'ye ölçekleme
+    fcCalc = Math.min(140, Math.max(40, fcCalc));
+    if (!isNaN(fcCalc)) base = fcCalc;
+  }
+  return base;
+};
 
 window.calcSoil = (field) => {
   const key = field.id + '_' + tstr();
   if(SC[key]) return SC[key];
   const a = window.agrd(field.crop);
-  const fc = SOIL_FC[field.soilType] || a.fc || 80;
+  // Dinamik fc hesapla (eğer toprak bileşenleri varsa)
+  let fc = SOIL_FC[field.soilType] || a.fc || 80;
+  if (field.soilComposition) {
+    fc = window.calcFieldCapacity(field.soilType, field.soilComposition.clay, field.soilComposition.sand, field.soilComposition.silt);
+  }
   const wx = window.WXC[field.id]?.days || simWX(field.lat, field.lon);
   const today = tstr();
   const irr = (field.events||[]).filter(e=>e.type==='sulama'&&!e.planned&&e.date<=today).map(e=>{
@@ -317,7 +336,7 @@ window.calcSolar = (field) => {
   return {sunH, rad, cf, hs, topt:a.to, tmaxLim:a.tm, minT:a.mn, actMax:td.tmax};
 }
 
-// ─── HAVA DURUMU ─────────────────────────────────────────────────
+// ─── HAVA DURUMU (Open-Meteo + AccuWeather) ──────────────────────
 window.wicon = (c) => {
   if(c===undefined) return'🌤️';if(c<=1)return'☀️';if(c<=3)return'⛅';
   if(c<=49)return'🌫️';if(c<=67)return'🌧️';if(c<=77)return'❄️';if(c<=82)return'🌦️';return'⛈️';
@@ -424,7 +443,7 @@ window.renderWX = (field) => {
   </div>`;
 }
 
-// ─── UYDU MOTORİ ─────────────────────────────────────────────────
+// ─── UYDU MOTORİ (NASA, Sentinel-2, Open-Meteo Agro) ─────────────
 window.ndviCls = (v) => {
   const n=parseFloat(v);
   if(n>0.7) return {l:'Çok İyi',   tag:'tg', color:'var(--green2)', bar:'#2d6a4f'};
@@ -441,9 +460,9 @@ window.fetchSat = async (field) => {
   sb('agro','load','Open-Meteo Agro…'); sb('nasa','load','NASA POWER…'); sb('s2','load','Sentinel-2…');
   const R={};
 
-  // 1. Open-Meteo Agro
+  // 1. Open-Meteo Agro (toprak sıcaklığı, nemi, VPD, ayrıca bağıl nem)
   try{
-    const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=soil_temperature_0cm,soil_temperature_6cm,soil_moisture_0_to_1cm,soil_moisture_3_to_9cm,vapor_pressure_deficit&daily=et0_fao_evapotranspiration,shortwave_radiation_sum&past_days=7&forecast_days=3&timezone=Europe%2FIstanbul`;
+    const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=soil_temperature_0cm,soil_temperature_6cm,soil_moisture_0_to_1cm,soil_moisture_3_to_9cm,vapor_pressure_deficit,relative_humidity_2m&daily=et0_fao_evapotranspiration,shortwave_radiation_sum&past_days=7&forecast_days=3&timezone=Europe%2FIstanbul`;
     const r=await fetch(url);
     if(r.ok){
       const d=await r.json();
@@ -452,6 +471,7 @@ window.fetchSat = async (field) => {
       R.soilT6=d.hourly?.soil_temperature_6cm?.[hb+hi]?.toFixed(1);
       R.soilM3=d.hourly?.soil_moisture_3_to_9cm?.[hb+hi];
       R.vpd=d.hourly?.vapor_pressure_deficit?.[hb+hi]?.toFixed(2);
+      R.humidity = d.hourly?.relative_humidity_2m?.[hb+hi]?.toFixed(0);
       R.et0=ti>=0?d.daily?.et0_fao_evapotranspiration?.[ti]?.toFixed(1):null;
       R.solar=ti>=0?d.daily?.shortwave_radiation_sum?.[ti]?.toFixed(1):null;
       R.past7Solar=d.daily?.shortwave_radiation_sum?.slice(0,8)||[];
@@ -529,7 +549,7 @@ window.renderSat = (field, R) => {
 
   const lv=parseFloat(R.lst)||20;
   const lel=qs('#sat-lst');
-  if(lel) lel.innerHTML=`<div style="text-align:center;padding:8px 0;"><div style="font-size:28px;font-weight:800;color:${lv>35?'var(--red)':lv>25?'var(--amber)':'var(--green2)'};">${R.lst}°C</div><span class="tag ${lv>35?'tr':lv>25?'ta':'tg'}" style="margin-top:4px;display:inline-flex;">${lv>35?'Yüksek Sıcaklık':lv>25?'Ilık':'Normal'}</span></div><div style="font-size:11px;color:var(--text2);margin-top:5px;">Toprak 0cm: ${R.soilT0||'—'}°C · 6cm: ${R.soilT6||'—'}°C${R.vpd?' · VPD: '+R.vpd+'kPa':''}</div>`;
+  if(lel) lel.innerHTML=`<div style="text-align:center;padding:8px 0;"><div style="font-size:28px;font-weight:800;color:${lv>35?'var(--red)':lv>25?'var(--amber)':'var(--green2)'};">${R.lst}°C</div><span class="tag ${lv>35?'tr':lv>25?'ta':'tg'}" style="margin-top:4px;display:inline-flex;">${lv>35?'Yüksek Sıcaklık':lv>25?'Ilık':'Normal'}</span></div><div style="font-size:11px;color:var(--text2);margin-top:5px;">Toprak 0cm: ${R.soilT0||'—'}°C · 6cm: ${R.soilT6||'—'}°C${R.vpd?' · VPD: '+R.vpd+'kPa':''}${R.humidity?' · Nem: '+R.humidity+'%':''}</div>`;
 
   const tel=qs('#sat-trend');
   const arr=R.past7Solar?.length?R.past7Solar:R.nasaSolarArr||[];
@@ -637,7 +657,7 @@ window.renderLocInfo = (field) => {
   ].map(([u,l])=>`<a href="${u}" target="_blank" class="wxlink">${l}</a>`).join('');
 }
 
-// ─── OLAYLAR ─────────────────────────────────────────────────────
+// ─── OLAYLAR (Gelişmiş Karlılık) ─────────────────────────────────
 window.updEF = () => {
   const type=qs('#e-type').value, df=qs('#e-dynfields');
   const ql=qs('#e-qlbl'), cl=qs('#e-clbl'), us=qs('#e-unit');
@@ -707,6 +727,11 @@ window.openEM = (editId) => {
     qs('#e-status').value=ev.planned?'planned':'done';
     updEF();
     if(ev.extra){ Object.entries(ev.extra).forEach(([k,v])=>{ const el=qs('#'+k); if(el) el.value=v; }); }
+    // Hasat ise gelir alanlarını doldur
+    if(ev.type==='hasat' && ev.revenue){
+      qs('#e-hq').value = ev.extra?.['e-hq'] || '';
+      qs('#e-hp').value = ev.extra?.['e-hp'] || '';
+    }
   }else{
     qs('#e-date').value=tstr(); qs('#e-type').value='sulama';
     qs('#e-notes').value=''; qs('#e-cost').value=''; qs('#e-qty').value='';
@@ -726,7 +751,15 @@ window.saveEvent = async () => {
   ['e-sm','e-sd','e-ft','e-fa','e-fbrand','e-pn','e-pt','e-ptarget','e-papp','e-ft2','e-fv','e-hq','e-hu','e-hp','e-hb','e-wc','e-wd'].forEach(id=>{
     const el=qs('#'+id); if(el&&el.value) extra[id]=el.value;
   });
-  const ev={id:eid||gid(),date:dt,type:qs('#e-type').value,notes:qs('#e-notes').value,cost,qty,unit:qs('#e-unit').value,planned:qs('#e-status').value==='planned',extra,total:+(cost*(qty||1)).toFixed(2)};
+  let revenue = 0;
+  let profit = null;
+  if(qs('#e-type').value === 'hasat') {
+    const harvestQty = parseFloat(extra['e-hq']) || 0;
+    const price = parseFloat(extra['e-hp']) || 0;
+    revenue = harvestQty * price;
+    profit = revenue - (cost * (qty||1));
+  }
+  const ev={id:eid||gid(),date:dt,type:qs('#e-type').value,notes:qs('#e-notes').value,cost,qty,unit:qs('#e-unit').value,planned:qs('#e-status').value==='planned',extra,total:+(cost*(qty||1)).toFixed(2), revenue, profit};
   if(eid){ const idx=(CUR.events||[]).findIndex(e=>e.id===eid); if(idx>=0) CUR.events[idx]=ev; else (CUR.events=CUR.events||[]).push(ev); }
   else (CUR.events=CUR.events||[]).push(ev);
   CUR.events.sort((a,b)=>b.date.localeCompare(a.date));
@@ -749,7 +782,7 @@ window.delEv = async (id) => {
 window.renderEvTab = (field) => {
   const tb=qs('#ev-tbody'); if(!tb) return;
   const evs=field.events||[];
-  if(!evs.length){ tb.innerHTML=`<tr><td colspan="7" style="text-align:center;padding:22px;color:var(--text3);">Kayıt yok.</td></tr>`; const cc=qs('#ev-cost'); if(cc) cc.innerHTML=''; return; }
+  if(!evs.length){ tb.innerHTML=`<tr><td colspan="8" style="text-align:center;padding:22px;color:var(--text3);">Kayıt yok.</td></tr>`; const cc=qs('#ev-cost'); if(cc) cc.innerHTML=''; return; }
   tb.innerHTML=evs.map(e=>{
     const total=e.total||(e.cost*(e.qty||1));
     const extra=e.extra?Object.entries(e.extra).filter(([k])=>['e-ft','e-pn','e-sm','e-ft2','e-fbrand'].includes(k)).map(([,v])=>v).join(' · '):'';
@@ -760,18 +793,23 @@ window.renderEvTab = (field) => {
       <td>${e.qty||'—'} ${e.unit||''}</td>
       <td>${e.cost?e.cost.toLocaleString('tr-TR')+'₺':'—'}</td>
       <td style="font-weight:600;">${total?Math.round(total).toLocaleString('tr-TR')+'₺':'—'}</td>
+      <td>${e.revenue?Math.round(e.revenue).toLocaleString('tr-TR')+'₺':(e.type==='hasat'?'—':'')}</td>
       <td><div style="display:flex;gap:3px;"><button class="btn btnxs btna" onclick="openEM('${e.id}')">✏️</button><button class="btn btnxs btnd" onclick="delEv('${e.id}')">✕</button></div></td>
     </tr>`;
   }).join('');
-  const cm={};let tot=0;
+  const cm={};let tot=0, totRev=0, totProfit=0;
   evs.filter(e=>e.cost>0).forEach(e=>{ const t=e.total||(e.cost*(e.qty||1)); cm[e.type]=(cm[e.type]||0)+t; tot+=t; });
+  evs.filter(e=>e.revenue).forEach(e=>{ totRev+=e.revenue; });
+  totProfit = totRev - tot;
   const cc=qs('#ev-cost');
   if(cc) cc.innerHTML=Object.keys(cm).length
-    ? Object.entries(cm).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="pr"><span class="prl">${EVI[k]||'📝'} ${k}</span><div class="prt"><div class="prf" style="width:${tot?Math.round(v/tot*100):0}%;background:${EVC[k]||'var(--green2)'};"></div></div><span class="prv">${Math.round(v).toLocaleString()}₺</span></div>`).join('')+`<div style="display:flex;justify-content:space-between;font-weight:700;font-size:14px;padding-top:9px;margin-top:5px;border-top:1px solid var(--bdr);"><span>Toplam</span><span>${Math.round(tot).toLocaleString('tr-TR')} ₺</span></div>`
+    ? Object.entries(cm).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="pr"><span class="prl">${EVI[k]||'📝'} ${k}</span><div class="prt"><div class="prf" style="width:${tot?Math.round(v/tot*100):0}%;background:${EVC[k]||'var(--green2)'};"></div></div><span class="prv">${Math.round(v).toLocaleString()}₺</span></div>`).join('')+`<div style="display:flex;justify-content:space-between;font-weight:700;font-size:14px;padding-top:9px;margin-top:5px;border-top:1px solid var(--bdr);"><span>Toplam Maliyet</span><span>${Math.round(tot).toLocaleString('tr-TR')} ₺</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:14px;margin-top:6px;"><span>Toplam Gelir</span><span>${Math.round(totRev).toLocaleString('tr-TR')} ₺</span></div>
+    <div style="display:flex;justify-content:space-between;font-weight:800;font-size:15px;margin-top:6px;color:${totProfit>=0?'var(--green2)':'var(--red)'}"><span>Net Kar</span><span>${Math.round(totProfit).toLocaleString('tr-TR')} ₺</span></div>`
     : 'Maliyet kaydı yok.';
 }
 
-// ─── ÖNERİLER ────────────────────────────────────────────────────
+// ─── ÖNERİLER (Gelişmiş Hastalık Riski) ────────────────────────────
 window.buildAutoRecs = (field) => {
   const recs=[];
   const s=calcSoil(field);
@@ -782,6 +820,15 @@ window.buildAutoRecs = (field) => {
   const futET=futWx.reduce((t,d)=>t+(d.et0||s.et),0);
   const maxT=futWx.length?Math.max(...futWx.map(d=>d.tmax)):25;
   const rainyD=futWx.filter(d=>d.rain>3).length;
+  // Hastalık riski için nem ve sıcaklık değerlendirmesi
+  let diseaseRisk = false;
+  let consecutiveHumid = 0;
+  for (let i=0; i<Math.min(futWx.length, 5); i++) {
+    // Open-Meteo'nun günlük verisinde nem yok, saatlik var ama burada yok. Basitçe yağış ve sıcaklıkla risk
+    if (futWx[i].rain > 2 && futWx[i].tmax > 15 && futWx[i].tmax < 28) consecutiveHumid++;
+    else consecutiveHumid = 0;
+    if (consecutiveHumid >= 3) diseaseRisk = true;
+  }
   const evs=field.events||[];
   const dSince=type=>{ const e=evs.filter(x=>x.type===type&&!x.planned).sort((a,b)=>b.date.localeCompare(a.date))[0]; return e?Math.round((Date.now()-new Date(e.date))/(864e5)):999; };
   const a=agrd(field.crop);
@@ -791,7 +838,8 @@ window.buildAutoRecs = (field) => {
 
   if(dSince('gübre')>45) recs.push({i:'🧪',bg:'var(--abg)',c:'var(--amber)',t:'Gübreleme Değerlendirin',s:`${dSince('gübre')<999?dSince('gübre')+' gündür':'Hiç'} gübreleme yapılmamış. ${a.fert?.slice(0,80)||'Dönemsel gübre planı yapın'}.`,pr:'ORTA'});
 
-  if(rainyD>=3&&dSince('ilaç')>21) recs.push({i:'🔬',bg:'var(--pbg)',c:'var(--purple)',t:'Fungal Hastalık Riski',s:`${rainyD} günlük yağışlı hava bekleniyor. Yüksek nem → fungus/mildiyö riski. Koruyucu ilaçlama değerlendirin.`,pr:'ORTA'});
+  if(diseaseRisk && dSince('ilaç')>21) recs.push({i:'🔬',bg:'var(--pbg)',c:'var(--purple)',t:'Fungal Hastalık Riski (Yüksek)',s:`Art arda yağışlı ve ılık hava → külleme/mildiyö riski. Koruyucu ilaçlama değerlendirin.`,pr:'YÜKSEK'});
+  else if(rainyD>=3&&dSince('ilaç')>21) recs.push({i:'🔬',bg:'var(--pbg)',c:'var(--purple)',t:'Fungal Hastalık Riski',s:`${rainyD} günlük yağışlı hava bekleniyor. Yüksek nem → fungus/mildiyö riski. Koruyucu ilaçlama değerlendirin.`,pr:'ORTA'});
 
   if(maxT>a.tm) recs.push({i:'🌡️',bg:'var(--rbg)',c:'var(--red)',t:'Kritik Sıcaklık Stresi!',s:`${maxT}°C bekleniyor, ürün üst limiti ${a.tm}°C. Sabah erken sulama yapın.`,pr:'YÜKSEK'});
   else if(maxT>a.to+8) recs.push({i:'☀️',bg:'var(--abg)',c:'var(--amber)',t:'Yüksek Sıcaklık Uyarısı',s:`${maxT}°C bekleniyor. Optimum: ${a.to}°C. Sulama zamanlamasına dikkat edin.`,pr:'ORTA'});
@@ -864,11 +912,13 @@ window.renderRecTab = (field) => {
   const fr=qs('#rec-fert');
   if(fr) fr.innerHTML=`<div style="font-size:13px;font-weight:600;margin-bottom:8px;">${field.crop||'Ürün seçilmemiş'} — Gübre Programı</div><div style="font-size:13px;line-height:1.7;background:var(--bg3);padding:10px 12px;border-radius:var(--r);">${a.fert}</div>${fertH.length?`<div style="font-size:11px;color:var(--text3);margin-top:8px;">Son gübrelemeler: ${fertH.join(' · ')}</div>`:''}`;
 
-  // Hastalık/zararlı riski
+  // Hastalık/zararlı riski (gelişmiş)
   const futWx=(WXC[field.id]?.days||simWX(field.lat,field.lon)).filter(d=>d.date>tstr()).slice(0,7);
   const avgR=futWx.reduce((s,d)=>s+d.rain,0)/Math.max(futWx.length,1);
   const avgT=futWx.reduce((s,d)=>s+d.tmax,0)/Math.max(futWx.length,1);
-  const rl=avgR>5&&avgT>18?'YÜKSEK':avgR>2||avgT>24?'ORTA':'DÜŞÜK';
+  let rl='DÜŞÜK';
+  if (avgR>5 && avgT>18) rl='YÜKSEK';
+  else if (avgR>2 || avgT>24) rl='ORTA';
   const rc={YÜKSEK:'var(--red)',ORTA:'var(--amber)',DÜŞÜK:'var(--green2)'}[rl];
   const pests=PEST_DATA[field.crop]||PEST_DATA.default;
   const pr=qs('#rec-pest');
@@ -881,8 +931,7 @@ window.renderRecTab = (field) => {
     : '<div style="color:var(--text3);font-size:13px;">🤖 AI Analiz butonu ile tüm veriler harmanlanarak bütünsel uzman yorumu oluşturulur.</div>';
 }
 
-// ─── YAPAY ZEKA (GEMINI 2.5 FLASH) ───────────────────────────────
-// Tüm verileri harmanlayarak TEK BÜTÜNsel analiz yapar
+// ─── YAPAY ZEKA (GEMINI) ───────────────────────────────────────
 window.runAI = async () => {
   if(!CUR) return;
 
@@ -920,12 +969,15 @@ window.runAI = async () => {
     const lastSpray=(CUR.events||[]).filter(e=>e.type==='ilaç'&&!e.planned).sort((a,b)=>b.date.localeCompare(a.date))[0];
     const evLog=(CUR.events||[]).map(e=>{
       const ex=e.extra?Object.entries(e.extra).filter(([,v])=>v).map(([,v])=>v).join(', '):'';
-      return`  ${e.date} | ${e.type}${ex?' ['+ex+']':''}${e.notes?' — '+e.notes:''} | ${e.qty?e.qty+(e.unit||''):''}${e.cost?' | '+e.cost+'₺':''} ${e.planned?'[PLANLI]':''}`;
+      return`  ${e.date} | ${e.type}${ex?' ['+ex+']':''}${e.notes?' — '+e.notes:''} | ${e.qty?e.qty+(e.unit||''):''}${e.cost?' | '+e.cost+'₺':''} ${e.planned?'[PLANLI]':''}${e.revenue?` | Gelir: ${e.revenue}₺` : ''}${e.profit!==undefined?` | Kar: ${e.profit}₺`:''}`;
     }).join('\n');
     const costMap={};let totalCost=0;
     (CUR.events||[]).filter(e=>e.cost>0).forEach(e=>{ const t=e.total||(e.cost*(e.qty||1)); costMap[e.type]=(costMap[e.type]||0)+t; totalCost+=t; });
     const costStr=Object.entries(costMap).map(([k,v])=>`${k}: ${Math.round(v)}₺`).join(' · ');
     const photoDesc=(CUR.photos||[]).map((p,i)=>`  Fotoğraf ${i+1}: ${p.date} [${p.type}]${p.note?' — '+p.note:''}${p.ai&&p.ai.length>10?' | Önceki analiz: '+p.ai.slice(0,120):''}`).join('\n');
+    // Gelir ve kar hesapla
+    const totalRevenue = (CUR.events||[]).reduce((s,e)=>s+(e.revenue||0),0);
+    const totalProfit = totalRevenue - totalCost;
 
     const prompt=`SEN DENEYİMLİ BİR TÜRK TARIM DANIŞMANISIN.
 
@@ -966,7 +1018,9 @@ Son gübreleme: ${lastFert?lastFert.date+' — '+(lastFert.extra?.['e-ft']||''):
 Son ilaçlama: ${lastSpray?lastSpray.date+' — '+(lastSpray.extra?.['e-pn']||lastSpray.extra?.['e-pt']||''):'kayıt yok'}
 
 ═══ MALİYET ANALİZİ ═══
-${costStr||'Kayıt yok'} | TOPLAM: ${Math.round(totalCost).toLocaleString('tr-TR')}₺${CUR.area>0?' | Dönüm başı: '+Math.round(totalCost/CUR.area).toLocaleString()+'₺':''}
+${costStr||'Kayıt yok'} | TOPLAM MALİYET: ${Math.round(totalCost).toLocaleString('tr-TR')}₺${CUR.area>0?' | Dönüm başı maliyet: '+Math.round(totalCost/CUR.area).toLocaleString()+'₺':''}
+TOPLAM GELİR: ${Math.round(totalRevenue).toLocaleString('tr-TR')}₺
+NET KAR: ${Math.round(totalProfit).toLocaleString('tr-TR')}₺
 
 ═══ TARLA FOTOĞRAFLARI (${(CUR.photos||[]).length} adet — görseller ekli) ═══
 ${photoDesc||'Fotoğraf yok'}
@@ -978,7 +1032,7 @@ Yukarıdaki tüm verileri ve eklenen fotoğrafların görsellerini birlikte değ
 
 KURALLAR:
 • Başlık başlık liste YOK — sadece akıcı, birbirine bağlı paragraflar
-• Hava + toprak nemi + uydu indeksleri + fenoloji + geçmiş uygulamalar + fotoğraflar tek bir analize entegre olsun
+• Hava + toprak nemi + uydu indeksleri + fenoloji + geçmiş uygulamalar + fotoğraflar + maliyet/karlılık tek bir analize entegre olsun
 • Veriler çelişiyorsa bunu belirt ve yorumla
 • Somut tarih ve miktar belirterek aksiyon önerileri ver
 • Türk tarım koşullarına özgü, teknik ama anlaşılır dil
@@ -1111,7 +1165,7 @@ if(!apiKey) { toast('Gemini API anahtarı alınamadı. Remote Config kontrol edi
   }catch(e){ el.innerHTML=`<div style="color:var(--red);font-size:12px;margin-top:6px;">Hata: ${e.message}</div>`; }
 }
 
-// ─── FOTOĞRAF YÖNETİMİ ────────────────────────────────────────────
+// ─── FOTOĞRAF YÖNETİMİ (EXIF otomatik tarih) ─────────────────────
 window.prevPhoto = async (e) => {
   const file=e.target.files[0]; if(!file) return;
   const si=qs('#p-size-info'); if(si) si.textContent='Sıkıştırılıyor...';
@@ -1119,6 +1173,21 @@ window.prevPhoto = async (e) => {
   const kb=Math.round(pendPh.length*0.75/1024);
   qs('#p-prev').innerHTML=`<img src="${pendPh}" style="width:100%;max-height:140px;object-fit:cover;border-radius:var(--r);margin-top:6px;"/>`;
   if(si) si.textContent=`~${kb} KB (sıkıştırıldı)`;
+  // EXIF'ten tarih okuma
+  if (window.EXIF) {
+    EXIF.getData(file, function() {
+      const dateTime = EXIF.getTag(this, 'DateTimeOriginal');
+      if (dateTime) {
+        // format: "YYYY:MM:DD HH:MM:SS"
+        const parts = dateTime.split(' ')[0].split(':');
+        if (parts.length === 3) {
+          const exifDate = `${parts[0]}-${parts[1]}-${parts[2]}`;
+          qs('#p-date').value = exifDate;
+          toast(`Fotoğraf tarihi otomatik alındı: ${exifDate}`, false);
+        }
+      }
+    });
+  }
 }
 window.openPhotoM = () => { pendPh=null; qs('#p-prev').innerHTML=''; qs('#p-ai').innerHTML=''; qs('#p-date').value=tstr(); qs('#p-note').value=''; if(qs('#p-size-info'))qs('#p-size-info').textContent=''; qs('#p-file').value=''; qs('#m-photo').classList.add('on'); }
 window.savePhoto = async () => {
@@ -1339,7 +1408,6 @@ window.calcPolyArea = (ring) => {
 
 // ─── FİREBASE / YEREL DEPOLAMA ───────────────────────────────────
 window.saveFieldToDB = async (field) => {
-  // Firebase'e kaydetmeden önce önbelleklenmiş geçici verileri temizle
   const clean=JSON.parse(JSON.stringify(field));
   delete clean._soilCache;
   const uid=window.FB_USER?.uid;
@@ -1358,7 +1426,6 @@ window.syncFromDB = async () => {
     DB.fields=fields||[];
     saveLocalDB();
     invSoilAll();
-    // Hava verisi olmayan tarlalar için çek
     DB.fields.forEach(f=>{ if(!WXC[f.id]) fetchWX(f); });
     renderAll();
     if(CUR){ const u=DB.fields.find(f=>f.id===CUR.id); if(u){ CUR=u; if(qs('#page-field.on')) renderFieldPage(CUR); }else{ CUR=null; goPage('dash'); } }
@@ -1374,6 +1441,41 @@ window.loadSettings = () => {
 }
 window.expData = () => { const a=document.createElement('a'); a.href='data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify({fields:DB.fields},null,2)); a.download='tarim_'+tstr()+'.json'; a.click(); }
 window.impData = (e) => { const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=ev=>{ try{ const d=JSON.parse(ev.target.result); if(d.fields){ DB.fields=d.fields; saveLocalDB(); renderAll(); toast('İçe aktarıldı'); } }catch{ toast('Geçersiz JSON',true); } }; r.readAsText(f); }
+
+// ─── CSV DIŞA AKTARIM ───────────────────────────────────────────
+window.exportToCSV = () => {
+  if (!DB.fields.length) { toast('Aktarılacak veri yok', true); return; }
+  const rows = [];
+  rows.push(['Tarla', 'Tarih', 'Tür', 'Detay', 'Miktar', 'Birim', 'Birim Maliyet (₺)', 'Toplam Maliyet (₺)', 'Gelir (₺)', 'Notlar']);
+  DB.fields.forEach(f => {
+    (f.events || []).forEach(e => {
+      const extraStr = e.extra ? Object.entries(e.extra).filter(([k]) => ['e-ft','e-pn','e-sm','e-ft2','e-fbrand'].includes(k)).map(([,v])=>v).join('; ') : '';
+      rows.push([
+        f.name,
+        e.date,
+        e.type,
+        extraStr,
+        e.qty || '',
+        e.unit || '',
+        e.cost || '',
+        e.total || '',
+        e.revenue || '',
+        e.notes || ''
+      ]);
+    });
+  });
+  const csvContent = rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  link.href = url;
+  link.setAttribute('download', `tarim_raporu_${tstr()}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+  toast('CSV dışa aktarıldı');
+};
 
 // ─── KULLANICI GİRİŞİ ────────────────────────────────────────────
 window.swAuthTab = (tab, el) => {
@@ -1568,30 +1670,34 @@ window.renderCal = () => {
 window.renderRep = () => {
   const rc=qs('#rep-content'); if(!rc) return;
   if(!DB.fields.length){ rc.innerHTML='<div class="empty">📊<br/>Tarla ekleyin.</div>'; return; }
-  const total=DB.fields.reduce((s,f)=>s+(f.events||[]).reduce((c,e)=>c+(e.total||(e.cost*(e.qty||1))),0),0);
+  const totalCost=DB.fields.reduce((s,f)=>s+(f.events||[]).reduce((c,e)=>c+(e.total||(e.cost*(e.qty||1))),0),0);
+  const totalRevenue=DB.fields.reduce((s,f)=>s+(f.events||[]).reduce((c,e)=>c+(e.revenue||0),0),0);
+  const totalProfit = totalRevenue - totalCost;
   const ta=DB.fields.reduce((s,f)=>s+(f.area||0),0);
   const byCat={}; DB.fields.forEach(f=>(f.events||[]).filter(e=>e.cost>0).forEach(e=>{ const t=e.total||(e.cost*(e.qty||1)); byCat[e.type]=(byCat[e.type]||0)+t; }));
   rc.innerHTML=`
     <div class="krow">
-      <div class="kpi"><div class="kpi-l">Toplam Yatırım</div><div class="kpi-v">${Math.round(total).toLocaleString('tr-TR')}</div><div class="kpi-s">₺</div></div>
-      <div class="kpi"><div class="kpi-l">Alan Başı</div><div class="kpi-v">${ta?Math.round(total/ta).toLocaleString():0}</div><div class="kpi-s">₺/birim</div></div>
-      <div class="kpi"><div class="kpi-l">Tarla</div><div class="kpi-v">${DB.fields.length}</div></div>
-      <div class="kpi"><div class="kpi-l">Toplam Alan</div><div class="kpi-v">${ta.toFixed(1)}</div></div>
+      <div class="kpi"><div class="kpi-l">Toplam Maliyet</div><div class="kpi-v">${Math.round(totalCost).toLocaleString('tr-TR')}</div><div class="kpi-s">₺</div></div>
+      <div class="kpi"><div class="kpi-l">Toplam Gelir</div><div class="kpi-v">${Math.round(totalRevenue).toLocaleString('tr-TR')}</div><div class="kpi-s">₺</div></div>
+      <div class="kpi"><div class="kpi-l">Net Kar</div><div class="kpi-v" style="color:${totalProfit>=0?'var(--green2)':'var(--red)'}">${Math.round(totalProfit).toLocaleString('tr-TR')}</div><div class="kpi-s">₺</div></div>
+      <div class="kpi"><div class="kpi-l">Alan Başı Kar</div><div class="kpi-v">${ta?Math.round(totalProfit/ta).toLocaleString():0}</div><div class="kpi-s">₺/birim</div></div>
     </div>
     <div class="g2">
       <div class="card"><div class="ct">Tarla Bazlı Maliyet</div>
-        ${DB.fields.map(f=>{const fc=(f.events||[]).reduce((s,e)=>s+(e.total||(e.cost*(e.qty||1))),0);return`<div class="pr"><span class="prl" style="display:flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border-radius:50%;background:${f.color};flex-shrink:0;"></span>${f.name}</span><div class="prt"><div class="prf" style="width:${total?Math.round(fc/total*100):0}%;background:${f.color};"></div></div><span class="prv">${Math.round(fc).toLocaleString()}₺</span></div>`;}).join('')}
-        <div style="display:flex;justify-content:space-between;font-weight:700;font-size:14px;padding-top:9px;margin-top:5px;border-top:1px solid var(--bdr);"><span>Toplam</span><span>${Math.round(total).toLocaleString('tr-TR')} ₺</span></div>
+        ${DB.fields.map(f=>{const fc=(f.events||[]).reduce((s,e)=>s+(e.total||(e.cost*(e.qty||1))),0);return`<div class="pr"><span class="prl" style="display:flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border-radius:50%;background:${f.color};flex-shrink:0;"></span>${f.name}</span><div class="prt"><div class="prf" style="width:${totalCost?Math.round(fc/totalCost*100):0}%;background:${f.color};"></div></div><span class="prv">${Math.round(fc).toLocaleString()}₺</span></div>`;}).join('')}
+        <div style="display:flex;justify-content:space-between;font-weight:700;font-size:14px;padding-top:9px;margin-top:5px;border-top:1px solid var(--bdr);"><span>Toplam Maliyet</span><span>${Math.round(totalCost).toLocaleString('tr-TR')} ₺</span></div>
       </div>
       <div class="card"><div class="ct">İşlem Bazlı Dağılım</div>
-        ${Object.keys(byCat).length?Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="pr"><span class="prl">${EVI[k]||'📝'} ${k}</span><div class="prt"><div class="prf" style="width:${total?Math.round(v/total*100):0}%;"></div></div><span class="prv">${Math.round(v).toLocaleString()}₺</span></div>`).join(''):'<div style="color:var(--text3);">Kayıt yok</div>'}
+        ${Object.keys(byCat).length?Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="pr"><span class="prl">${EVI[k]||'📝'} ${k}</span><div class="prt"><div class="prf" style="width:${totalCost?Math.round(v/totalCost*100):0}%;"></div></div><span class="prv">${Math.round(v).toLocaleString()}₺</span></div>`).join(''):'<div style="color:var(--text3);">Kayıt yok</div>'}
       </div>
     </div>
     <div class="card"><div class="ct">Tarla Özet Tablosu</div>
-      <div style="overflow-x:auto;"><table class="tbl"><thead><tr><th>Tarla</th><th>Ürün</th><th>Alan</th><th>Dönem</th><th>Nem</th><th>Hasat</th><th>Maliyet</th></tr></thead>
+      <div style="overflow-x:auto;"><table class="tbl"><thead><tr><th>Tarla</th><th>Ürün</th><th>Alan</th><th>Dönem</th><th>Nem</th><th>Hasat</th><th>Maliyet</th><th>Gelir</th><th>Kar</th></tr></thead>
       <tbody>${DB.fields.map(f=>{
         invSoil(f.id); const s=calcSoil(f); const sc=scl(s.pct);
         const fc=(f.events||[]).reduce((c,e)=>c+(e.total||(e.cost*(e.qty||1))),0);
+        const rev=(f.events||[]).reduce((c,e)=>c+(e.revenue||0),0);
+        const profit = rev - fc;
         const ph=calcPheno(f); const he=calcHarvest(f);
         return`<tr>
           <td style="font-weight:600;white-space:nowrap;"><span style="width:8px;height:8px;border-radius:50%;background:${f.color};display:inline-block;margin-right:5px;"></span>${f.name}</td>
@@ -1600,12 +1706,13 @@ window.renderRep = () => {
           <td><span class="tag ${sc.tag}">${sc.l} %${s.pct}</span></td>
           <td style="font-size:11px;">${he?(he.already?'🟢 Hazır!':he.daysLeft+'g'):'—'}</td>
           <td>${Math.round(fc).toLocaleString()}₺</td>
-        </tr>`;}).join('')}</tbody></table></div>
+          <td>${Math.round(rev).toLocaleString()}₺</td>
+          <td style="color:${profit>=0?'var(--green2)':'var(--red)'}">${Math.round(profit).toLocaleString()}₺</td>
+        </table>`;}).join('')}</tbody></table></div>
     </div>`;
 }
 
 // ─── OTOMATİK YENİLEME ───────────────────────────────────────────
-// Her 10 dakikada bir: toprak önbelleğini temizle + hava verisini yenile
 setInterval(async()=>{
   invSoilAll();
   const toFetch=DB.fields.filter(f=>!WXC[f.id]||(Date.now()-WXC[f.id].at>1800000));
@@ -1618,7 +1725,6 @@ setInterval(async()=>{
   }
 }, 600000);
 
-// Her 5 dakikada bir: Firebase sessiz senkronizasyon
 setInterval(async()=>{
   if(window.FB_USER&&window.FB_MODE){
     try{
@@ -1636,7 +1742,7 @@ window.deleteCurrentPh = window.delCurPh;
 window.fetchSoilTypeFromCoords = async (lat, lon) => {
   try {
     // Texture class sorgusu (0-5cm derinlik)
-    const url = `https://rest.isric.org/soilgrids/v2.0/properties/query?lon=${lon}&lat=${lat}&property=texture_class&depth=0-5cm&value=mean`;
+    const url = `https://rest.isric.org/soilgrids/v2.0/properties/query?lon=${lon}&lat=${lat}&property=texture_class&property=clay&property=sand&property=silt&depth=0-5cm&value=mean`;
     const res = await fetch(url);
     if (!res.ok) throw new Error('SoilGrids hatası: ' + res.status);
     const data = await res.json();
@@ -1667,14 +1773,20 @@ window.fetchSoilTypeFromCoords = async (lat, lon) => {
       'Sandy Clay Loam': 'killiTin',
       'Sandy Clay': 'killi'
     };
-    return soilMap[textureName] || 'tinli'; // varsayılan tınlı
+    // Ayrıca kum, silt, kil yüzdelerini al ve global olarak sakla (isteğe bağlı)
+    const clay = data?.properties?.layers?.[0]?.depths?.[0]?.values?.mean;
+    const sand = data?.properties?.layers?.[1]?.depths?.[0]?.values?.mean;
+    const silt = data?.properties?.layers?.[2]?.depths?.[0]?.values?.mean;
+    if (clay !== undefined && sand !== undefined && silt !== undefined) {
+      window.tempSoilComposition = { clay: clay*100, sand: sand*100, silt: silt*100 }; // yüzdeye çevir
+    }
+    return soilMap[textureName] || 'tinli';
   } catch(e) {
     console.warn('SoilGrids hatası:', e);
     return null;
   }
 };
 
-// Koordinat alanları değişince otomatik doldur
 window.autoFillSoilFromCoords = async () => {
   const lat = parseFloat(qs('#f-lat')?.value);
   const lon = parseFloat(qs('#f-lon')?.value);
@@ -1683,8 +1795,6 @@ window.autoFillSoilFromCoords = async () => {
   const soilSelect = qs('#f-soil');
   if (!soilSelect) return;
   
-  // Kullanıcıya yükleniyor bildirimi (isteğe bağlı)
-  const originalVal = soilSelect.value;
   soilSelect.disabled = true;
   soilSelect.style.opacity = '0.6';
   
@@ -1692,6 +1802,11 @@ window.autoFillSoilFromCoords = async () => {
     const soilType = await window.fetchSoilTypeFromCoords(lat, lon);
     if (soilType && soilSelect.querySelector(`option[value="${soilType}"]`)) {
       soilSelect.value = soilType;
+      // Toprak bileşenlerini de tarla nesnesine eklemek için global değişkende tut
+      if (window.tempSoilComposition) {
+        window.pendingSoilComp = window.tempSoilComposition;
+        delete window.tempSoilComposition;
+      }
       window.toast(`🌱 Toprak tipi "${soilType}" olarak tahmin edildi.`, false);
     } else if (soilType) {
       window.toast(`Tahmin edilen toprak tipi (${soilType}) listede yok, manuel seçin.`, true);
@@ -1707,7 +1822,6 @@ window.autoFillSoilFromCoords = async () => {
   }
 };
 
-// Mevcut tüm tarlaların toprak tipini koordinatlarına göre güncelle
 window.updateAllSoilTypes = async () => {
   if (!DB.fields.length) {
     toast('Güncellenecek tarla yok.', true);
@@ -1723,9 +1837,12 @@ window.updateAllSoilTypes = async () => {
       const newSoil = await window.fetchSoilTypeFromCoords(field.lat, field.lon);
       if (newSoil && newSoil !== field.soilType) {
         field.soilType = newSoil;
+        if (window.tempSoilComposition) {
+          field.soilComposition = window.tempSoilComposition;
+          delete window.tempSoilComposition;
+        }
         await saveFieldToDB(field);
         updated++;
-        // Toprak önbelleğini temizle
         window.invSoil(field.id);
       }
     } catch(e) {
@@ -1734,7 +1851,6 @@ window.updateAllSoilTypes = async () => {
     }
   }
   
-  // UI'ı yenile
   window.renderAll();
   if (window.CUR) window.renderFieldPage(window.CUR);
   
