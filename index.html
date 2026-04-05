@@ -8,11 +8,11 @@
 <title>Tarla Takip</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
+<!-- EXIF.js for photo metadata -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <!--Firebase-->
 <script type="module" src="firebase-config.js"></script>
 <link rel="stylesheet" href="style.css">
-
 </head>
 <body>
 <!-- ══ AUTH SCREEN ══ -->
@@ -188,7 +188,7 @@
     <div class="card" style="padding:0;overflow:hidden;">
       <div style="overflow-x:auto;">
         <table class="tbl">
-          <thead><tr><th>Tarih</th><th>Tür</th><th>Detay</th><th>Miktar</th><th>Birim₺</th><th>Toplam</th><th style="width:70px;"></th></tr></thead>
+          <thead><tr><th>Tarih</th><th>Tür</th><th>Detay</th><th>Miktar</th><th>Birim₺</th><th>Toplam</th><th>Gelir</th><th style="width:70px;"></th></tr></thead>
           <tbody id="ev-tbody"></tbody>
         </table>
       </div>
@@ -246,6 +246,9 @@
 <!-- REPORTS -->
 <div id="page-rep" class="page">
   <div class="ph"><div class="ph-title">📊 Raporlar & Analiz</div></div>
+  <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
+    <button class="btn btnp" onclick="window.exportToCSV()">📎 CSV Dışa Aktar</button>
+  </div>
   <div id="rep-content"></div>
 </div>
 
