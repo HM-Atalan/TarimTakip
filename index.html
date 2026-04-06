@@ -348,6 +348,14 @@
       <div class="hint" id="soil-hint" style="color:var(--text3);">Koordinat girildiğinde SoilGrids (ISRIC) verisinden otomatik belirlenir · Manuel değiştirilebilir</div>
     </div>
   </div>
+  <div class="fg">
+  <label>Durum</label>
+  <select id="f-status">
+    <option value="active">🌱 Aktif (Ürün ekili)</option>
+    <option value="fallow">🌾 Nadas</option>
+    <option value="planned">📅 Planlanan</option>
+  </select>
+  </div>
   <div class="fr">
     <div class="fg"><label>Ürün Kategorisi</label>
       <select id="f-cat" onchange="window.fillCrops()">
