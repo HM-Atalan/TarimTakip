@@ -7,11 +7,10 @@
 window.DB = { fields: [], s: { acuKey: '' } };
 window.CUR = null;
 // ═══════════════════════════════════════════════════════════════════
-// TarlaTakip — Ana Script (Temiz Versiyon)
-// Gemini 2.5 Flash · Firebase Firestore · Open-Meteo · NASA · Sentinel-2
+// TarlaTakip — Ana Script (Gelişmiş: ET₀+Kc, Nadas, Verim Tahmini)
 // ═══════════════════════════════════════════════════════════════════
 
-// ─── VERİ TABLOLARI ───────────────────────────────────────────────
+// ─── VERİ TABLOLARI (KC ve YIELD EKLENDİ) ──────────────────────────
 const CROPS = {
   tahil:['Buğday','Arpa','Mısır','Çavdar','Yulaf','Pirinç','Tritikale','Çeltik'],
   sebze:['Domates','Biber (dolmalık)','Biber (sivri)','Biber (kapya)','Patlıcan','Salatalık',
@@ -36,99 +35,123 @@ const CROP_AGR = {
   'Buğday':     {et:3.2,tb:0,  to:22,tm:35, mn:-3, td:210,
     st:['Çimlenme','Kardeşlenme','Sapa Kalkma','Başaklanma','Süt Olum','Olgunluk'],
     gd:[100,400,700,900,1050,1200],fc:105,
-    fert:'Ekimde DAP 15 kg/da + KCl 5 kg/da; kardeşlenmede Üre 10 kg/da; sapa kalkışta CAN 15 kg/da'},
+    fert:'Ekimde DAP 15 kg/da + KCl 5 kg/da; kardeşlenmede Üre 10 kg/da; sapa kalkışta CAN 15 kg/da',
+    kc:[0.4,0.7,1.05,0.85], yieldMax:550, optRain:400},
   'Arpa':       {et:3.0,tb:0,  to:20,tm:32, mn:-4, td:185,
     st:['Çimlenme','Kardeşlenme','Sapa Kalkma','Başaklanma','Olgunluk'],
     gd:[90,350,650,850,1050],fc:85,
-    fert:'Ekimde DAP 12 kg/da; kardeşlenmede Üre 8 kg/da; sapa kalkışta CAN 10 kg/da'},
+    fert:'Ekimde DAP 12 kg/da; kardeşlenmede Üre 8 kg/da; sapa kalkışta CAN 10 kg/da',
+    kc:[0.4,0.7,1.0,0.8], yieldMax:500, optRain:350},
   'Mısır':      {et:5.0,tb:10, to:30,tm:40, mn:10, td:130,
     st:['Çimlenme','V6 (6 Yaprak)','VT (Tepe Püskülü)','R1 (İpek)','R3 (Süt)','R6 (Olgunluk)'],
     gd:[100,350,650,800,1000,1400],fc:90,
-    fert:'Ekimde DAP+KCl; V3-V5 Üre 15 kg/da; VT CAN 20 kg/da; Zn takip edin'},
+    fert:'Ekimde DAP+KCl; V3-V5 Üre 15 kg/da; VT CAN 20 kg/da; Zn takip edin',
+    kc:[0.3,0.7,1.15,0.85], yieldMax:1200, optRain:500},
   'Domates':    {et:4.5,tb:10, to:25,tm:35, mn:10, td:120,
     st:['Fide','Vejetatif','Çiçeklenme','Meyve Tutumu','Meyve Büyüme','Olgunlaşma'],
     gd:[200,450,650,800,1000,1200],fc:85,
-    fert:'Dikimde DAP 10 kg/da; çiçekte K ağırlıklı NPK; meyve döneminde Ca+B yapraktan'},
+    fert:'Dikimde DAP 10 kg/da; çiçekte K ağırlıklı NPK; meyve döneminde Ca+B yapraktan',
+    kc:[0.4,0.8,1.15,0.9], yieldMax:8000, optRain:400},
   'Biber (dolmalık)':{et:4.0,tb:10,to:26,tm:36,mn:10,td:130,
     st:['Fide','Vejetatif','Çiçeklenme','Meyve Tutumu','Hasat'],
     gd:[200,500,700,900,1100],fc:85,
-    fert:'Dikimde NPK 8-16-16; büyümede CAN; çiçekte K₂SO₄; meyve döneminde Ca+B'},
+    fert:'Dikimde NPK 8-16-16; büyümede CAN; çiçekte K₂SO₄; meyve döneminde Ca+B',
+    kc:[0.4,0.75,1.1,0.9], yieldMax:5000, optRain:400},
   'Biber (sivri)':{et:3.8,tb:10,to:26,tm:36,mn:10,td:120,
     st:['Fide','Vejetatif','Çiçek','Meyve','Hasat'],
     gd:[180,450,650,850,1050],fc:85,
-    fert:'Dikimde NPK dengeli; büyümede CAN; çiçekte K+Ca takviyesi'},
+    fert:'Dikimde NPK dengeli; büyümede CAN; çiçekte K+Ca takviyesi',
+    kc:[0.4,0.75,1.1,0.9], yieldMax:4000, optRain:380},
   'Biber (kapya)':{et:3.8,tb:10,to:26,tm:36,mn:10,td:130,
     st:['Fide','Vejetatif','Çiçek','Meyve','Olgunlaşma'],
     gd:[200,500,700,900,1150],fc:85,
-    fert:'Dikimde NPK 8-16-16; meyve döneminde K artır; Ca+B yapraktan'},
+    fert:'Dikimde NPK 8-16-16; meyve döneminde K artır; Ca+B yapraktan',
+    kc:[0.4,0.75,1.1,0.9], yieldMax:4500, optRain:400},
   'Patlıcan':   {et:4.0,tb:10, to:28,tm:38, mn:12, td:120,
     st:['Fide','Vejetatif','Çiçek','Meyve','Hasat'],
     gd:[200,500,700,900,1100],fc:85,
-    fert:'Dikimde NPK 15-15-15; büyümede üre; çiçekte K₂O ağırlıklı'},
+    fert:'Dikimde NPK 15-15-15; büyümede üre; çiçekte K₂O ağırlıklı',
+    kc:[0.4,0.75,1.1,0.9], yieldMax:6000, optRain:420},
   'Salatalık':  {et:4.2,tb:12, to:27,tm:37, mn:12, td:90,
     st:['Çimlenme','Fide','Vejetatif','Çiçek','Hasat'],
     gd:[150,300,550,750,950],fc:85,
-    fert:'Dikimde NPK 15-15-15; büyümede CAN; çiçekte K+Ca+B'},
+    fert:'Dikimde NPK 15-15-15; büyümede CAN; çiçekte K+Ca+B',
+    kc:[0.4,0.8,1.15,0.9], yieldMax:10000, optRain:450},
   'Patates':    {et:4.5,tb:7,  to:20,tm:30, mn:5,  td:110,
     st:['Çıkış','Vejetatif','Yumru Başlangıç','Yumru Büyüme','Olgunluk'],
     gd:[150,400,650,900,1050],fc:80,
-    fert:'Ekimde K ağırlıklı NPK; yumru büyümesinde K₂SO₄ artır; Mg ve B mikro'},
+    fert:'Ekimde K ağırlıklı NPK; yumru büyümesinde K₂SO₄ artır; Mg ve B mikro',
+    kc:[0.4,0.7,1.1,0.85], yieldMax:4000, optRain:350},
   'Soğan (kuru)':{et:3.5,tb:7,  to:20,tm:30, mn:0,  td:150,
     st:['Çıkış','Vejetatif','Soğan Bağlama','Olgunluk'],
     gd:[100,600,900,1200],fc:80,
-    fert:'Ekimde DAP+KCl; büyümede bölünmüş üre; soğan bağlamada K artır'},
+    fert:'Ekimde DAP+KCl; büyümede bölünmüş üre; soğan bağlamada K artır',
+    kc:[0.4,0.7,1.0,0.8], yieldMax:6000, optRain:400},
   'Sarımsak':   {et:3.0,tb:0,  to:18,tm:28, mn:-5, td:180,
     st:['Çıkış','Vejetatif','Diş Bağlama','Olgunluk'],
     gd:[80,400,700,1000],fc:80,
-    fert:'Ekimde DAP 10 kg/da; büyümede Üre 8 kg/da; diş bağlamada K'},
+    fert:'Ekimde DAP 10 kg/da; büyümede Üre 8 kg/da; diş bağlamada K',
+    kc:[0.4,0.7,1.0,0.8], yieldMax:5000, optRain:350},
   'Pamuk':      {et:6.0,tb:15, to:30,tm:40, mn:15, td:180,
     st:['Çimlenme','Vejetatif','Tomurcuklama','Çiçeklenme','Koza Tutumu','Koza Açılımı'],
     gd:[60,400,700,1000,1300,1600],fc:90,
-    fert:'Ekimde DAP; çiçekte N+K dengeli; kozada B ve Zn mikro besin'},
+    fert:'Ekimde DAP; çiçekte N+K dengeli; kozada B ve Zn mikro besin',
+    kc:[0.4,0.75,1.1,0.85], yieldMax:500, optRain:500},
   'Ayçiçeği':  {et:4.0,tb:6,  to:25,tm:35, mn:5,  td:120,
     st:['Çimlenme','Rozet','Çiçeklenme','Tohum Doldurma','Olgunluk'],
     gd:[80,400,700,950,1100],fc:80,
-    fert:'Ekimde DAP; rozetde CAN 10 kg/da; çiçeklenmede B mikro element'},
+    fert:'Ekimde DAP; rozetde CAN 10 kg/da; çiçeklenmede B mikro element',
+    kc:[0.4,0.7,1.1,0.85], yieldMax:350, optRain:400},
   'Şeker Pancarı':{et:4.5,tb:3,to:20,tm:30,mn:-2,td:180,
     st:['Çıkış','Vejetatif','Kök Büyüme','Olgunluk'],
     gd:[120,500,900,1300],fc:95,
-    fert:'Ekimde NPK dengeli; büyümede bölünmüş N; olgunlukta K artır'},
+    fert:'Ekimde NPK dengeli; büyümede bölünmüş N; olgunlukta K artır',
+    kc:[0.4,0.75,1.1,0.85], yieldMax:7000, optRain:450},
   'Zeytin (Yağlık — Ayvalık)':{et:2.5,tb:10,to:25,tm:38,mn:-7,td:270,
     st:['Sürgün Uyanışı','Çiçeklenme','Meyve Tutumu','Meyve Büyüme','Yağ Biriktirme','Hasat'],
     gd:[200,400,700,1200,1600,2000],fc:70,
-    fert:'Sonbaharda K₂SO₄ 8 kg/ağaç; ilkbaharda Üre 0.5-1 kg/ağaç; yapraktan Zn+B'},
+    fert:'Sonbaharda K₂SO₄ 8 kg/ağaç; ilkbaharda Üre 0.5-1 kg/ağaç; yapraktan Zn+B',
+    kc:[0.5,0.65,0.7,0.65], yieldMax:30, optRain:600},
   'Zeytin (Yağlık — Gemlik)':{et:2.5,tb:10,to:25,tm:38,mn:-8,td:275,
     st:['Sürgün','Çiçek','Meyve Tutumu','Büyüme','Yağ Biriktirme','Hasat'],
     gd:[200,420,720,1220,1620,2050],fc:70,
-    fert:'Sonbaharda K₂SO₄; ilkbaharda Üre+DAP; yapraktan Zn+B+Mn'},
+    fert:'Sonbaharda K₂SO₄; ilkbaharda Üre+DAP; yapraktan Zn+B+Mn',
+    kc:[0.5,0.65,0.7,0.65], yieldMax:30, optRain:600},
   'Elma':       {et:3.0,tb:4,  to:22,tm:32, mn:-25,td:180,
     st:['Tomurcuk Kabarması','Çiçeklenme','Meyve Tutumu','Meyve Büyüme','Olgunluk'],
     gd:[100,250,450,900,1400],fc:80,
-    fert:'İlkbaharda dengeli NPK; meyve büyümesinde K artır; yapraktan Ca+B'},
+    fert:'İlkbaharda dengeli NPK; meyve büyümesinde K artır; yapraktan Ca+B',
+    kc:[0.5,0.8,1.0,0.8], yieldMax:3000, optRain:500},
   'Portakal':   {et:3.5,tb:13, to:27,tm:38, mn:-3, td:300,
     st:['Sürgün','Çiçeklenme','Meyve Tutumu','Büyüme','Renk Değişimi','Olgunluk'],
     gd:[300,600,1000,1600,2000,2400],fc:80,
-    fert:'3 dönemde bölünmüş gübre; Mg ve Fe eksikliğine dikkat; yapraktan Mn+Zn'},
+    fert:'3 dönemde bölünmüş gübre; Mg ve Fe eksikliğine dikkat; yapraktan Mn+Zn',
+    kc:[0.5,0.7,0.85,0.7], yieldMax:4000, optRain:800},
   'Mandalina':  {et:3.2,tb:13, to:26,tm:37, mn:-4, td:290,
     st:['Sürgün','Çiçek','Meyve Tutumu','Büyüme','Olgunluk'],
     gd:[280,560,950,1550,2200],fc:80,
-    fert:'İlkbaharda N ağırlıklı; meyve döneminde K+Mg; yapraktan Zn+Mn'},
+    fert:'İlkbaharda N ağırlıklı; meyve döneminde K+Mg; yapraktan Zn+Mn',
+    kc:[0.5,0.7,0.85,0.7], yieldMax:3500, optRain:750},
   'Karpuz':     {et:5.0,tb:15, to:32,tm:42, mn:15, td:90,
     st:['Çimlenme','Fide','Çiçeklenme','Meyve Tutumu','Olgunluk'],
     gd:[100,300,600,900,1200],fc:85,
-    fert:'Ekimde DAP; çiçekte K ağırlıklı; meyve döneminde Ca+B yapraktan'},
+    fert:'Ekimde DAP; çiçekte K ağırlıklı; meyve döneminde Ca+B yapraktan',
+    kc:[0.4,0.7,1.0,0.85], yieldMax:6000, optRain:250},
   'Kavun':      {et:4.5,tb:15, to:30,tm:40, mn:15, td:85,
     st:['Çimlenme','Vejetatif','Çiçek','Olgunlaşma'],
     gd:[90,350,650,1100],fc:80,
-    fert:'Ekimde NPK 15-15-15; büyümede K; olgunlaşmada B takviyesi'},
+    fert:'Ekimde NPK 15-15-15; büyümede K; olgunlaşmada B takviyesi',
+    kc:[0.4,0.7,1.0,0.85], yieldMax:4000, optRain:250},
   'Çilek':      {et:3.5,tb:5,  to:20,tm:30, mn:-10,td:90,
     st:['Vejetasyon','Çiçeklenme','Meyve Tutumu','Olgunlaşma','Hasat'],
     gd:[150,350,500,650,800],fc:80,
-    fert:'Dikimde DAP; dengeli NPK; Ca+B önemli; Fe eksikliğine dikkat'},
+    fert:'Dikimde DAP; dengeli NPK; Ca+B önemli; Fe eksikliğine dikkat',
+    kc:[0.4,0.7,1.0,0.85], yieldMax:2500, optRain:400},
   'default':    {et:3.5,tb:5,  to:22,tm:35, mn:0,  td:120,
     st:['Erken Büyüme','Orta Dönem','Olgunluk Öncesi','Hasat'],
     gd:[300,700,950,1100],fc:80,
-    fert:'Ekimde temel NPK 15-15-15; büyüme döneminde dengeli azot takviyesi'}
+    fert:'Ekimde temel NPK 15-15-15; büyüme döneminde dengeli azot takviyesi',
+    kc:[0.4,0.7,1.0,0.85], yieldMax:300, optRain:350}
 };
 
 const PEST_DATA = {
@@ -207,18 +230,24 @@ window.compressImg = (file, maxKB=150, q=0.82) => {
   });
 }
 
-// ─── TOPRAK NEM MODELİ (Gelişmiş - Kum/Silt/Kil bazlı) ────────────
-window.agrd = (crop) => { return CROP_AGR[crop] || CROP_AGR.default; }
+// ─── TOPRAK NEM MODELİ (GELİŞMİŞ: ET₀+Kc, NADAS DESTEĞİ) ─────────
+window.agrd = (crop) => { return CROP_AGR[crop] || CROP_AGR.default; };
 
-// Dinamik tarla kapasitesi hesaplama (kum/silt/kil yüzdelerine göre)
+window.calcGDD = (field, untilDate = tstr()) => {
+  const a = window.agrd(field.crop);
+  if(!field.plantDate) return null;
+  const wx = window.WXC[field.id]?.days || simWX(field.lat, field.lon);
+  let acc = 0;
+  wx.filter(d=>d.date>=field.plantDate && d.date<=untilDate).forEach(d=>{
+    acc += Math.max(0, Math.min((d.tmax+d.tmin)/2, a.tm) - a.tb);
+  });
+  return Math.round(acc);
+};
+
 window.calcFieldCapacity = (soilType, clayPct, sandPct, siltPct) => {
-  // Varsayılan değerler
   let base = SOIL_FC[soilType] || 80;
   if (clayPct !== undefined && sandPct !== undefined) {
-    // Saubhagya et al. (2020) yaklaşımı: FC (mm/10cm) = 0.2*clay + 0.05*silt + 0.01*sand
-    // 10cm için mm cinsinden, biz fc'yi mm olarak kullanıyoruz (toprak profili 100cm varsayımı? mevcut modelde fc mm cinsinden)
-    // Mevcut fc değerleri genelde 100mm civarında. Oranı koruyalım.
-    let fcCalc = (0.2 * clayPct + 0.05 * siltPct + 0.01 * sandPct) * 2.5; // kabaca 100mm'ye ölçekleme
+    let fcCalc = (0.2 * clayPct + 0.05 * siltPct + 0.01 * sandPct) * 2.5;
     fcCalc = Math.min(140, Math.max(40, fcCalc));
     if (!isNaN(fcCalc)) base = fcCalc;
   }
@@ -229,7 +258,6 @@ window.calcSoil = (field) => {
   const key = field.id + '_' + tstr();
   if(SC[key]) return SC[key];
   const a = window.agrd(field.crop);
-  // Dinamik fc hesapla (eğer toprak bileşenleri varsa)
   let fc = SOIL_FC[field.soilType] || a.fc || 80;
   if (field.soilComposition) {
     fc = window.calcFieldCapacity(field.soilType, field.soilComposition.clay, field.soilComposition.sand, field.soilComposition.silt);
@@ -247,8 +275,34 @@ window.calcSoil = (field) => {
   let moist = fc * 0.68;
   const log = [];
   wx.filter(d=>d.date<=today).forEach(d=>{
-    const hf = d.tmax>38?1.45:d.tmax>33?1.2:d.tmax>28?1.05:1.0;
-    const et = a.et * hf * (d.tmax > a.tm ? 0.6 : 1.0);
+    // Kc hesapla (sadece aktif tarla ve ekim tarihi varsa)
+    let kc = 0.7;
+    if (field.status !== 'fallow' && field.plantDate && field.plantDate <= d.date) {
+      const gdd = window.calcGDD(field, d.date);
+      if (gdd !== null) {
+        const a2 = window.agrd(field.crop);
+        const gddTarget = a2.gd[a2.gd.length-1];
+        const ratio = Math.min(1, gdd / gddTarget);
+        if (a2.kc && a2.kc.length === 4) {
+          if (ratio < 0.1) kc = a2.kc[0];
+          else if (ratio < 0.5) kc = a2.kc[0] + (a2.kc[1]-a2.kc[0])*(ratio/0.5);
+          else if (ratio < 0.8) kc = a2.kc[1] + (a2.kc[2]-a2.kc[1])*((ratio-0.5)/0.3);
+          else kc = a2.kc[2] + (a2.kc[3]-a2.kc[2])*Math.min(1, (ratio-0.8)/0.2);
+        }
+      }
+    }
+    let et = 0;
+    if (field.status === 'fallow') {
+      // Çıplak toprak buharlaşması (E ≈ 0.2 * ET₀)
+      et = (d.et0 || 0) * 0.2;
+    } else {
+      et = (d.et0 || 0) * kc;
+      // ET₀ yoksa eski yönteme dön
+      if (et === 0) {
+        const hf = d.tmax>38?1.45:d.tmax>33?1.2:d.tmax>28?1.05:1.0;
+        et = a.et * hf * (d.tmax > a.tm ? 0.6 : 1.0);
+      }
+    }
     const irD = irr.filter(i=>i.date===d.date).reduce((s,i)=>s+i.mm,0);
     const eff = d.rain>30?0.7:d.rain>15?0.85:1.0;
     moist = Math.max(0, Math.min(fc, moist + d.rain*eff + irD - et));
@@ -257,9 +311,9 @@ window.calcSoil = (field) => {
   const result = {pct:Math.round(moist/fc*100), moist:+moist.toFixed(0), fc, et:a.et, log};
   SC[key] = result;
   return result;
-}
-window.invSoil = (fid) => { Object.keys(SC).filter(k=>k.startsWith(fid+'_')).forEach(k=>delete SC[k]); }
-window.invSoilAll = () => { Object.keys(SC).forEach(k=>delete SC[k]); }
+};
+window.invSoil = (fid) => { Object.keys(SC).filter(k=>k.startsWith(fid+'_')).forEach(k=>delete SC[k]); };
+window.invSoilAll = () => { Object.keys(SC).forEach(k=>delete SC[k]); };
 
 window.scl = (pct) => {
   if(pct>78) return {l:'Islak',  tag:'tb', color:'var(--blue)',   bg:'var(--bbg)'};
@@ -1266,7 +1320,6 @@ window.fillCrops = () => {
 window.openFM = (editId) => {
   qs('#f-eid').value = editId || '';
   qs('#fm-title').textContent = editId ? 'Tarla Düzenle' : 'Yeni Tarla Ekle';
-
   const preview = qs('#f-import-preview');
   if (preview) preview.style.display = 'none';
   const soilBadge = qs('#soil-auto-badge');
@@ -1276,7 +1329,6 @@ window.openFM = (editId) => {
   if (editId) {
     const f = window.DB.fields.find(x => x.id === editId);
     if (!f) return;
-
     qs('#f-lat').value = f.lat || '';
     qs('#f-lon').value = f.lon || '';
     qs('#f-name').value = f.name || '';
@@ -1284,44 +1336,33 @@ window.openFM = (editId) => {
     qs('#f-area').value = f.area || '';
     qs('#f-aunit').value = f.areaUnit || 'dönüm';
     qs('#f-soil').value = f.soilType || 'killiTin';
+    qs('#f-status').value = f.status || 'active';   // YENİ
     qs('#f-cat').value = f.category || '';
     fillCrops();
     if (f.crop) qs('#f-crop').value = f.crop;
-
     qs('#f-qty').value = f.qty || '';
     qs('#f-qunit').value = f.qunit || 'adet';
     qs('#f-color').value = f.color || '#40916c';
     qs('#f-plant').value = f.plantDate || '';
     qs('#f-harvest').value = f.harvestDate || '';
     qs('#f-notes').value = f.notes || '';
-
   } else {
-    [
-      'f-lat','f-lon','f-name','f-loc',
-      'f-area','f-qty','f-notes',
-      'f-plant','f-harvest'
-    ].forEach(id => {
+    ['f-lat','f-lon','f-name','f-loc','f-area','f-qty','f-notes','f-plant','f-harvest'].forEach(id => {
       const el = qs('#' + id);
       if (el) el.value = '';
     });
-
     qs('#f-color').value = '#40916c';
     qs('#f-cat').value = '';
     qs('#f-aunit').value = 'dönüm';
-
+    qs('#f-status').value = 'active';   // YENİ
     const file = qs('#f-file');
     if (file) file.value = '';
-
     fillCrops();
   }
-
-  // Koordinatlar girildiğinde toprak tipini otomatik tahmin et
   const latEl=qs('#f-lat'), lonEl=qs('#f-lon');
   const triggerSoilFetch = () => {
     const lt=parseFloat(latEl?.value), ln=parseFloat(lonEl?.value);
-    if(!isNaN(lt) && !isNaN(ln) && lt!==0 && ln!==0) {
-      window.autoFillSoilFromCoords();
-    }
+    if(!isNaN(lt) && !isNaN(ln) && lt!==0 && ln!==0) window.autoFillSoilFromCoords();
   };
   if(latEl && !latEl._soilBound){
     latEl._soilBound=true;
@@ -1334,12 +1375,9 @@ window.openFM = (editId) => {
 window.saveField = async () => {
   const name=qs('#f-name').value.trim(); if(!name){ toast('Tarla adı zorunlu',true); return; }
   const eid=qs('#f-eid').value; const ex=eid?DB.fields.find(f=>f.id===eid):null;
-  // Toprak tipi henüz otomatik çekilmediyse kayıt anında çek
   const lat=parseFloat(qs('#f-lat')?.value), lon=parseFloat(qs('#f-lon')?.value);
   if(!window.pendingSoilComp && !isNaN(lat) && !isNaN(lon) && (!ex || ex.lat!==lat || ex.lon!==lon)) {
-    try {
-      await window.autoFillSoilFromCoords();
-    } catch(e) { console.warn('Auto soil fetch failed:', e); }
+    try { await window.autoFillSoilFromCoords(); } catch(e) { console.warn('Auto soil fetch failed:', e); }
   }
   const f={
     id:ex?ex.id:gid(), name,
@@ -1350,6 +1388,7 @@ window.saveField = async () => {
     qty:parseFloat(qs('#f-qty').value)||0, qunit:qs('#f-qunit').value,
     soilType:qs('#f-soil').value, plantDate:qs('#f-plant').value, harvestDate:qs('#f-harvest').value,
     color:qs('#f-color').value||'#40916c', notes:qs('#f-notes').value,
+    status: qs('#f-status').value,   // YENİ
     events:ex?ex.events:[], photos:ex?ex.photos:[], aiRecs:ex?ex.aiRecs:[],
     soilComposition: window.pendingSoilComp || ex?.soilComposition || null
   };
@@ -1359,7 +1398,7 @@ window.saveField = async () => {
   WXC[f.id]=null; invSoil(f.id);
   closeM('field'); renderAll(); showField(f.id);
   toast(ex?'Tarla güncellendi':'Tarla eklendi');
-}
+};
 
 window.delField = async (id) => {
   if(!id||!confirm('Bu tarla ve tüm verileri silinecek. Emin misiniz?')) return;
@@ -1597,11 +1636,14 @@ window.renderDash = () => {
   qs('#ddate').textContent=now.toLocaleDateString('tr-TR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   const ta=DB.fields.reduce((s,f)=>s+(f.area||0),0);
   const tc=DB.fields.reduce((s,f)=>s+(f.events||[]).reduce((c,e)=>c+(e.total||(e.cost*(e.qty||1))),0),0);
+  const activeCount = DB.fields.filter(f=> f.status !== 'fallow').length;
+  const fallowCount = DB.fields.filter(f=> f.status === 'fallow').length;
   qs('#dkpis').innerHTML=`
     <div class="kpi"><div class="kpi-l">Tarla</div><div class="kpi-v">${DB.fields.length}</div></div>
     <div class="kpi"><div class="kpi-l">Toplam Alan</div><div class="kpi-v">${ta.toFixed(1)}</div></div>
     <div class="kpi"><div class="kpi-l">Toplam Maliyet</div><div class="kpi-v">${Math.round(tc).toLocaleString('tr-TR')}</div><div class="kpi-s">₺</div></div>
-    <div class="kpi"><div class="kpi-l">Ekili Tarla</div><div class="kpi-v">${DB.fields.filter(f=>f.crop).length}<small>/${DB.fields.length}</small></div></div>`;
+    <div class="kpi"><div class="kpi-l">Ekili Tarla</div><div class="kpi-v">${activeCount}<small>/${DB.fields.length}</small></div></div>
+    <div class="kpi"><div class="kpi-l">Nadas</div><div class="kpi-v">${fallowCount}</div></div>`;
   const df=qs('#dfields');
   if(!DB.fields.length){ df.innerHTML='<div class="empty">🌾<br/>Tarla yok.<br/>"+ Yeni Tarla" ile başlayın.</div>'; qs('#devents').innerHTML=''; qs('#dplanned').innerHTML=''; return; }
   df.innerHTML=DB.fields.map(f=>{
@@ -1611,7 +1653,7 @@ window.renderDash = () => {
     return`<div class="evrow" style="cursor:pointer;" onclick="showField('${f.id}')">
       <div class="evico" style="background:${f.color||'#40916c'}22;font-size:14px;">🌿</div>
       <div class="evbody">
-        <div class="evtitle">${f.name}</div>
+        <div class="evtitle">${f.name} ${f.status === 'fallow' ? '<span class="tag ta">Nadas</span>' : f.status === 'planned' ? '<span class="tag tb">Planlanan</span>' : ''}</div>
         <div class="evsub">${f.crop||'Ürün yok'} · ${f.area}${f.areaUnit||'dön'} · ${f.location||'—'}</div>
         ${ph?`<div class="evsub" style="margin-top:2px;">📍 ${ph.stage}${he&&!he.already?' · Hasat ~'+he.daysLeft+'g':he?.already?' · 🟢 Hasat zamanı!':''}</div>`:''}
       </div>
@@ -1627,7 +1669,21 @@ window.renderDash = () => {
   const planned=[];DB.fields.forEach(f=>(f.events||[]).filter(e=>e.planned&&e.date>=tstr()).forEach(e=>planned.push({...e,fn:f.name,fc:f.color})));
   planned.sort((a,b)=>a.date.localeCompare(b.date));
   qs('#dplanned').innerHTML=planned.slice(0,4).map(e=>`<div class="evrow"><div class="evico" style="background:${e.fc||'#40916c'}22;font-size:13px;">${EVI[e.type]||'📝'}</div><div class="evbody"><div class="evtitle">${e.fn} — ${e.type}</div><div class="evsub">${fd(e.date)}</div></div></div>`).join('')||'<div style="color:var(--text3);font-size:13px;">Planlanan görev yok.</div>';
-}
+};
+
+// ─── VERİM TAHMİNİ (YENİ) ────────────────────────────────────────
+window.calcYield = (field) => {
+  const a = window.agrd(field.crop);
+  if (!a.yieldMax) return null;
+  const ph = window.calcPheno(field);
+  const gddPct = ph ? ph.totPct : 0;
+  const ndvi = SATC[field.id]?.data?.ndvi || 0.4;
+  const wx = WXC[field.id]?.days || [];
+  const seasonRain = wx.reduce((s,d)=>s+(d.rain||0),0);
+  const rainFactor = Math.min(1, seasonRain / (a.optRain||350));
+  const yieldEst = a.yieldMax * (gddPct/100 * 0.4 + ndvi/0.8 * 0.4 + rainFactor * 0.2);
+  return Math.round(yieldEst);
+};
 
 window.showField = (id) => {
   CUR=DB.fields.find(f=>f.id===id); if(!CUR) return;
