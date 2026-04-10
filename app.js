@@ -254,6 +254,25 @@ window.calcFieldCapacity = (soilType, clayPct, sandPct, siltPct) => {
   return base;
 };
 
+// GLDAS'tan toprak nemi verisi çek
+window.fetchGLDASSoilMoisture = async (lat, lon) => {
+  // Firebase Functions SDK'sının yüklü olduğundan emin olun
+  const getSoilMoisture = firebase.functions().httpsCallable('getSoilMoisture');
+  try {
+    const result = await getSoilMoisture({ latitude: lat, longitude: lon });
+    if (result.data.success) {
+      console.log('GLDAS nem verisi alındı:', result.data.moisture);
+      return result.data.moisture; // kg/m² cinsinden nem değeri
+    } else {
+      console.error('GLDAS hatası:', result.data.error);
+      return null;
+    }
+  } catch (error) {
+    console.error('Fonksiyon çağrı hatası:', error);
+    return null;
+  }
+};
+
 window.calcSoil = (field) => {
   const key = field.id + '_' + tstr();
   if(SC[key]) return SC[key];
@@ -311,7 +330,16 @@ window.calcSoil = (field) => {
   const result = {pct:Math.round(moist/fc*100), moist:+moist.toFixed(0), fc, et:a.et, log};
   SC[key] = result;
   return result;
+  // Eğer GLDAS verisi alınabildiyse, mevcut modelin başlangıç nemini güncelle
+  const gldasMoisture = await window.fetchGLDASSoilMoisture(field.lat, field.lon);
+  if (gldasMoisture !== null) {
+    // GLDAS verisini (kg/m²) mevcut sisteminizin nem birimine (mm) dönüştürün
+    // Not: 1 kg/m² = 1 mm su yüksekliğine eşittir (1 m²'lik alanda 1 kg su = 1 mm).
+    const gldasMoistureMm = gldasMoisture; // Bu durumda doğrudan kullanılabilir
+    // Başlangıç nemini güncelle
+    moist = gldasMoistureMm;  
 };
+  
 window.invSoil = (fid) => { Object.keys(SC).filter(k=>k.startsWith(fid+'_')).forEach(k=>delete SC[k]); };
 window.invSoilAll = () => { Object.keys(SC).forEach(k=>delete SC[k]); };
 
