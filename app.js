@@ -422,7 +422,7 @@ window.fetchWX = async (field) => {
   const id=field.id, lat=field.lat, lon=field.lon;
   setBadge('wxsrc','om','load','Open-Meteo…');
   try{
-    const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,weathercode,et0_fao_evapotranspiration&past_days=7&forecast_days=8&timezone=Europe%2FIstanbul`;
+    const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,weathercode,et0_fao_evapotranspiration&past_days=7&forecast_days=8&timezone=Europe%2FIstanbul&cell_selection=land`;
     const r=await fetch(url); if(!r.ok) throw new Error('HTTP '+r.status);
     const d=await r.json();
     const days=d.daily.time.map((t,i)=>({
