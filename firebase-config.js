@@ -50,12 +50,17 @@ function initFirebase(){
       if(typeof window.onAuthChange === 'function') window.onAuthChange(user);
     });
   }catch(e){ console.warn('Firebase init error:', e); window.FB_MODE=false; }
-      if (app) {
+       if (app) {
     functions = getFunctions(app);
     window.FB_FUNCTIONS = functions;
-  }   
-}
-initFirebase();
+           }
+                  window.fbCallFunction = async (name, data) => {
+                    if (!functions) throw new Error('Functions not initialized');
+                    const callable = httpsCallable(functions, name);
+                    const result = await callable(data);
+                    return result.data;
+                  };
+};
 
 // Remote Config'ten Gemini anahtarını al (senkron/async)
 window.getGeminiKey = async () => {
