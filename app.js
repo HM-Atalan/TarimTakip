@@ -677,7 +677,7 @@ window.satCtxStr = (field) => {
 }
 
 // ─── TOPRAK RENDER ────────────────────────────────────────────────
-window.renderSoil = (field) => {
+window.renderSoil = async (field) => {
   const s= await calcSoil(field); 
   const sc=scl(s.pct);
   const wx=WXC[field.id]?.days||simWX(field.lat,field.lon);
@@ -890,7 +890,7 @@ window.renderEvTab = (field) => {
 }
 
 // ─── ÖNERİLER (Gelişmiş Hastalık Riski) ────────────────────────────
-window.buildAutoRecs = (field) => {
+window.buildAutoRecs = async (field) => {
   const recs=[];
   const s= await calcSoil(field);
   const wx=WXC[field.id]?.days||simWX(field.lat,field.lon);
@@ -1623,11 +1623,12 @@ window.updateChip = (user) => {
 // ─── RENDER FONKSİYONLARI ────────────────────────────────────────
 window.renderAll = () => { renderSB(); renderDash(); renderCal(); renderRep(); }
 
-window.renderSB = () => {
+window.renderSB = async () => {
   const el=qs('#sb-list'); if(!el) return; el.innerHTML='';
   DB.fields.forEach(f=>{
     invSoil(f.id);
-    const s= await calcSoil(f); const sc=scl(s.pct);
+    const s= await calcSoil(f); 
+    const sc=scl(s.pct);
     const d=document.createElement('div'); d.className='fi'+(f.id===CUR?.id?' on':'');
     d.onclick=()=>{ showField(f.id); clSBmob(); };
     d.innerHTML=`<div class="fi-dot" style="background:${f.color||'#40916c'};"></div><div class="fi-info"><div class="fi-name">${f.name}</div><div class="fi-sub">${f.crop||'Ürün yok'} · <span class="tag ${sc.tag}" style="font-size:9px;">${sc.l} %${s.pct}</span></div></div>`;
@@ -1635,7 +1636,7 @@ window.renderSB = () => {
   });
 }
 
-window.renderFKPIs = (field) => {
+window.renderFKPIs = async (field) => {
   invSoil(field.id);
   const s= await calcSoil(field); const sc=scl(s.pct);
   const tc=(field.events||[]).reduce((t,e)=>t+(e.total||(e.cost*(e.qty||1))),0);
@@ -1657,7 +1658,7 @@ window.renderFKPIs = (field) => {
     <div class="kpi"><div class="kpi-l">Toplam Maliyet</div><div class="kpi-v">${Math.round(tc).toLocaleString('tr-TR')}<small>₺</small></div><div class="kpi-s">${(field.events||[]).length} kayıt</div></div>`;
 }
 
-window.renderDash = () => {
+window.renderDash = async () => {
   const now=new Date();
   qs('#ddate').textContent=now.toLocaleDateString('tr-TR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   const ta=DB.fields.reduce((s,f)=>s+(f.area||0),0);
