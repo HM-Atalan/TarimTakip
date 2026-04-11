@@ -678,7 +678,8 @@ window.satCtxStr = (field) => {
 
 // ─── TOPRAK RENDER ────────────────────────────────────────────────
 window.renderSoil = (field) => {
-  const s= await calcSoil(field); const sc=scl(s.pct);
+  const s= await calcSoil(field); 
+  const sc=scl(s.pct);
   const wx=WXC[field.id]?.days||simWX(field.lat,field.lon);
   const futR=wx.filter(d=>d.date>tstr()).slice(0,7).reduce((t,d)=>t+d.rain,0);
   const futET=wx.filter(d=>d.date>tstr()).slice(0,7).reduce((t,d)=>t+(d.et0||s.et),0);
