@@ -348,16 +348,16 @@ window.scl = (pct) => {
 }
 
 // ─── FENOLOJİ & HASAT TAHMİNİ ────────────────────────────────────
-window.calcGDD = (field) => {
-  const a = window.agrd(field.crop);
-  if(!field.plantDate) return null;
-  const wx = window.WXC[field.id]?.days || simWX(field.lat, field.lon);
-  let acc = 0;
-  wx.filter(d=>d.date>=field.plantDate && d.date<=tstr()).forEach(d=>{
-    acc += Math.max(0, Math.min((d.tmax+d.tmin)/2, a.tm) - a.tb);
-  });
-  return Math.round(acc);
-}
+// window.calcGDD = (field) => {
+//  const a = window.agrd(field.crop);
+//  if(!field.plantDate) return null;
+//  const wx = window.WXC[field.id]?.days || simWX(field.lat, field.lon);
+//  let acc = 0;
+//  wx.filter(d=>d.date>=field.plantDate && d.date<=tstr()).forEach(d=>{
+//    acc += Math.max(0, Math.min((d.tmax+d.tmin)/2, a.tm) - a.tb);
+//  });
+//  return Math.round(acc);
+//}
 
 window.calcPheno = (field) => {
   const a = window.agrd(field.crop);
@@ -1862,14 +1862,25 @@ Türkçe, kısa ve uygulanabilir. Maksimum 4-5 madde.`;
 };
 
 window.renderRep = async () => {
-  const rc=qs('#rep-content'); if(!rc) return;
-  if(!DB.fields.length){ rc.innerHTML='<div class="empty">📊<br/>Tarla ekleyin.</div>'; return; }
-  const totalCost=DB.fields.reduce((s,f)=>s+(f.events||[]).reduce((c,e)=>c+(e.total||(e.cost*(e.qty||1))),0),0);
-  const totalRevenue=DB.fields.reduce((s,f)=>s+(f.events||[]).reduce((c,e)=>c+(e.revenue||0),0),0);
+  const rc = qs('#rep-content'); if (!rc) return;
+  if (!DB.fields.length) { rc.innerHTML = '<div class="empty">📊<br/>Tarla ekleyin.</div>'; return; }
+  
+  const totalCost = DB.fields.reduce((s, f) => s + (f.events || []).reduce((c, e) => c + (e.total || (e.cost * (e.qty || 1))), 0), 0);
+  const totalRevenue = DB.fields.reduce((s, f) => s + (f.events || []).reduce((c, e) => c + (e.revenue || 0), 0), 0);
   const totalProfit = totalRevenue - totalCost;
-  const ta=DB.fields.reduce((s,f)=>s+(f.area||0),0);
-  const byCat={}; DB.fields.forEach(f=>(f.events||[]).filter(e=>e.cost>0).forEach(e=>{ const t=e.total||(e.cost*(e.qty||1)); byCat[e.type]=(byCat[e.type]||0)+t; }));
-  rc.innerHTML=`
+  const ta = DB.fields.reduce((s, f) => s + (f.area || 0), 0);
+  const byCat = {}; DB.fields.forEach(f => (f.events || []).filter(e => e.cost > 0).forEach(e => { const t = e.total || (e.cost * (e.qty || 1)); byCat[e.type] = (byCat[e.type] || 0) + t; }));
+  
+  // Tarla bazlı verileri paralel çek
+  const fieldData = await Promise.all(DB.fields.map(async f => {
+    const s = await calcSoil(f);
+    const fc = (f.events || []).reduce((c, e) => c + (e.total || (e.cost * (e.qty || 1))), 0);
+    const rev = (f.events || []).reduce((c, e) => c + (e.revenue || 0), 0);
+    const profit = rev - fc;
+    const ph = calcPheno(f);
+    const he = calcHarvest(f);
+    return { f, s, fc, rev, profit, ph, he };
+  }));
     <div class="krow">
       <div class="kpi"><div class="kpi-l">Toplam Maliyet</div><div class="kpi-v">${Math.round(totalCost).toLocaleString('tr-TR')}</div><div class="kpi-s">₺</div></div>
       <div class="kpi"><div class="kpi-l">Toplam Gelir</div><div class="kpi-v">${Math.round(totalRevenue).toLocaleString('tr-TR')}</div><div class="kpi-s">₺</div></div>
@@ -2042,7 +2053,7 @@ window.autoFillSoilFromCoords = async () => {
 
 window.updateAllSoilTypes = async () => {
   if (!DB.fields.length) {
-    await window.renderAll();
+   // await window.renderAll();
   if (window.CUR) window.renderFieldPage(window.CUR);
     return;
   }
@@ -2070,7 +2081,7 @@ window.updateAllSoilTypes = async () => {
     }
   }
   
-  window.renderAll();
+  await window.renderAll();
   if (window.CUR) window.renderFieldPage(window.CUR);
   
   toast(`✅ Güncelleme tamamlandı: ${updated} tarla güncellendi, ${failed} başarısız.`, failed > 0);
