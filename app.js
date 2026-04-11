@@ -1903,6 +1903,8 @@ window.renderRep = async () => {
     const he = calcHarvest(f);
     return { f, s, fc, rev, profit, ph, he };
   }));
+
+  rc.innerHTML = `
     <div class="krow">
       <div class="kpi"><div class="kpi-l">Toplam Maliyet</div><div class="kpi-v">${Math.round(totalCost).toLocaleString('tr-TR')}</div><div class="kpi-s">₺</div></div>
       <div class="kpi"><div class="kpi-l">Toplam Gelir</div><div class="kpi-v">${Math.round(totalRevenue).toLocaleString('tr-TR')}</div><div class="kpi-s">₺</div></div>
@@ -1920,12 +1922,8 @@ window.renderRep = async () => {
     </div>
     <div class="card"><div class="ct">Tarla Özet Tablosu</div>
       <div style="overflow-x:auto;"><table class="tbl"><thead><tr><th>Tarla</th><th>Ürün</th><th>Alan</th><th>Dönem</th><th>Nem</th><th>Hasat</th><th>Maliyet</th><th>Gelir</th><th>Kar</th></tr></thead>
-      <tbody>${DB.fields.map(f=>{
-        invSoil(f.id); const s= await calcSoil(f); const sc=scl(s.pct);
-        const fc=(f.events||[]).reduce((c,e)=>c+(e.total||(e.cost*(e.qty||1))),0);
-        const rev=(f.events||[]).reduce((c,e)=>c+(e.revenue||0),0);
-        const profit = rev - fc;
-        const ph=calcPheno(f); const he=calcHarvest(f);
+      <tbody>${fieldData.map(({f,s,fc,rev,profit,ph,he})=>{
+        const sc=scl(s.pct);
         return`<tr>
           <td style="font-weight:600;white-space:nowrap;"><span style="width:8px;height:8px;border-radius:50%;background:${f.color};display:inline-block;margin-right:5px;"></span>${f.name}</td>
           <td>${f.crop||'—'}</td><td>${f.area} ${f.areaUnit||'dön'}</td>
