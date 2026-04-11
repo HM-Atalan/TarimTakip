@@ -1635,17 +1635,19 @@ window.updateChip = (user) => {
 window.renderAll = async () => { await renderSB(); await renderDash(); renderCal(); await renderRep(); }
 
 window.renderSB = async () => {
-  const el=qs('#sb-list'); if(!el) return; el.innerHTML='';
-  DB.fields.forEach(f=>{
+  const el = qs('#sb-list'); if (!el) return; el.innerHTML = '';
+  // for...of kullanarak her bir tarla için sırayla işlem yap
+  for (const f of DB.fields) {
     invSoil(f.id);
-    const s= await calcSoil(f); 
-    const sc=scl(s.pct);
-    const d=document.createElement('div'); d.className='fi'+(f.id===CUR?.id?' on':'');
-    d.onclick=()=>{ showField(f.id); clSBmob(); };
-    d.innerHTML=`<div class="fi-dot" style="background:${f.color||'#40916c'};"></div><div class="fi-info"><div class="fi-name">${f.name}</div><div class="fi-sub">${f.crop||'Ürün yok'} · <span class="tag ${sc.tag}" style="font-size:9px;">${sc.l} %${s.pct}</span></div></div>`;
+    const s = await calcSoil(f);
+    const sc = scl(s.pct);
+    const d = document.createElement('div');
+    d.className = 'fi' + (f.id === CUR?.id ? ' on' : '');
+    d.onclick = () => { showField(f.id); clSBmob(); };
+    d.innerHTML = `<div class="fi-dot" style="background:${f.color || '#40916c'};"></div><div class="fi-info"><div class="fi-name">${f.name}</div><div class="fi-sub">${f.crop || 'Ürün yok'} · <span class="tag ${sc.tag}" style="font-size:9px;">${sc.l} %${s.pct}</span></div></div>`;
     el.appendChild(d);
-  });
-}
+  }
+};
 
 window.renderFKPIs = async (field) => {
   invSoil(field.id);
@@ -1670,30 +1672,45 @@ window.renderFKPIs = async (field) => {
 }
 
 window.renderDash = async () => {
-  const now=new Date();
-  qs('#ddate').textContent=now.toLocaleDateString('tr-TR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  const ta=DB.fields.reduce((s,f)=>s+(f.area||0),0);
-  const tc=DB.fields.reduce((s,f)=>s+(f.events||[]).reduce((c,e)=>c+(e.total||(e.cost*(e.qty||1))),0),0);
-  const activeCount = DB.fields.filter(f=> f.status !== 'fallow').length;
-  const fallowCount = DB.fields.filter(f=> f.status === 'fallow').length;
-  qs('#dkpis').innerHTML=`
+  const now = new Date();
+  qs('#ddate').textContent = now.toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const ta = DB.fields.reduce((s, f) => s + (f.area || 0), 0);
+  const tc = DB.fields.reduce((s, f) => s + (f.events || []).reduce((c, e) => c + (e.total || (e.cost * (e.qty || 1))), 0), 0);
+  const activeCount = DB.fields.filter(f => f.status !== 'fallow').length;
+  const fallowCount = DB.fields.filter(f => f.status === 'fallow').length;
+  qs('#dkpis').innerHTML = `
     <div class="kpi"><div class="kpi-l">Tarla</div><div class="kpi-v">${DB.fields.length}</div></div>
     <div class="kpi"><div class="kpi-l">Toplam Alan</div><div class="kpi-v">${ta.toFixed(1)}</div></div>
     <div class="kpi"><div class="kpi-l">Toplam Maliyet</div><div class="kpi-v">${Math.round(tc).toLocaleString('tr-TR')}</div><div class="kpi-s">₺</div></div>
     <div class="kpi"><div class="kpi-l">Ekili Tarla</div><div class="kpi-v">${activeCount}<small>/${DB.fields.length}</small></div></div>
     <div class="kpi"><div class="kpi-l">Nadas</div><div class="kpi-v">${fallowCount}</div></div>`;
-  const df=qs('#dfields');
-  if(!DB.fields.length){ df.innerHTML='<div class="empty">🌾<br/>Tarla yok.<br/>"+ Yeni Tarla" ile başlayın.</div>'; qs('#devents').innerHTML=''; qs('#dplanned').innerHTML=''; return; }
-  df.innerHTML=DB.fields.map(f=>{
+  
+  const df = qs('#dfields');
+  if (!DB.fields.length) {
+    df.innerHTML = '<div class="empty">🌾<br/>Tarla yok.<br/>"+ Yeni Tarla" ile başlayın.</div>';
+    qs('#devents').innerHTML = '';
+    qs('#dplanned').innerHTML = '';
+    return;
+  }
+
+  // Tüm tarlaların nem, fenoloji vb. verilerini paralel hesapla
+  const fieldsWithSoil = await Promise.all(DB.fields.map(async f => {
     invSoil(f.id);
-    const s= await calcSoil(f); const sc=scl(s.pct);
-    const ph=calcPheno(f); const he=calcHarvest(f);
-    return`<div class="evrow" style="cursor:pointer;" onclick="showField('${f.id}')">
-      <div class="evico" style="background:${f.color||'#40916c'}22;font-size:14px;">🌿</div>
+    const s = await calcSoil(f);
+    const sc = scl(s.pct);
+    const ph = calcPheno(f);
+    const he = calcHarvest(f);
+    return { f, s, sc, ph, he };
+  }));
+
+  // fieldsWithSoil dizisini kullanarak HTML oluştur (artık await yok)
+  df.innerHTML = fieldsWithSoil.map(({ f, s, sc, ph, he }) => {
+    return `<div class="evrow" style="cursor:pointer;" onclick="showField('${f.id}')">
+      <div class="evico" style="background:${f.color || '#40916c'}22;font-size:14px;">🌿</div>
       <div class="evbody">
         <div class="evtitle">${f.name} ${f.status === 'fallow' ? '<span class="tag ta">Nadas</span>' : f.status === 'planned' ? '<span class="tag tb">Planlanan</span>' : ''}</div>
-        <div class="evsub">${f.crop||'Ürün yok'} · ${f.area}${f.areaUnit||'dön'} · ${f.location||'—'}</div>
-        ${ph?`<div class="evsub" style="margin-top:2px;">📍 ${ph.stage}${he&&!he.already?' · Hasat ~'+he.daysLeft+'g':he?.already?' · 🟢 Hasat zamanı!':''}</div>`:''}
+        <div class="evsub">${f.crop || 'Ürün yok'} · ${f.area}${f.areaUnit || 'dön'} · ${f.location || '—'}</div>
+        ${ph ? `<div class="evsub" style="margin-top:2px;">📍 ${ph.stage}${he && !he.already ? ' · Hasat ~' + he.daysLeft + 'g' : he?.already ? ' · 🟢 Hasat zamanı!' : ''}</div>` : ''}
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;">
         <span class="tag ${sc.tag}">${sc.l}</span>
@@ -1701,12 +1718,17 @@ window.renderDash = async () => {
       </div>
     </div>`;
   }).join('');
-  const allEvs=[];DB.fields.forEach(f=>(f.events||[]).filter(e=>!e.planned).forEach(e=>allEvs.push({...e,fn:f.name})));
-  allEvs.sort((a,b)=>b.date.localeCompare(a.date));
-  qs('#devents').innerHTML=allEvs.slice(0,4).map(e=>`<div class="evrow"><div class="evico" style="background:${EVC[e.type]||'#eee'};font-size:12px;">${EVI[e.type]||'📝'}</div><div class="evbody"><div class="evtitle">${e.fn} — ${e.type}</div><div class="evsub">${fd(e.date)}${e.notes?' · '+e.notes.slice(0,40):''}</div></div>${e.total?`<span class="evcost">${Math.round(e.total).toLocaleString()}₺</span>`:''}</div>`).join('')||'<div style="color:var(--text3);font-size:13px;">Kayıt yok.</div>';
-  const planned=[];DB.fields.forEach(f=>(f.events||[]).filter(e=>e.planned&&e.date>=tstr()).forEach(e=>planned.push({...e,fn:f.name,fc:f.color})));
-  planned.sort((a,b)=>a.date.localeCompare(b.date));
-  qs('#dplanned').innerHTML=planned.slice(0,4).map(e=>`<div class="evrow"><div class="evico" style="background:${e.fc||'#40916c'}22;font-size:13px;">${EVI[e.type]||'📝'}</div><div class="evbody"><div class="evtitle">${e.fn} — ${e.type}</div><div class="evsub">${fd(e.date)}</div></div></div>`).join('')||'<div style="color:var(--text3);font-size:13px;">Planlanan görev yok.</div>';
+
+  // Olaylar ve planlanan görevler (async gerektirmez)
+  const allEvs = [];
+  DB.fields.forEach(f => (f.events || []).filter(e => !e.planned).forEach(e => allEvs.push({ ...e, fn: f.name })));
+  allEvs.sort((a, b) => b.date.localeCompare(a.date));
+  qs('#devents').innerHTML = allEvs.slice(0, 4).map(e => `<div class="evrow"><div class="evico" style="background:${EVC[e.type] || '#eee'};font-size:12px;">${EVI[e.type] || '📝'}</div><div class="evbody"><div class="evtitle">${e.fn} — ${e.type}</div><div class="evsub">${fd(e.date)}${e.notes ? ' · ' + e.notes.slice(0, 40) : ''}</div></div>${e.total ? `<span class="evcost">${Math.round(e.total).toLocaleString()}₺</span>` : ''}</div>`).join('') || '<div style="color:var(--text3);font-size:13px;">Kayıt yok.</div>';
+  
+  const planned = [];
+  DB.fields.forEach(f => (f.events || []).filter(e => e.planned && e.date >= tstr()).forEach(e => planned.push({ ...e, fn: f.name, fc: f.color })));
+  planned.sort((a, b) => a.date.localeCompare(b.date));
+  qs('#dplanned').innerHTML = planned.slice(0, 4).map(e => `<div class="evrow"><div class="evico" style="background:${e.fc || '#40916c'}22;font-size:13px;">${EVI[e.type] || '📝'}</div><div class="evbody"><div class="evtitle">${e.fn} — ${e.type}</div><div class="evsub">${fd(e.date)}</div></div></div>`).join('') || '<div style="color:var(--text3);font-size:13px;">Planlanan görev yok.</div>';
 };
 
 // ─── VERİM TAHMİNİ (YENİ) ────────────────────────────────────────
