@@ -678,7 +678,7 @@ window.satCtxStr = (field) => {
 
 // ─── TOPRAK RENDER ────────────────────────────────────────────────
 window.renderSoil = (field) => {
-  const s= awaitcalcSoil(field); const sc=scl(s.pct);
+  const s= await calcSoil(field); const sc=scl(s.pct);
   const wx=WXC[field.id]?.days||simWX(field.lat,field.lon);
   const futR=wx.filter(d=>d.date>tstr()).slice(0,7).reduce((t,d)=>t+d.rain,0);
   const futET=wx.filter(d=>d.date>tstr()).slice(0,7).reduce((t,d)=>t+(d.et0||s.et),0);
@@ -891,7 +891,7 @@ window.renderEvTab = (field) => {
 // ─── ÖNERİLER (Gelişmiş Hastalık Riski) ────────────────────────────
 window.buildAutoRecs = (field) => {
   const recs=[];
-  const s=awaitcalcSoil(field);
+  const s= await calcSoil(field);
   const wx=WXC[field.id]?.days||simWX(field.lat,field.lon);
   const today=tstr();
   const futWx=wx.filter(d=>d.date>today).slice(0,7);
@@ -1042,7 +1042,7 @@ window.runAI = async () => {
   addB('load','');
 
   try{
-    const s=awaitcalcSoil(CUR); const sc=scl(s.pct);
+    const s= await calcSoil(CUR); const sc=scl(s.pct);
     const wx=WXC[CUR.id]?.days||simWX(CUR.lat,CUR.lon);
     const today=tstr();
     const pastWx=wx.filter(d=>d.date<today).slice(-7).map(d=>`${d.date.slice(5)}: ${d.tmax}°/${d.tmin}° yağış:${d.rain}mm rüzgar:${d.wind}km/h ET₀:${d.et0||'—'}mm`).join('\n');
@@ -1178,7 +1178,7 @@ window.sendChat = async () => {
   inp.value=''; addB('user',msg); addB('load','');
   aiHist.push({role:'user',content:msg});
   if(aiHist.length>14) aiHist=aiHist.slice(-14);
-  const s=CUR?awaitcalcSoil(CUR):null;
+  const s= await CUR?calcSoil(CUR):null;
   const ph=CUR?calcPheno(CUR):null;
   const sat=SATC[CUR?.id]?.data;
   const sys=CUR
@@ -1222,7 +1222,7 @@ window.analyzePhoto = async () => {
   el.innerHTML='<div class="bubble bs"><span style="display:inline-flex;gap:3px;"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.3;animation:dl 1.2s infinite;"></span><span style="width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.3;animation:dl 1.2s .2s infinite;"></span><span style="width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.3;animation:dl 1.2s .4s infinite;"></span></span> Görsel + tarla bağlamı analiz ediliyor...</div>';
   try{
     const b64=pendPh.split(',')[1]; const mime=pendPh.split(';')[0].split(':')[1]||'image/jpeg';
-    const s=CUR?awaitcalcSoil(CUR):null;
+    const s= await CUR?calcSoil(CUR):null;
     const ph=CUR?calcPheno(CUR):null;
     const sat=SATC[CUR?.id]?.data;
     const wx=CUR?WXC[CUR.id]?.days||simWX(CUR.lat,CUR.lon):[];
@@ -1626,7 +1626,7 @@ window.renderSB = () => {
   const el=qs('#sb-list'); if(!el) return; el.innerHTML='';
   DB.fields.forEach(f=>{
     invSoil(f.id);
-    const s=awaitcalcSoil(f); const sc=scl(s.pct);
+    const s= await calcSoil(f); const sc=scl(s.pct);
     const d=document.createElement('div'); d.className='fi'+(f.id===CUR?.id?' on':'');
     d.onclick=()=>{ showField(f.id); clSBmob(); };
     d.innerHTML=`<div class="fi-dot" style="background:${f.color||'#40916c'};"></div><div class="fi-info"><div class="fi-name">${f.name}</div><div class="fi-sub">${f.crop||'Ürün yok'} · <span class="tag ${sc.tag}" style="font-size:9px;">${sc.l} %${s.pct}</span></div></div>`;
@@ -1636,7 +1636,7 @@ window.renderSB = () => {
 
 window.renderFKPIs = (field) => {
   invSoil(field.id);
-  const s=awaitcalcSoil(field); const sc=scl(s.pct);
+  const s= await calcSoil(field); const sc=scl(s.pct);
   const tc=(field.events||[]).reduce((t,e)=>t+(e.total||(e.cost*(e.qty||1))),0);
   const lastEv=(field.events||[]).filter(e=>!e.planned)[0];
   const ph=calcPheno(field);
@@ -1673,7 +1673,7 @@ window.renderDash = () => {
   if(!DB.fields.length){ df.innerHTML='<div class="empty">🌾<br/>Tarla yok.<br/>"+ Yeni Tarla" ile başlayın.</div>'; qs('#devents').innerHTML=''; qs('#dplanned').innerHTML=''; return; }
   df.innerHTML=DB.fields.map(f=>{
     invSoil(f.id);
-    const s=awaitcalcSoil(f); const sc=scl(s.pct);
+    const s= await calcSoil(f); const sc=scl(s.pct);
     const ph=calcPheno(f); const he=calcHarvest(f);
     return`<div class="evrow" style="cursor:pointer;" onclick="showField('${f.id}')">
       <div class="evico" style="background:${f.color||'#40916c'}22;font-size:14px;">🌿</div>
@@ -1804,7 +1804,7 @@ window.aiPestAnalysis = async (fieldId) => {
     const lastSpray = (field.events||[]).filter(e=>e.type==='ilaç'&&!e.planned).sort((a,b)=>b.date.localeCompare(a.date))[0];
     const ph = calcPheno(field);
     const pests = (PEST_DATA[field.crop] || PEST_DATA.default).join(', ');
-    const s = awaitcalcSoil(field);
+    const s = await calcSoil(field);
     const prompt = `Sen bir Türk fitopatoloji ve entomoloji uzmanısın.
     
 TARLA: ${field.name} | ÜRÜN: ${field.crop||'?'} | DÖNEM: ${ph?.stage||'bilinmiyor'} | Alan: ${field.area} ${field.areaUnit||'dönüm'}
@@ -1868,7 +1868,7 @@ window.renderRep = () => {
     <div class="card"><div class="ct">Tarla Özet Tablosu</div>
       <div style="overflow-x:auto;"><table class="tbl"><thead><tr><th>Tarla</th><th>Ürün</th><th>Alan</th><th>Dönem</th><th>Nem</th><th>Hasat</th><th>Maliyet</th><th>Gelir</th><th>Kar</th></tr></thead>
       <tbody>${DB.fields.map(f=>{
-        invSoil(f.id); const s=awaitcalcSoil(f); const sc=scl(s.pct);
+        invSoil(f.id); const s= await calcSoil(f); const sc=scl(s.pct);
         const fc=(f.events||[]).reduce((c,e)=>c+(e.total||(e.cost*(e.qty||1))),0);
         const rev=(f.events||[]).reduce((c,e)=>c+(e.revenue||0),0);
         const profit = rev - fc;
