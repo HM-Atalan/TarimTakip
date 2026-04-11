@@ -256,13 +256,12 @@ window.calcFieldCapacity = (soilType, clayPct, sandPct, siltPct) => {
 
 window.fetchGLDASSoilMoisture = async (lat, lon) => {
     try {
-        const getSoilMoisture = firebase.functions().httpsCallable('getSoilMoisture');
-        const result = await getSoilMoisture({ latitude: lat, longitude: lon });
-        if (result.data.success) {
-            console.log('GLDAS nem verisi alındı:', result.data.moisture);
-            return result.data.moisture; // kg/m² cinsinden nem değeri
+        const result = await window.fbCallFunction('getSoilMoisture', { latitude: lat, longitude: lon });
+        if (result.success) {
+            console.log('GLDAS nem verisi alındı:', result.moisture);
+            return result.moisture;
         } else {
-            console.error('GLDAS hatası:', result.data.error);
+            console.error('GLDAS hatası:', result.error);
             return null;
         }
     } catch (error) {
@@ -931,7 +930,7 @@ window.buildAutoRecs = async (field) => {
   return recs;
 }
 
-window.renderRecTab = (field) => {
+window.renderRecTab = async (field) => {
   // Fenoloji + Hasat Tahmini
   const ph=calcPheno(field);
   const he=calcHarvest(field);
@@ -1520,18 +1519,30 @@ window.deleteFieldFromDB = async (fieldId) => {
   saveLocalDB();
 }
 window.syncFromDB = async () => {
-  const uid=window.FB_USER?.uid; if(!uid||!window.FB_MODE) return;
-  try{
-    const fields=await window.fbLoadFields(uid);
-    DB.fields=fields||[];
+  const uid = window.FB_USER?.uid;
+  if (!uid || !window.FB_MODE) return;
+  try {
+    const fields = await window.fbLoadFields(uid);
+    DB.fields = fields || [];
     saveLocalDB();
     invSoilAll();
-    DB.fields.forEach(f=>{ if(!WXC[f.id]) fetchWX(f); });
-    renderAll();
-    if(CUR){ const u=DB.fields.find(f=>f.id===CUR.id); if(u){ CUR=u; if(qs('#page-field.on')) renderFieldPage(CUR); }else{ CUR=null; goPage('dash'); } }
+    DB.fields.forEach(f => { if (!WXC[f.id]) fetchWX(f); });
+    await renderAll();
+    if (CUR) {
+      const u = DB.fields.find(f => f.id === CUR.id);
+      if (u) {
+        CUR = u;
+        if (qs('#page-field.on')) renderFieldPage(CUR);
+      } else {
+        CUR = null;
+        goPage('dash');
+      }
+    }
     toast('Veriler güncellendi ✓');
-  }catch(e){ toast('Senkronizasyon hatası: '+e.message,true); }
-}
+  } catch (e) {
+    toast('Senkronizasyon hatası: ' + e.message, true);
+  }
+};
 window.saveLocalDB = () => { try{ localStorage.setItem('tt_fields',JSON.stringify(DB.fields)); }catch(e){} }
 window.loadLocalDB = () => { try{ const d=localStorage.getItem('tt_fields'); if(d) DB.fields=JSON.parse(d)||[]; }catch(e){} }
 window.saveSettings = () => { DB.s.acuKey=qs('#acu-key')?.value||''; localStorage.setItem('tt_s',JSON.stringify(DB.s)); toast('Kaydedildi'); }
@@ -1621,7 +1632,7 @@ window.updateChip = (user) => {
 }
 
 // ─── RENDER FONKSİYONLARI ────────────────────────────────────────
-window.renderAll = () => { renderSB(); renderDash(); renderCal(); renderRep(); }
+window.renderAll = async () => { renderSB(); renderDash(); renderCal(); renderRep(); }
 
 window.renderSB = async () => {
   const el=qs('#sb-list'); if(!el) return; el.innerHTML='';
@@ -1712,16 +1723,19 @@ window.calcYield = (field) => {
   return Math.round(yieldEst);
 };
 
-window.showField = (id) => {
-  CUR=DB.fields.find(f=>f.id===id); if(!CUR) return;
-  aiHist=[]; curTab='map';
-  goPage('field'); renderSB(); renderFieldPage(CUR);
-  if(!WXC[CUR.id]) fetchWX(CUR);
-  // Uydu verisi yoksa veya eskiyse arka planda güncelle
-  if(!SATC[CUR.id]||(Date.now()-SATC[CUR.id].at>3600000)) {
-    setTimeout(()=>fetchSat(CUR), 500);
+window.showField = async (id) => {
+  CUR = DB.fields.find(f => f.id === id);
+  if (!CUR) return;
+  aiHist = [];
+  curTab = 'map';
+  goPage('field');
+  await renderSB();
+  renderFieldPage(CUR);
+  if (!WXC[CUR.id]) fetchWX(CUR);
+  if (!SATC[CUR.id] || (Date.now() - SATC[CUR.id].at > 3600000)) {
+    setTimeout(() => fetchSat(CUR), 500);
   }
-}
+};
 
 window.renderFieldPage = (field) => {
   CUR=field;
@@ -1730,7 +1744,7 @@ window.renderFieldPage = (field) => {
   goTab('map');
 }
 
-window.goTab = (t) => {
+window.goTab = async (t) => {
   curTab=t;
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
   document.querySelectorAll('.tp').forEach(x=>x.classList.remove('on'));
@@ -1843,7 +1857,7 @@ Türkçe, kısa ve uygulanabilir. Maksimum 4-5 madde.`;
   }
 };
 
-window.renderRep = () => {
+window.renderRep = async () => {
   const rc=qs('#rep-content'); if(!rc) return;
   if(!DB.fields.length){ rc.innerHTML='<div class="empty">📊<br/>Tarla ekleyin.</div>'; return; }
   const totalCost=DB.fields.reduce((s,f)=>s+(f.events||[]).reduce((c,e)=>c+(e.total||(e.cost*(e.qty||1))),0),0);
@@ -1901,14 +1915,18 @@ setInterval(async()=>{
   }
 }, 600000);
 
-setInterval(async()=>{
-  if(window.FB_USER&&window.FB_MODE){
-    try{
-      const fields=await window.fbLoadFields(window.FB_USER.uid);
-      if(fields?.length){ window.DB.fields=fields; saveLocalDB(); invSoilAll(); renderSB(); renderDash(); if(window.CUR){const u = window.DB.fields.find(f=>f.id===window.CUR.id);if(u)window.CUR=u;} }
-    }catch(e){}
+setInterval(async () => {
+  invSoilAll();
+  const toFetch = DB.fields.filter(f => !WXC[f.id] || (Date.now() - WXC[f.id].at > 1800000));
+  await Promise.allSettled(toFetch.map(f => fetchWX(f)));
+  await renderSB();
+  await renderDash();
+  if (CUR && qs('#page-field.on')) {
+    await renderFKPIs(CUR);
+    if (curTab === 'soil') await renderSoil(CUR);
+    if (curTab === 'rec') await renderRecTab(CUR);
   }
-}, 300000);
+}, 600000);
 
 // Alias for HTML onclick compatibility
 window.importFieldFile = window.importFF;
@@ -2013,7 +2031,8 @@ window.autoFillSoilFromCoords = async () => {
 
 window.updateAllSoilTypes = async () => {
   if (!DB.fields.length) {
-    toast('Güncellenecek tarla yok.', true);
+    await window.renderAll();
+  if (window.CUR) window.renderFieldPage(window.CUR);
     return;
   }
   
