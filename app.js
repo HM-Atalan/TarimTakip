@@ -979,7 +979,7 @@ window.renderRecTab = async (field) => {
   }
 
   // Akıllı uyarılar
-  const recs=buildAutoRecs(field);
+  const recs= await buildAutoRecs(field);
   const ar=qs('#rec-auto');
   if(ar) ar.innerHTML=recs.length
     ? recs.map(r=>`<div class="ritem" style="background:${r.bg};"><div class="rico" style="background:${r.bg};color:${r.c};font-size:15px;">${r.i}</div><div class="rbody"><div class="rtitle">${r.t}<span class="rpri" style="background:${r.c}22;color:${r.c};">${r.pr}</span></div><div class="rsub">${r.s}</div></div></div>`).join('')
@@ -1632,7 +1632,7 @@ window.updateChip = (user) => {
 }
 
 // ─── RENDER FONKSİYONLARI ────────────────────────────────────────
-window.renderAll = async () => { renderSB(); renderDash(); renderCal(); renderRep(); }
+window.renderAll = async () => { await renderSB(); await renderDash(); renderCal(); await renderRep(); }
 
 window.renderSB = async () => {
   const el=qs('#sb-list'); if(!el) return; el.innerHTML='';
@@ -1745,30 +1745,34 @@ window.renderFieldPage = (field) => {
 }
 
 window.goTab = async (t) => {
-  curTab=t;
-  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
-  document.querySelectorAll('.tp').forEach(x=>x.classList.remove('on'));
+  curTab = t;
+  document.querySelectorAll('.tab').forEach(x => x.classList.remove('on'));
+  document.querySelectorAll('.tp').forEach(x => x.classList.remove('on'));
   qs(`.tab[data-t="${t}"]`)?.classList.add('on');
-  qs('#tp-'+t)?.classList.add('on');
-  if(!CUR) return;
-  if(t==='map'){
-    requestAnimationFrame(()=>{ setTimeout(()=>{ initMap(CUR.lat,CUR.lon,CUR); renderLocInfo(CUR); },80); });
-  }else if(t==='wx'){
-    if(!WXC[CUR.id]) fetchWX(CUR); else renderWX(CUR);
-  }else if(t==='sat'){
-    if(!SATC[CUR.id]||Date.now()-SATC[CUR.id].at>3600000) fetchSat(CUR);
+  qs('#tp-' + t)?.classList.add('on');
+  if (!CUR) return;
+  if (t === 'map') {
+    requestAnimationFrame(() => { setTimeout(() => { initMap(CUR.lat, CUR.lon, CUR); renderLocInfo(CUR); }, 80); });
+  } else if (t === 'wx') {
+    if (!WXC[CUR.id]) fetchWX(CUR); else renderWX(CUR);
+  } else if (t === 'sat') {
+    if (!SATC[CUR.id] || Date.now() - SATC[CUR.id].at > 3600000) fetchSat(CUR);
     else renderSat(CUR, SATC[CUR.id].data);
-  }else if(t==='soil'){ renderSoil(CUR); }
-  else if(t==='ev'){ renderEvTab(CUR); }
-  else if(t==='rec'){ renderRecTab(CUR); }
-  else if(t==='ph'){ renderPhTab(CUR); }
-  else if(t==='ai'){
-    const chat=qs('#ai-chat');
-    if(chat&&!chat.children.length) chat.innerHTML=`<div class="bubble bs">👋 <strong>${CUR.name}</strong> tarlası için AI asistanı hazır.<br/>🤖 <strong>AI Analiz</strong> butonuna basın → Hava + toprak + uydu + fenoloji + olaylar + fotoğraflar tek bütünsel uzman yorumu.</div>`;
-    const qq=qs('#qqbtns');
-    if(qq) qq.innerHTML=['Sulama planı','Gübre tavsiyesi',`${CUR.crop||'ürün'} hastalık riskleri`,'Bu hafta ne yapmalıyım?'].map(q=>`<button style="padding:4px 9px;border-radius:7px;font-size:11px;border:1px solid var(--bdr2);background:transparent;color:var(--text2);cursor:pointer;" onmouseover="this.style.borderColor='var(--green2)';this.style.color='var(--green2)'" onmouseout="this.style.borderColor='var(--bdr2)';this.style.color='var(--text2)'" onclick="qs('#ai-inp').value='${q}';sendChat()">${q}</button>`).join('');
+  } else if (t === 'soil') {
+    await renderSoil(CUR);
+  } else if (t === 'ev') {
+    renderEvTab(CUR);
+  } else if (t === 'rec') {
+    await renderRecTab(CUR);
+  } else if (t === 'ph') {
+    renderPhTab(CUR);
+  } else if (t === 'ai') {
+    const chat = qs('#ai-chat');
+    if (chat && !chat.children.length) chat.innerHTML = `<div class="bubble bs">👋 <strong>${CUR.name}</strong> tarlası için AI asistanı hazır.<br/>🤖 <strong>AI Analiz</strong> butonuna basın → Hava + toprak + uydu + fenoloji + olaylar + fotoğraflar tek bütünsel uzman yorumu.</div>`;
+    const qq = qs('#qqbtns');
+    if (qq) qq.innerHTML = ['Sulama planı', 'Gübre tavsiyesi', `${CUR.crop || 'ürün'} hastalık riskleri`, 'Bu hafta ne yapmalıyım?'].map(q => `<button style="padding:4px 9px;border-radius:7px;font-size:11px;border:1px solid var(--bdr2);background:transparent;color:var(--text2);cursor:pointer;" onmouseover="this.style.borderColor='var(--green2)';this.style.color='var(--green2)'" onmouseout="this.style.borderColor='var(--bdr2)';this.style.color='var(--text2)'" onclick="qs('#ai-inp').value='${q}';sendChat()">${q}</button>`).join('');
   }
-}
+};
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>goTab(t.dataset.t)));
 
 window.closeM = (id) => { qs('#m-'+id)?.classList.remove('on'); }
@@ -1903,18 +1907,6 @@ window.renderRep = async () => {
 }
 
 // ─── OTOMATİK YENİLEME ───────────────────────────────────────────
-setInterval(async()=>{
-  invSoilAll();
-  const toFetch=DB.fields.filter(f=>!WXC[f.id]||(Date.now()-WXC[f.id].at>1800000));
-  await Promise.allSettled(toFetch.map(f=>fetchWX(f)));
-  renderSB(); renderDash();
-  if(CUR&&qs('#page-field.on')){
-    renderFKPIs(CUR);
-    if(curTab==='soil') renderSoil(CUR);
-    if(curTab==='rec') renderRecTab(CUR);
-  }
-}, 600000);
-
 setInterval(async () => {
   invSoilAll();
   const toFetch = DB.fields.filter(f => !WXC[f.id] || (Date.now() - WXC[f.id].at > 1800000));
@@ -1927,6 +1919,25 @@ setInterval(async () => {
     if (curTab === 'rec') await renderRecTab(CUR);
   }
 }, 600000);
+
+setInterval(async () => {
+  if (window.FB_USER && window.FB_MODE) {
+    try {
+      const fields = await window.fbLoadFields(window.FB_USER.uid);
+      if (fields?.length) {
+        window.DB.fields = fields;
+        saveLocalDB();
+        invSoilAll();
+        await renderSB();
+        await renderDash();
+        if (window.CUR) {
+          const u = window.DB.fields.find(f => f.id === window.CUR.id);
+          if (u) window.CUR = u;
+        }
+      }
+    } catch (e) { }
+  }
+}, 300000);
 
 // Alias for HTML onclick compatibility
 window.importFieldFile = window.importFF;
