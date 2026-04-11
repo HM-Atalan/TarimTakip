@@ -254,28 +254,26 @@ window.calcFieldCapacity = (soilType, clayPct, sandPct, siltPct) => {
   return base;
 };
 
-// GLDAS'tan toprak nemi verisi çek
 window.fetchGLDASSoilMoisture = async (lat, lon) => {
-  // Firebase Functions SDK'sının yüklü olduğundan emin olun
-  const getSoilMoisture = firebase.functions().httpsCallable('getSoilMoisture');
-  try {
-    const result = await getSoilMoisture({ latitude: lat, longitude: lon });
-    if (result.data.success) {
-      console.log('GLDAS nem verisi alındı:', result.data.moisture);
-      return result.data.moisture; // kg/m² cinsinden nem değeri
-    } else {
-      console.error('GLDAS hatası:', result.data.error);
-      return null;
+    try {
+        const getSoilMoisture = firebase.functions().httpsCallable('getSoilMoisture');
+        const result = await getSoilMoisture({ latitude: lat, longitude: lon });
+        if (result.data.success) {
+            console.log('GLDAS nem verisi alındı:', result.data.moisture);
+            return result.data.moisture; // kg/m² cinsinden nem değeri
+        } else {
+            console.error('GLDAS hatası:', result.data.error);
+            return null;
+        }
+    } catch (error) {
+        console.error('Fonksiyon çağrı hatası:', error);
+        return null;
     }
-  } catch (error) {
-    console.error('Fonksiyon çağrı hatası:', error);
-    return null;
-  }
 };
 
-window.calcSoil = (field) => {
-  const key = field.id + '_' + tstr();
-  if(SC[key]) return SC[key];
+window.calcSoil = async (field) => {
+    const key = field.id + '_' + tstr();
+    if(SC[key]) return SC[key];
   const a = window.agrd(field.crop);
   let fc = SOIL_FC[field.soilType] || a.fc || 80;
   if (field.soilComposition) {
@@ -291,7 +289,15 @@ window.calcSoil = (field) => {
     else if(u==='toplam'&&qty>100) mm=qty/100;
     return {date:e.date, mm:Math.min(mm,fc)};
   });
-  let moist = fc * 0.68;
+      let moist = fc * 0.68;
+    
+    // YENİ: GLDAS verisini dene
+    const gldasMoisture = await window.fetchGLDASSoilMoisture(field.lat, field.lon);
+    if (gldasMoisture !== null) {
+        // GLDAS verisi kg/m² olarak gelir, 1 kg/m² = 1 mm suya eşittir
+        moist = Math.min(fc, gldasMoisture); // fc'yi aşmasın
+        console.log(`GLDAS başlangıç nemi kullanıldı: ${moist} mm`);
+    }
   const log = [];
   wx.filter(d=>d.date<=today).forEach(d=>{
     // Kc hesapla (sadece aktif tarla ve ekim tarihi varsa)
@@ -330,16 +336,7 @@ window.calcSoil = (field) => {
   const result = {pct:Math.round(moist/fc*100), moist:+moist.toFixed(0), fc, et:a.et, log};
   SC[key] = result;
   return result;
-  // Eğer GLDAS verisi alınabildiyse, mevcut modelin başlangıç nemini güncelle
-  const gldasMoisture = await window.fetchGLDASSoilMoisture(field.lat, field.lon);
-  if (gldasMoisture !== null) {
-    // GLDAS verisini (kg/m²) mevcut sisteminizin nem birimine (mm) dönüştürün
-    // Not: 1 kg/m² = 1 mm su yüksekliğine eşittir (1 m²'lik alanda 1 kg su = 1 mm).
-    const gldasMoistureMm = gldasMoisture; // Bu durumda doğrudan kullanılabilir
-    // Başlangıç nemini güncelle
-    moist = gldasMoistureMm;  
 };
-  
 window.invSoil = (fid) => { Object.keys(SC).filter(k=>k.startsWith(fid+'_')).forEach(k=>delete SC[k]); };
 window.invSoilAll = () => { Object.keys(SC).forEach(k=>delete SC[k]); };
 
@@ -681,7 +678,7 @@ window.satCtxStr = (field) => {
 
 // ─── TOPRAK RENDER ────────────────────────────────────────────────
 window.renderSoil = (field) => {
-  const s=calcSoil(field); const sc=scl(s.pct);
+  const s= awaitcalcSoil(field); const sc=scl(s.pct);
   const wx=WXC[field.id]?.days||simWX(field.lat,field.lon);
   const futR=wx.filter(d=>d.date>tstr()).slice(0,7).reduce((t,d)=>t+d.rain,0);
   const futET=wx.filter(d=>d.date>tstr()).slice(0,7).reduce((t,d)=>t+(d.et0||s.et),0);
@@ -894,7 +891,7 @@ window.renderEvTab = (field) => {
 // ─── ÖNERİLER (Gelişmiş Hastalık Riski) ────────────────────────────
 window.buildAutoRecs = (field) => {
   const recs=[];
-  const s=calcSoil(field);
+  const s=awaitcalcSoil(field);
   const wx=WXC[field.id]?.days||simWX(field.lat,field.lon);
   const today=tstr();
   const futWx=wx.filter(d=>d.date>today).slice(0,7);
@@ -1045,7 +1042,7 @@ window.runAI = async () => {
   addB('load','');
 
   try{
-    const s=calcSoil(CUR); const sc=scl(s.pct);
+    const s=awaitcalcSoil(CUR); const sc=scl(s.pct);
     const wx=WXC[CUR.id]?.days||simWX(CUR.lat,CUR.lon);
     const today=tstr();
     const pastWx=wx.filter(d=>d.date<today).slice(-7).map(d=>`${d.date.slice(5)}: ${d.tmax}°/${d.tmin}° yağış:${d.rain}mm rüzgar:${d.wind}km/h ET₀:${d.et0||'—'}mm`).join('\n');
@@ -1181,7 +1178,7 @@ window.sendChat = async () => {
   inp.value=''; addB('user',msg); addB('load','');
   aiHist.push({role:'user',content:msg});
   if(aiHist.length>14) aiHist=aiHist.slice(-14);
-  const s=CUR?calcSoil(CUR):null;
+  const s=CUR?awaitcalcSoil(CUR):null;
   const ph=CUR?calcPheno(CUR):null;
   const sat=SATC[CUR?.id]?.data;
   const sys=CUR
@@ -1225,7 +1222,7 @@ window.analyzePhoto = async () => {
   el.innerHTML='<div class="bubble bs"><span style="display:inline-flex;gap:3px;"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.3;animation:dl 1.2s infinite;"></span><span style="width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.3;animation:dl 1.2s .2s infinite;"></span><span style="width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.3;animation:dl 1.2s .4s infinite;"></span></span> Görsel + tarla bağlamı analiz ediliyor...</div>';
   try{
     const b64=pendPh.split(',')[1]; const mime=pendPh.split(';')[0].split(':')[1]||'image/jpeg';
-    const s=CUR?calcSoil(CUR):null;
+    const s=CUR?awaitcalcSoil(CUR):null;
     const ph=CUR?calcPheno(CUR):null;
     const sat=SATC[CUR?.id]?.data;
     const wx=CUR?WXC[CUR.id]?.days||simWX(CUR.lat,CUR.lon):[];
@@ -1629,7 +1626,7 @@ window.renderSB = () => {
   const el=qs('#sb-list'); if(!el) return; el.innerHTML='';
   DB.fields.forEach(f=>{
     invSoil(f.id);
-    const s=calcSoil(f); const sc=scl(s.pct);
+    const s=awaitcalcSoil(f); const sc=scl(s.pct);
     const d=document.createElement('div'); d.className='fi'+(f.id===CUR?.id?' on':'');
     d.onclick=()=>{ showField(f.id); clSBmob(); };
     d.innerHTML=`<div class="fi-dot" style="background:${f.color||'#40916c'};"></div><div class="fi-info"><div class="fi-name">${f.name}</div><div class="fi-sub">${f.crop||'Ürün yok'} · <span class="tag ${sc.tag}" style="font-size:9px;">${sc.l} %${s.pct}</span></div></div>`;
@@ -1639,7 +1636,7 @@ window.renderSB = () => {
 
 window.renderFKPIs = (field) => {
   invSoil(field.id);
-  const s=calcSoil(field); const sc=scl(s.pct);
+  const s=awaitcalcSoil(field); const sc=scl(s.pct);
   const tc=(field.events||[]).reduce((t,e)=>t+(e.total||(e.cost*(e.qty||1))),0);
   const lastEv=(field.events||[]).filter(e=>!e.planned)[0];
   const ph=calcPheno(field);
@@ -1676,7 +1673,7 @@ window.renderDash = () => {
   if(!DB.fields.length){ df.innerHTML='<div class="empty">🌾<br/>Tarla yok.<br/>"+ Yeni Tarla" ile başlayın.</div>'; qs('#devents').innerHTML=''; qs('#dplanned').innerHTML=''; return; }
   df.innerHTML=DB.fields.map(f=>{
     invSoil(f.id);
-    const s=calcSoil(f); const sc=scl(s.pct);
+    const s=awaitcalcSoil(f); const sc=scl(s.pct);
     const ph=calcPheno(f); const he=calcHarvest(f);
     return`<div class="evrow" style="cursor:pointer;" onclick="showField('${f.id}')">
       <div class="evico" style="background:${f.color||'#40916c'}22;font-size:14px;">🌿</div>
@@ -1807,7 +1804,7 @@ window.aiPestAnalysis = async (fieldId) => {
     const lastSpray = (field.events||[]).filter(e=>e.type==='ilaç'&&!e.planned).sort((a,b)=>b.date.localeCompare(a.date))[0];
     const ph = calcPheno(field);
     const pests = (PEST_DATA[field.crop] || PEST_DATA.default).join(', ');
-    const s = calcSoil(field);
+    const s = awaitcalcSoil(field);
     const prompt = `Sen bir Türk fitopatoloji ve entomoloji uzmanısın.
     
 TARLA: ${field.name} | ÜRÜN: ${field.crop||'?'} | DÖNEM: ${ph?.stage||'bilinmiyor'} | Alan: ${field.area} ${field.areaUnit||'dönüm'}
@@ -1871,7 +1868,7 @@ window.renderRep = () => {
     <div class="card"><div class="ct">Tarla Özet Tablosu</div>
       <div style="overflow-x:auto;"><table class="tbl"><thead><tr><th>Tarla</th><th>Ürün</th><th>Alan</th><th>Dönem</th><th>Nem</th><th>Hasat</th><th>Maliyet</th><th>Gelir</th><th>Kar</th></tr></thead>
       <tbody>${DB.fields.map(f=>{
-        invSoil(f.id); const s=calcSoil(f); const sc=scl(s.pct);
+        invSoil(f.id); const s=awaitcalcSoil(f); const sc=scl(s.pct);
         const fc=(f.events||[]).reduce((c,e)=>c+(e.total||(e.cost*(e.qty||1))),0);
         const rev=(f.events||[]).reduce((c,e)=>c+(e.revenue||0),0);
         const profit = rev - fc;
