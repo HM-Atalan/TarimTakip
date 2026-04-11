@@ -5,6 +5,7 @@ import { getAuth, onAuthStateChanged, signInWithPopup, signInWithEmailAndPasswor
 import { getFirestore, doc, collection, getDocs, setDoc, deleteDoc, onSnapshot, query, orderBy }
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 import { getRemoteConfig, fetchAndActivate, getValue } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-remote-config.js';
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
 
 // ── FIREBASE CONFIG ──────────────────────────────
 const FB_CONFIG = {
@@ -49,6 +50,10 @@ function initFirebase(){
       if(typeof window.onAuthChange === 'function') window.onAuthChange(user);
     });
   }catch(e){ console.warn('Firebase init error:', e); window.FB_MODE=false; }
+      if (app) {
+    functions = getFunctions(app);
+    window.FB_FUNCTIONS = functions;
+  }   
 }
 initFirebase();
 
