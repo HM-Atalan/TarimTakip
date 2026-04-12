@@ -845,9 +845,9 @@ window.saveEvent = async () => {
   invSoil(CUR.id);
   const fi=DB.fields.findIndex(f=>f.id===CUR.id); if(fi>=0) DB.fields[fi]=CUR;
   await saveFieldToDB(CUR);
-  closeM('event'); renderFieldPage(CUR); renderSB(); renderDash();
+  closeM('event'); await renderFieldPage(CUR); await renderSB(); await renderDash();
   toast(eid?'Güncellendi':'Kaydedildi');
-}
+};
 
 window.delEv = async (id) => {
   if(!CUR||!confirm('Bu kaydı silmek istediğinizden emin misiniz?')) return;
@@ -855,7 +855,7 @@ window.delEv = async (id) => {
   invSoil(CUR.id);
   const fi=DB.fields.findIndex(f=>f.id===CUR.id); if(fi>=0) DB.fields[fi]=CUR;
   await saveFieldToDB(CUR);
-  renderEvTab(CUR); renderDash(); toast('Silindi');
+  await renderEvTab(CUR); await renderDash(); toast('Silindi');
 }
 
 window.renderEvTab = (field) => {
@@ -1421,7 +1421,7 @@ window.saveField = async () => {
   if(ex){ DB.fields[DB.fields.indexOf(ex)]=f; }else DB.fields.push(f);
   await saveFieldToDB(f);
   WXC[f.id]=null; invSoil(f.id);
-  closeM('field'); renderAll(); showField(f.id);
+  closeM('field'); await renderAll(); showField(f.id);
   toast(ex?'Tarla güncellendi':'Tarla eklendi');
 };
 
@@ -1431,7 +1431,7 @@ window.delField = async (id) => {
   await deleteFieldFromDB(id);
   delete WXC[id]; delete SATC[id]; invSoil(id);
   if(CUR?.id===id){ CUR=null; goPage('dash'); }
-  renderAll();
+  await renderAll();
 }
 
 // ─── DOSYA İMPORT (JSON/GeoJSON/KML) ─────────────────────────────
@@ -1632,7 +1632,7 @@ window.updateChip = (user) => {
 }
 
 // ─── RENDER FONKSİYONLARI ────────────────────────────────────────
-window.renderAll = async () => { await renderSB(); await renderDash(); renderCal(); await renderRep(); }
+window.renderAll = async () => { await renderSB(); await renderDash(); renderCal(); await renderRep(); };
 
 window.renderSB = async () => {
   const el = qs('#sb-list'); if (!el) return; el.innerHTML = '';
@@ -1799,17 +1799,17 @@ document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>goTa
 
 window.closeM = (id) => { qs('#m-'+id)?.classList.remove('on'); }
 
-window.goPage = (p) => {
+window.goPage = async (p) => {
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('on'));
   qs('#page-'+p)?.classList.add('on');
   document.querySelectorAll('.tn').forEach(b=>b.classList.remove('on'));
   const idx={dash:0,cal:1,rep:2,cfg:3}[p];
   if(idx!==undefined) document.querySelectorAll('.tn')[idx]?.classList.add('on');
-  if(p==='dash'){ invSoilAll(); renderDash(); }
+  if(p==='dash'){ invSoilAll(); await renderDash(); }
   if(p==='cal') renderCal();
-  if(p==='rep'){ invSoilAll(); renderRep(); }
+  if(p==='rep'){ invSoilAll(); await renderRep(); }
   clSBmob();
-}
+};
 
 window.renderCal = () => {
   const now=new Date(); const y=now.getFullYear(), m=now.getMonth();
@@ -2073,8 +2073,7 @@ window.autoFillSoilFromCoords = async () => {
 
 window.updateAllSoilTypes = async () => {
   if (!DB.fields.length) {
-   // await window.renderAll();
-  if (window.CUR) window.renderFieldPage(window.CUR);
+    toast('Güncellenecek tarla yok.', true);
     return;
   }
   
