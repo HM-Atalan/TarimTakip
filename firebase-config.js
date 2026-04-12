@@ -37,9 +37,7 @@ function initFirebase(){
     window.FB_MODE = true;
     FB_READY = true;
 
-    functions = getFunctions(app);
-    window.FB_FUNCTIONS = functions;
-
+    // Remote Config yükleme
     remoteConfigPromise = fetchAndActivate(remoteConfig)
       .then(() => {
         GEMINI_KEY = getValue(remoteConfig, 'GMINIK').asString();
@@ -47,6 +45,10 @@ function initFirebase(){
         else console.log('Remote Config: Gemini anahtarı alındı');
       })
       .catch(err => console.error('Remote Config hatası:', err));
+
+    // Firebase Functions'i başlat
+    functions = getFunctions(app);
+    window.FB_FUNCTIONS = functions;
 
     onAuthStateChanged(auth, user => {
       window.FB_USER = user;
@@ -68,8 +70,9 @@ window.getGeminiKey = async () => {
   return GEMINI_KEY || null;
 };
 
+// fbCallFunction'ı window üzerine global olarak tanımla
 window.fbCallFunction = async (name, data) => {
-  if (!functions) throw new Error('Functions not initialized');
+  if (!functions) throw new Error('Functions not initialized. Firebase başlatılmamış olabilir.');
   const callable = httpsCallable(functions, name);
   const result = await callable(data);
   return result.data;
