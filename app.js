@@ -256,7 +256,10 @@ window.calcFieldCapacity = (soilType, clayPct, sandPct, siltPct) => {
 
 window.fetchGLDASSoilMoisture = async (lat, lon) => {
     try {
-        const result = await window.fbCallFunction('getSoilMoisture', { latitude: lat, longitude: lon });
+        // HTTP fonksiyon URL'si (deploy sonrası konsoldan alın)
+        const url = `https://us-central1-tarlatakip-app.cloudfunctions.net/getSoilMoistureHttp?lat=${lat}&lon=${lon}`;
+        const response = await fetch(url);
+        const result = await response.json();
         if (result.success) {
             console.log('GLDAS nem verisi alındı:', result.moisture);
             return result.moisture;
