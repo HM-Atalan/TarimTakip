@@ -20,8 +20,9 @@ const FB_CONFIG = {
 
 let app = null, auth = null, db = null, remoteConfig = null;
 let FB_READY = false;
-let GEMINI_KEY = null;          // önbellek
-let remoteConfigPromise = null; // bekleme promise'i
+let GEMINI_KEY = null;
+let remoteConfigPromise = null;
+let functions = null;  // TANIMLA!
 
 function initFirebase(){
   if(!FB_CONFIG.apiKey){ window.FB_MODE=false; return; }
@@ -30,13 +31,15 @@ function initFirebase(){
     auth = getAuth(app);
     db = getFirestore(app);
     remoteConfig = getRemoteConfig(app);
-    remoteConfig.settings = { minimumFetchIntervalMillis: 3600000 }; // 1 saat
+    remoteConfig.settings = { minimumFetchIntervalMillis: 3600000 };
     window.FB_AUTH = auth;
     window.FB_DB   = db;
     window.FB_MODE = true;
     FB_READY = true;
 
-    // Remote Config'i hemen yükle (arka planda)
+    functions = getFunctions(app);
+    window.FB_FUNCTIONS = functions;
+
     remoteConfigPromise = fetchAndActivate(remoteConfig)
       .then(() => {
         GEMINI_KEY = getValue(remoteConfig, 'GMINIK').asString();
@@ -50,19 +53,9 @@ function initFirebase(){
       if(typeof window.onAuthChange === 'function') window.onAuthChange(user);
     });
   }catch(e){ console.warn('Firebase init error:', e); window.FB_MODE=false; }
-       if (app) {
-    functions = getFunctions(app);
-    window.FB_FUNCTIONS = functions;
-           }
-                  window.fbCallFunction = async (name, data) => {
-                    if (!functions) throw new Error('Functions not initialized');
-                    const callable = httpsCallable(functions, name);
-                    const result = await callable(data);
-                    return result.data;
-                  };
-};
+}
+initFirebase();
 
-// Remote Config'ten Gemini anahtarını al (senkron/async)
 window.getGeminiKey = async () => {
   if(GEMINI_KEY) return GEMINI_KEY;
   if(remoteConfigPromise) await remoteConfigPromise;
@@ -75,7 +68,13 @@ window.getGeminiKey = async () => {
   return GEMINI_KEY || null;
 };
 
-// Expose Firestore helpers
+window.fbCallFunction = async (name, data) => {
+  if (!functions) throw new Error('Functions not initialized');
+  const callable = httpsCallable(functions, name);
+  const result = await callable(data);
+  return result.data;
+};
+
 window.fbSaveField = async (uid, field) => {
   if(!db) return;
   const ref = doc(db, 'users', uid, 'fields', field.id);
