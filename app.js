@@ -855,7 +855,7 @@ window.delEv = async (id) => {
   invSoil(CUR.id);
   const fi=DB.fields.findIndex(f=>f.id===CUR.id); if(fi>=0) DB.fields[fi]=CUR;
   await saveFieldToDB(CUR);
-  await renderEvTab(CUR); await renderDash(); toast('Silindi');
+  renderEvTab(CUR); await renderDash(); toast('Silindi');
 }
 
 window.renderEvTab = (field) => {
