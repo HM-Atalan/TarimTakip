@@ -253,28 +253,30 @@ window.calcFieldCapacity = (soilType, clayPct, sandPct, siltPct) => {
   }
   return base;
 };
+
 const moistureCache = {};
-window.fetchGLDASSoilMoisture = async (lat, lon, fieldId) {
+
+window.fetchGLDASSoilMoisture = async (lat, lon, fieldId) => {
     const now = Date.now();
     const cacheKey = fieldId || `${lat},${lon}`;
     
-    // 3 saat = 3 * 60 * 60 * 1000 milisaniye
+    // 3 saat = 10.800.000 milisaniye
     const THREE_HOURS = 3 * 60 * 60 * 1000;
 
-    // 1. Önbellek Kontrolü: 3 saat geçmediyse sunucuya boşuna gitme
+    // 1. Önbellek Kontrolü
     if (moistureCache[cacheKey] && (now - moistureCache[cacheKey].timestamp < THREE_HOURS)) {
-        console.log(`${fieldId || 'Konum'} için son 3 saatlik veri kullanılıyor.`);
+        console.log(`${fieldId || 'Konum'} için hafızadaki veri kullanılıyor.`);
         return moistureCache[cacheKey].data;
     }
 
     try {
-        console.log("GLDAS: 3 saatlik yeni veri periyodu kontrol ediliyor...");
+        console.log("GLDAS: Sunucudan güncel veri çekiliyor...");
         
         const response = await fetch(`https://us-central1-tarlatakip-app.cloudfunctions.net/getSoilMoistureHttp?lat=${lat}&lon=${lon}`);
         const result = await response.json();
 
         if (result.success) {
-            // 2. Yeni veriyi 3 saat boyunca saklamak üzere kaydet
+            // 2. Veriyi 3 saatlik damga ile kaydet
             moistureCache[cacheKey] = {
                 data: result.moisture,
                 timestamp: now
