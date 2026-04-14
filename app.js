@@ -1727,7 +1727,12 @@ window.renderDash = async () => {
   const activeCount = DB.fields.filter(f => f.status !== 'fallow').length;
   const fallowCount = DB.fields.filter(f => f.status === 'fallow').length;
   
-  qs('#dkpis').innerHTML = `... (aynı) ...`;
+  qs('#dkpis').innerHTML = `
+  <div class="kpi"><div class="kpi-l">Tarla</div><div class="kpi-v">${DB.fields.length}</div></div>
+  <div class="kpi"><div class="kpi-l">Toplam Alan</div><div class="kpi-v">${ta.toFixed(1)}</div></div>
+  <div class="kpi"><div class="kpi-l">Toplam Maliyet</div><div class="kpi-v">${Math.round(tc).toLocaleString('tr-TR')}</div><div class="kpi-s">₺</div></div>
+  <div class="kpi"><div class="kpi-l">Ekili Tarla</div><div class="kpi-v">${activeCount}<small>/${DB.fields.length}</small></div></div>
+  <div class="kpi"><div class="kpi-l">Nadas</div><div class="kpi-v">${fallowCount}</div></div>`;
   
   const df = qs('#dfields');
   if (!DB.fields.length) {
