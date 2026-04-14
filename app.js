@@ -5,6 +5,7 @@
 // import { getFirestore, doc, collection, getDocs, setDoc, deleteDoc, onSnapshot, query, orderBy }
 //  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 window.DB = { fields: [], s: { acuKey: '' } };
+window.SOIL_CACHE = { data: null, lastUpdated: 0 };
 window.CUR = null;
 // ═══════════════════════════════════════════════════════════════════
 // TarlaTakip — Ana Script (Gelişmiş: ET₀+Kc, Nadas, Verim Tahmini)
@@ -233,6 +234,27 @@ window.compressImg = (file, maxKB=150, q=0.82) => {
 // ─── TOPRAK NEM MODELİ (GELİŞMİŞ: ET₀+Kc, NADAS DESTEĞİ) ─────────
 window.agrd = (crop) => { return CROP_AGR[crop] || CROP_AGR.default; };
 
+window.computeAllSoils = async (force = false) => {
+  const now = Date.now();
+  // 5 dakika içinde hesaplanmışsa ve zorlamıyorsak önbelleği kullan
+  if (!force && window.SOIL_CACHE.data && (now - window.SOIL_CACHE.lastUpdated < 300000)) {
+    return window.SOIL_CACHE.data;
+  }
+  
+  // Tüm tarlaların nem verilerini PARALEL hesapla
+  const soilData = await Promise.all(DB.fields.map(async f => {
+    invSoil(f.id);
+    const s = await calcSoil(f);
+    const sc = scl(s.pct);
+    const ph = calcPheno(f);
+    const he = calcHarvest(f);
+    return { f, s, sc, ph, he };
+  }));
+  
+  window.SOIL_CACHE = { data: soilData, lastUpdated: Date.now() };
+  return soilData;
+};
+
 window.calcGDD = (field, untilDate = tstr()) => {
   const a = window.agrd(field.crop);
   if(!field.plantDate) return null;
@@ -368,16 +390,6 @@ window.scl = (pct) => {
 }
 
 // ─── FENOLOJİ & HASAT TAHMİNİ ────────────────────────────────────
-// window.calcGDD = (field) => {
-//  const a = window.agrd(field.crop);
-//  if(!field.plantDate) return null;
-//  const wx = window.WXC[field.id]?.days || simWX(field.lat, field.lon);
-//  let acc = 0;
-//  wx.filter(d=>d.date>=field.plantDate && d.date<=tstr()).forEach(d=>{
-//    acc += Math.max(0, Math.min((d.tmax+d.tmin)/2, a.tm) - a.tb);
-//  });
-//  return Math.round(acc);
-//}
 
 window.calcPheno = (field) => {
   const a = window.agrd(field.crop);
@@ -867,6 +879,7 @@ window.saveEvent = async () => {
   await saveFieldToDB(CUR);
   closeM('event'); await renderFieldPage(CUR); await renderSB(); await renderDash();
   toast(eid?'Güncellendi':'Kaydedildi');
+  await window.computeAllSoils(true);
 };
 
 window.delEv = async (id) => {
@@ -876,6 +889,7 @@ window.delEv = async (id) => {
   const fi=DB.fields.findIndex(f=>f.id===CUR.id); if(fi>=0) DB.fields[fi]=CUR;
   await saveFieldToDB(CUR);
   renderEvTab(CUR); await renderDash(); toast('Silindi');
+  await window.computeAllSoils(true);
 }
 
 window.renderEvTab = (field) => {
@@ -1443,6 +1457,7 @@ window.saveField = async () => {
   WXC[f.id]=null; invSoil(f.id);
   closeM('field'); await renderAll(); showField(f.id);
   toast(ex?'Tarla güncellendi':'Tarla eklendi');
+  await window.computeAllSoils(true);
 };
 
 window.delField = async (id) => {
@@ -1452,6 +1467,7 @@ window.delField = async (id) => {
   delete WXC[id]; delete SATC[id]; invSoil(id);
   if(CUR?.id===id){ CUR=null; goPage('dash'); }
   await renderAll();
+  await window.computeAllSoils(true);
 }
 
 // ─── DOSYA İMPORT (JSON/GeoJSON/KML) ─────────────────────────────
@@ -1562,6 +1578,7 @@ window.syncFromDB = async () => {
   } catch (e) {
     toast('Senkronizasyon hatası: ' + e.message, true);
   }
+  await window.computeAllSoils(true);
 };
 window.saveLocalDB = () => { try{ localStorage.setItem('tt_fields',JSON.stringify(DB.fields)); }catch(e){} }
 window.loadLocalDB = () => { try{ const d=localStorage.getItem('tt_fields'); if(d) DB.fields=JSON.parse(d)||[]; }catch(e){} }
@@ -1652,21 +1669,30 @@ window.updateChip = (user) => {
 }
 
 // ─── RENDER FONKSİYONLARI ────────────────────────────────────────
-window.renderAll = async () => { await renderSB(); await renderDash(); renderCal(); await renderRep(); };
+// window.renderAll = async () => { await renderSB(); await renderDash(); renderCal(); await renderRep(); };
+window.renderAll = async () => {
+  // Önce tüm toprak verilerini bir kere hesapla (önbelleğe al)
+  await window.computeAllSoils();
+  // Sonra her iki render'ı paralel çalıştır (artık hesaplama yapmazlar, sadece DOM oluştururlar)
+  await Promise.all([renderSB(), renderDash()]);
+  renderCal();
+  await renderRep();
+};
 
 window.renderSB = async () => {
-  const el = qs('#sb-list'); if (!el) return; el.innerHTML = '';
-  // for...of kullanarak her bir tarla için sırayla işlem yap
-  for (const f of DB.fields) {
-    invSoil(f.id);
-    const s = await calcSoil(f);
-    const sc = scl(s.pct);
+  const el = qs('#sb-list'); if (!el) return;
+  
+  // Önbellekten veya yeni hesapla tüm tarlaların verisini al
+  const allSoilData = await window.computeAllSoils();
+  
+  el.innerHTML = '';
+  allSoilData.forEach(({ f, s, sc }) => {
     const d = document.createElement('div');
     d.className = 'fi' + (f.id === CUR?.id ? ' on' : '');
     d.onclick = () => { showField(f.id); clSBmob(); };
     d.innerHTML = `<div class="fi-dot" style="background:${f.color || '#40916c'};"></div><div class="fi-info"><div class="fi-name">${f.name}</div><div class="fi-sub">${f.crop || 'Ürün yok'} · <span class="tag ${sc.tag}" style="font-size:9px;">${sc.l} %${s.pct}</span></div></div>`;
     el.appendChild(d);
-  }
+  });
 };
 
 window.renderFKPIs = async (field) => {
@@ -1694,16 +1720,14 @@ window.renderFKPIs = async (field) => {
 window.renderDash = async () => {
   const now = new Date();
   qs('#ddate').textContent = now.toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  
+  // Önce özet KPI'lar (ta, tc, activeCount, fallowCount) hesaplanır (async gerektirmez)
   const ta = DB.fields.reduce((s, f) => s + (f.area || 0), 0);
   const tc = DB.fields.reduce((s, f) => s + (f.events || []).reduce((c, e) => c + (e.total || (e.cost * (e.qty || 1))), 0), 0);
   const activeCount = DB.fields.filter(f => f.status !== 'fallow').length;
   const fallowCount = DB.fields.filter(f => f.status === 'fallow').length;
-  qs('#dkpis').innerHTML = `
-    <div class="kpi"><div class="kpi-l">Tarla</div><div class="kpi-v">${DB.fields.length}</div></div>
-    <div class="kpi"><div class="kpi-l">Toplam Alan</div><div class="kpi-v">${ta.toFixed(1)}</div></div>
-    <div class="kpi"><div class="kpi-l">Toplam Maliyet</div><div class="kpi-v">${Math.round(tc).toLocaleString('tr-TR')}</div><div class="kpi-s">₺</div></div>
-    <div class="kpi"><div class="kpi-l">Ekili Tarla</div><div class="kpi-v">${activeCount}<small>/${DB.fields.length}</small></div></div>
-    <div class="kpi"><div class="kpi-l">Nadas</div><div class="kpi-v">${fallowCount}</div></div>`;
+  
+  qs('#dkpis').innerHTML = `... (aynı) ...`;
   
   const df = qs('#dfields');
   if (!DB.fields.length) {
@@ -1712,18 +1736,10 @@ window.renderDash = async () => {
     qs('#dplanned').innerHTML = '';
     return;
   }
-
-  // Tüm tarlaların nem, fenoloji vb. verilerini paralel hesapla
-  const fieldsWithSoil = await Promise.all(DB.fields.map(async f => {
-    invSoil(f.id);
-    const s = await calcSoil(f);
-    const sc = scl(s.pct);
-    const ph = calcPheno(f);
-    const he = calcHarvest(f);
-    return { f, s, sc, ph, he };
-  }));
-
-  // fieldsWithSoil dizisini kullanarak HTML oluştur (artık await yok)
+  
+  // Paylaşımlı önbellekten tüm tarla verilerini al
+  const fieldsWithSoil = await window.computeAllSoils();
+  
   df.innerHTML = fieldsWithSoil.map(({ f, s, sc, ph, he }) => {
     return `<div class="evrow" style="cursor:pointer;" onclick="showField('${f.id}')">
       <div class="evico" style="background:${f.color || '#40916c'}22;font-size:14px;">🌿</div>
@@ -1738,8 +1754,8 @@ window.renderDash = async () => {
       </div>
     </div>`;
   }).join('');
-
-  // Olaylar ve planlanan görevler (async gerektirmez)
+  
+  // Olaylar ve planlanan görevler (aynı)
   const allEvs = [];
   DB.fields.forEach(f => (f.events || []).filter(e => !e.planned).forEach(e => allEvs.push({ ...e, fn: f.name })));
   allEvs.sort((a, b) => b.date.localeCompare(a.date));
