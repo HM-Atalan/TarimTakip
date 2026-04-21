@@ -186,8 +186,28 @@ window.calcSoil = async (field) => {
     else if(u==='toplam'&&qty>100) mm=qty/100;
     return {date:e.date, mm:Math.min(mm,fc)};
   });
-      let moist = fc * 0.68;
-    
+ //     let moist = fc * 0.68;
+ 
+// ----- BAŞLANGIÇ NEMİ: Open‑Meteo Agro toprak nemini kullan (3-9 cm) -----
+let moist;
+const agroSoil = SATC[field.id]?.data?.soilM3; // 0-1 arası (örnek: 0.25 = %25)
+if (agroSoil !== undefined && agroSoil > 0.01) {
+  // Agro verisi mm'ye çevrilir: fc ile çarpılır (çünkü fc mm cinsinden maksimum kapasite)
+  moist = agroSoil * fc;
+  console.log(`🌱 Başlangıç nemi (Open‑Meteo Agro): ${(agroSoil*100).toFixed(1)}% → ${moist.toFixed(1)} mm / ${fc} mm`);
+} else {
+  // Eğer agro verisi yoksa (henüz çekilmemiş veya hata), son 7 gün yağışına göre tahmin et
+  const wx = window.WXC[field.id]?.days || simWX(field.lat, field.lon);
+  const past7Days = wx.filter(d => d.date < tstr() && d.date >= new Date(Date.now() - 7*864e5).toISOString().slice(0,10));
+  const last7Rain = past7Days.reduce((s,d) => s + d.rain, 0);
+  if (last7Rain > 25) moist = fc * 0.80;
+  else if (last7Rain > 10) moist = fc * 0.60;
+  else if (last7Rain > 2) moist = fc * 0.40;
+  else moist = fc * 0.25;
+  console.log(`⚠️ Agro verisi yok, yağış bazlı başlangıç: son 7g yağış=${last7Rain.toFixed(1)}mm → ${moist.toFixed(1)} mm`);
+}
+// ----- devam eden kod (sulama, et, log) aynen kalır -----
+   
     // YENİ: GLDAS verisini dene
 //    const gldasMoisture = await window.fetchGLDASSoilMoisture(field.lat, field.lon);
 //    if (gldasMoisture !== null) {
