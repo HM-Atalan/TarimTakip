@@ -132,7 +132,7 @@ window.calcFieldCapacity = (soilType, clayPct, sandPct, siltPct) => {
   return base;
 };
 
-const moistureCache = {};
+// const moistureCache = {};
 
 // window.fetchGLDASSoilMoisture = async (lat, lon, fieldId) => {
 //    const now = Date.now();
@@ -166,7 +166,7 @@ const moistureCache = {};
 //        console.error("Nem verisi güncellenirken hata:", error);
 //        return null;
 //    }
-//};
+// };
 
 window.calcSoil = async (field) => {
     const key = field.id + '_' + tstr();
@@ -190,11 +190,11 @@ window.calcSoil = async (field) => {
     
     // YENİ: GLDAS verisini dene
 //    const gldasMoisture = await window.fetchGLDASSoilMoisture(field.lat, field.lon);
-    if (gldasMoisture !== null) {
+//    if (gldasMoisture !== null) {
         // GLDAS verisi kg/m² olarak gelir, 1 kg/m² = 1 mm suya eşittir
-        moist = Math.min(fc, gldasMoisture); // fc'yi aşmasın
-        console.log(`GLDAS başlangıç nemi kullanıldı: ${moist} mm`);
-    }
+//        moist = Math.min(fc, gldasMoisture); // fc'yi aşmasın
+//        console.log(`GLDAS başlangıç nemi kullanıldı: ${moist} mm`);
+//    }
   const log = [];
   wx.filter(d=>d.date<=today).forEach(d=>{
     // Kc hesapla (sadece aktif tarla ve ekim tarihi varsa)
