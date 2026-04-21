@@ -134,39 +134,39 @@ window.calcFieldCapacity = (soilType, clayPct, sandPct, siltPct) => {
 
 const moistureCache = {};
 
-window.fetchGLDASSoilMoisture = async (lat, lon, fieldId) => {
-    const now = Date.now();
-    const cacheKey = fieldId || `${lat},${lon}`;
+// window.fetchGLDASSoilMoisture = async (lat, lon, fieldId) => {
+//    const now = Date.now();
+//    const cacheKey = fieldId || `${lat},${lon}`;
     
     // 3 saat = 10.800.000 milisaniye
-    const THREE_HOURS = 3 * 60 * 60 * 1000;
+//    const THREE_HOURS = 3 * 60 * 60 * 1000;
 
     // 1. Önbellek Kontrolü
-    if (moistureCache[cacheKey] && (now - moistureCache[cacheKey].timestamp < THREE_HOURS)) {
-        console.log(`${fieldId || 'Konum'} için hafızadaki veri kullanılıyor.`);
-        return moistureCache[cacheKey].data;
-    }
+//    if (moistureCache[cacheKey] && (now - moistureCache[cacheKey].timestamp < THREE_HOURS)) {
+//        console.log(`${fieldId || 'Konum'} için hafızadaki veri kullanılıyor.`);
+//        return moistureCache[cacheKey].data;
+//    }
 
-    try {
-        console.log("GLDAS: Sunucudan güncel veri çekiliyor...");
+//    try {
+//        console.log("GLDAS: Sunucudan güncel veri çekiliyor...");
         
-        const response = await fetch(`https://us-central1-tarlatakip-app.cloudfunctions.net/getSoilMoistureHttp?lat=${lat}&lon=${lon}`);
-        const result = await response.json();
+//        const response = await fetch(`https://us-central1-tarlatakip-app.cloudfunctions.net/getSoilMoistureHttp?lat=${lat}&lon=${lon}`);
+//        const result = await response.json();
 
-        if (result.success) {
+//        if (result.success) {
             // 2. Veriyi 3 saatlik damga ile kaydet
-            moistureCache[cacheKey] = {
-                data: result.moisture,
-                timestamp: now
-            };
-            return result.moisture;
-        }
-        return null;
-    } catch (error) {
-        console.error("Nem verisi güncellenirken hata:", error);
-        return null;
-    }
-};
+//            moistureCache[cacheKey] = {
+//                data: result.moisture,
+//                timestamp: now
+//            };
+//            return result.moisture;
+//        }
+//        return null;
+//    } catch (error) {
+//        console.error("Nem verisi güncellenirken hata:", error);
+//        return null;
+//    }
+//};
 
 window.calcSoil = async (field) => {
     const key = field.id + '_' + tstr();
@@ -189,7 +189,7 @@ window.calcSoil = async (field) => {
       let moist = fc * 0.68;
     
     // YENİ: GLDAS verisini dene
-    const gldasMoisture = await window.fetchGLDASSoilMoisture(field.lat, field.lon);
+//    const gldasMoisture = await window.fetchGLDASSoilMoisture(field.lat, field.lon);
     if (gldasMoisture !== null) {
         // GLDAS verisi kg/m² olarak gelir, 1 kg/m² = 1 mm suya eşittir
         moist = Math.min(fc, gldasMoisture); // fc'yi aşmasın
