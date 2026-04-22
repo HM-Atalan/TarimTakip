@@ -1430,6 +1430,21 @@ window.deleteFieldFromDB = async (fieldId) => {
   if(uid&&window.FB_MODE){ try{ await window.fbDeleteField(uid,fieldId); }catch(e){ toast('DB silme hatası: '+e.message,true); } }
   saveLocalDB();
 }
+
+// ========= YENİ FONKSİYON: Tüm tarlaların uydu/agro verilerini çek =========
+window.fetchAllSatellites = async () => {
+  if (!DB.fields.length) return;
+  console.log('🛰️ Tüm tarlalar için uydu/agro verileri çekiliyor...');
+  const results = await Promise.allSettled(DB.fields.map(f => fetchSat(f)));
+  const succeeded = results.filter(r => r.status === 'fulfilled').length;
+  console.log(`✅ ${succeeded}/${DB.fields.length} tarla için veri alındı.`);
+  // Veriler geldikten sonra toprak önbelleğini temizle ve yeniden hesapla
+  invSoilAll();
+  await computeAllSoils(true);
+  await renderAll();
+  toast(`🛰️ ${succeeded} tarla için uydu verileri güncellendi.`, false);
+};
+
 window.syncFromDB = async () => {
   const uid = window.FB_USER?.uid;
   if (!uid || !window.FB_MODE) return;
@@ -1451,6 +1466,8 @@ window.syncFromDB = async () => {
       }
     }
     toast('Veriler güncellendi ✓');
+    // --- YENİ: Uydu/agro verilerini arka planda çek ---
+    fetchAllSatellites().catch(e => console.warn('Uydu çekim hatası:', e));
   } catch (e) {
     toast('Senkronizasyon hatası: ' + e.message, true);
   }
@@ -1522,7 +1539,8 @@ window.signEmail = async (mode) => {
 }
 window.showAErr = (m,msg) => { const el=qs('#'+m+'-err'); if(el){ el.style.display='block'; el.textContent=msg; } }
 window.noFBNotice = () => { qs('#no-fb-note').style.display='block'; qs('#auth-form-wrap').style.display='none'; }
-window.enterLocalMode = () => { LOCAL=true; qs('#auth-screen').classList.add('hidden'); loadLocalDB(); DB.fields.forEach(f=>fetchWX(f)); renderAll(); toast('Yerel modda çalışıyorsunuz'); }
+window.enterLocalMode = () => { LOCAL=true; qs('#auth-screen').classList.add('hidden'); loadLocalDB(); DB.fields.forEach(f=>fetchWX(f)); renderAll(); // --- YENİ: Yerel modda da uydu verilerini çek ---
+  fetchAllSatellites().catch(e => console.warn('Uydu çekim hatası:', e)); toast('Yerel modda çalışıyorsunuz'); }
 window.doSignOut = async () => { if(window.FB_MODE&&window.FB_USER) await window.fbSignOut(); else{ LOCAL=false; DB.fields=[]; } qs('#auth-screen')?.classList.remove('hidden'); }
 
 window.onAuthChange=async(user)=>{
@@ -2030,4 +2048,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   setTimeout(()=>{ if(!window.FB_MODE) noFBNotice(); }, 1500);
   qs('#main')?.addEventListener('click',()=>{ if(window.innerWidth<=768) qs('#sb')?.classList.remove('open'); });
   document.addEventListener('keydown',e=>{ if(e.key==='Escape') closePhViewer(); });
+    // --- YENİ: Sayfa açıldığında yerel tarlalar varsa onların uydu verilerini çek ---
+  if (!window.FB_USER && DB.fields.length) {
+    fetchAllSatellites().catch(e => console.warn('Başlangıç uydu çekim hatası:', e));
+  }
 });
