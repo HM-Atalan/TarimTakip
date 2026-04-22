@@ -1592,26 +1592,33 @@ window.renderFKPIs = async (field) => {
 window.renderDash = async () => {
   const now = new Date();
   qs('#ddate').textContent = now.toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  const ta = window.DB.fields.reduce((s, f) => s + (f.area || 0), 0);
-  const tc = window.DB.fields.reduce((s, f) => s + (f.events || []).reduce((c, e) => c + (e.total || (e.cost * (e.qty || 1))), 0), 0);
-  const activeCount = window.DB.fields.filter(f => f.status !== 'fallow').length;
-  const fallowCount = window.DB.fields.filter(f => f.status === 'fallow').length;
+  
+  // Önce özet KPI'lar (ta, tc, activeCount, fallowCount) hesaplanır (async gerektirmez)
+  const ta = DB.fields.reduce((s, f) => s + (f.area || 0), 0);
+  const tc = DB.fields.reduce((s, f) => s + (f.events || []).reduce((c, e) => c + (e.total || (e.cost * (e.qty || 1))), 0), 0);
+  const activeCount = DB.fields.filter(f => f.status !== 'fallow').length;
+  const fallowCount = DB.fields.filter(f => f.status === 'fallow').length;
+  
   qs('#dkpis').innerHTML = `
-  <div class="kpi"><div class="kpi-l">Tarla</div><div class="kpi-v">${window.DB.fields.length}</div></div>
+  <div class="kpi"><div class="kpi-l">Tarla</div><div class="kpi-v">${DB.fields.length}</div></div>
   <div class="kpi"><div class="kpi-l">Toplam Alan</div><div class="kpi-v">${ta.toFixed(1)}</div></div>
   <div class="kpi"><div class="kpi-l">Toplam Maliyet</div><div class="kpi-v">${Math.round(tc).toLocaleString('tr-TR')}</div><div class="kpi-s">₺</div></div>
-  <div class="kpi"><div class="kpi-l">Ekili Tarla</div><div class="kpi-v">${activeCount}<small>/${window.DB.fields.length}</small></div></div>
+  <div class="kpi"><div class="kpi-l">Ekili Tarla</div><div class="kpi-v">${activeCount}<small>/${DB.fields.length}</small></div></div>
   <div class="kpi"><div class="kpi-l">Nadas</div><div class="kpi-v">${fallowCount}</div></div>`;
+  
   const df = qs('#dfields');
-  if (!window.DB.fields.length) {
+  if (!DB.fields.length) {
     df.innerHTML = '<div class="empty">🌾<br/>Tarla yok.<br/>"+ Yeni Tarla" ile başlayın.</div>';
     qs('#devents').innerHTML = '';
     qs('#dplanned').innerHTML = '';
     return;
   }
+  
+  // Paylaşımlı önbellekten tüm tarla verilerini al
   const fieldsWithSoil = await window.computeAllSoils();
+  
   df.innerHTML = fieldsWithSoil.map(({ f, s, sc, ph, he }) => {
-    return `<div class="evrow" style="cursor:pointer;" onclick="window.showField('${f.id}')">
+    return `<div class="evrow" style="cursor:pointer;" onclick="showField('${f.id}')">
       <div class="evico" style="background:${f.color || '#40916c'}22;font-size:14px;">🌿</div>
       <div class="evbody">
         <div class="evtitle">${f.name} ${f.status === 'fallow' ? '<span class="tag ta">Nadas</span>' : f.status === 'planned' ? '<span class="tag tb">Planlanan</span>' : ''}</div>
@@ -1624,14 +1631,17 @@ window.renderDash = async () => {
       </div>
     </div>`;
   }).join('');
+  
+  // Olaylar ve planlanan görevler (aynı)
   const allEvs = [];
-  window.DB.fields.forEach(f => (f.events || []).filter(e => !e.planned).forEach(e => allEvs.push({ ...e, fn: f.name })));
+  DB.fields.forEach(f => (f.events || []).filter(e => !e.planned).forEach(e => allEvs.push({ ...e, fn: f.name })));
   allEvs.sort((a, b) => b.date.localeCompare(a.date));
-  qs('#devents').innerHTML = allEvs.slice(0, 4).map(e => `<div class="evrow"><div class="evico" style="background:${window.EVC[e.type] || '#eee'};font-size:12px;">${window.EVI[e.type] || '📝'}</div><div class="evbody"><div class="evtitle">${e.fn} — ${e.type}</div><div class="evsub">${fd(e.date)}${e.notes ? ' · ' + e.notes.slice(0, 40) : ''}</div></div>${e.total ? `<span class="evcost">${Math.round(e.total).toLocaleString()}₺</span>` : ''}</div>`).join('') || '<div style="color:var(--text3);font-size:13px;">Kayıt yok.</div>';
+  qs('#devents').innerHTML = allEvs.slice(0, 4).map(e => `<div class="evrow"><div class="evico" style="background:${EVC[e.type] || '#eee'};font-size:12px;">${EVI[e.type] || '📝'}</div><div class="evbody"><div class="evtitle">${e.fn} — ${e.type}</div><div class="evsub">${fd(e.date)}${e.notes ? ' · ' + e.notes.slice(0, 40) : ''}</div></div>${e.total ? `<span class="evcost">${Math.round(e.total).toLocaleString()}₺</span>` : ''}</div>`).join('') || '<div style="color:var(--text3);font-size:13px;">Kayıt yok.</div>';
+  
   const planned = [];
-  window.DB.fields.forEach(f => (f.events || []).filter(e => e.planned && e.date >= window.tstr()).forEach(e => planned.push({ ...e, fn: f.name, fc: f.color })));
+  DB.fields.forEach(f => (f.events || []).filter(e => e.planned && e.date >= tstr()).forEach(e => planned.push({ ...e, fn: f.name, fc: f.color })));
   planned.sort((a, b) => a.date.localeCompare(b.date));
-  qs('#dplanned').innerHTML = planned.slice(0, 4).map(e => `<div class="evrow"><div class="evico" style="background:${e.fc || '#40916c'}22;font-size:13px;">${window.EVI[e.type] || '📝'}</div><div class="evbody"><div class="evtitle">${e.fn} — ${e.type}</div><div class="evsub">${fd(e.date)}</div></div></div>`).join('') || '<div style="color:var(--text3);font-size:13px;">Planlanan görev yok.</div>';
+  qs('#dplanned').innerHTML = planned.slice(0, 4).map(e => `<div class="evrow"><div class="evico" style="background:${e.fc || '#40916c'}22;font-size:13px;">${EVI[e.type] || '📝'}</div><div class="evbody"><div class="evtitle">${e.fn} — ${e.type}</div><div class="evsub">${fd(e.date)}</div></div></div>`).join('') || '<div style="color:var(--text3);font-size:13px;">Planlanan görev yok.</div>';
 };
 
 window.showField = async (id) => {
