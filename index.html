@@ -10,8 +10,6 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <!-- EXIF.js for photo metadata -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
-<!-- PDF Library -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <!--Firebase-->
 <script type="module" src="firebase-config.js"></script>
 <link rel="stylesheet" href="style.css">
@@ -21,7 +19,7 @@
 <div id="auth-screen">
   <div class="auth-box">
     <div class="auth-logo">
-      <svg viewBox="0 0 26 26" fill="none"><rect x="2" y="14" width="8" height="10" rx="1.5" fill="currentColor" opacity=".55"/><rect x="11" y="9" width="8" height="15" rx="1.5" fill="currentColor"/><[...]
+      <svg viewBox="0 0 26 26" fill="none"><rect x="2" y="14" width="8" height="10" rx="1.5" fill="currentColor" opacity=".55"/><rect x="11" y="9" width="8" height="15" rx="1.5" fill="currentColor"/><path d="M6 14Q8 8 13 6Q18 4 20 10" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"/></svg>
       TarlaTakip
     </div>
     <div id="no-fb-note" style="display:none;">
@@ -35,7 +33,7 @@
       </div>
       <div class="auth-pane on" id="ap-login">
         <button class="btn btnp" onclick="window.signGoogle()" style="width:100%;justify-content:center;margin-bottom:10px;">
-          <svg width="16" height="16" viewBox="0 0 24 24"><path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28[...]
+          <svg width="16" height="16" viewBox="0 0 24 24"><path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
           Google ile Giriş
         </button>
         <div class="auth-sep">veya e-posta ile</div>
@@ -46,7 +44,7 @@
       </div>
       <div class="auth-pane" id="ap-register">
         <div class="fg"><label>E-posta</label><input type="email" id="reg-email" placeholder="ornek@email.com"/></div>
-        <div class="fg"><label>Şifre (min 6 karakter)</label><input type="password" id="reg-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')window.signEmail('register')[...]
+        <div class="fg"><label>Şifre (min 6 karakter)</label><input type="password" id="reg-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')window.signEmail('register')"/></div>
         <div class="auth-err" id="reg-err"></div>
         <button class="btn btnp" onclick="window.signEmail('register')" style="width:100%;justify-content:center;margin-top:4px;">Hesap Oluştur</button>
       </div>
@@ -58,7 +56,7 @@
 <div id="top">
   <button class="ibtn" id="mbtn" onclick="window.togSB()">☰</button>
   <div class="logo">
-    <svg viewBox="0 0 26 26" fill="none"><rect x="2" y="14" width="8" height="10" rx="1.5" fill="currentColor" opacity=".55"/><rect x="11" y="9" width="8" height="15" rx="1.5" fill="currentColor"/><pa[...]
+    <svg viewBox="0 0 26 26" fill="none"><rect x="2" y="14" width="8" height="10" rx="1.5" fill="currentColor" opacity=".55"/><rect x="11" y="9" width="8" height="15" rx="1.5" fill="currentColor"/><path d="M6 14Q8 8 13 6Q18 4 20 10" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"/></svg>
     <span>TarlaTakip</span>
   </div>
   <div id="tnav">
@@ -132,8 +130,6 @@
     <div class="tab" data-t="wx">☀️ Hava</div>
     <div class="tab" data-t="soil">💧 Toprak</div>
     <div class="tab" data-t="sat">🛰️ Uydu</div>
-    <div class="tab" data-t="multi">🌱 Ürünler</div>
-    <div class="tab" data-t="schedule">📅 Çalışma</div>
     <div class="tab" data-t="ev">📋 Olaylar</div>
     <div class="tab" data-t="rec">💡 Öneriler</div>
     <div class="tab" data-t="ph">📷 Foto</div>
@@ -161,7 +157,7 @@
 
   <div id="tp-soil" class="tp">
     <div class="g2">
-      <div class="card"><div class="ct">Toprak Nem Tahmini (Bilimsel Model)</div><div id="sg"></div></div>
+      <div class="card"><div class="ct">Toprak Nem Tahmini</div><div id="sg"></div></div>
       <div class="card"><div class="ct">Su İhtiyacı Analizi</div><div id="sw"></div></div>
     </div>
     <div class="card"><div class="ct">7 Günlük Su Dengesi</div><div id="st"></div></div>
@@ -182,53 +178,6 @@
     <div class="card"><div class="ct">📈 Solar Radyasyon Trendi (14 Gün)</div><div id="sat-trend"></div></div>
     <div class="card"><div class="ct">🌿 Vejetasyon Sağlık Yorumu</div><div id="sat-interp"></div></div>
     <div class="card"><div class="ct">🔗 Uydu Görüntü Platformları</div><div id="sat-links"></div></div>
-  </div>
-
-  <!-- ÇOKLU ÜRÜN SEKMESI -->
-  <div id="tp-multi" class="tp">
-    <div class="card">
-      <div class="ct">🌱 Tarlada Yetişen Ürünler</div>
-      <div style="display:flex;gap:8px;margin-bottom:10px;">
-        <button class="btn btnp" onclick="window.openSubCropModal(window.CUR?.id)">+ Alt Ürün Ekle</button>
-      </div>
-      <div id="multi-crop-status"></div>
-    </div>
-    <div class="card"><div class="ct">Alan Dağılımı</div><div id="multi-crop-distribution"></div></div>
-  </div>
-
-  <!-- ÇALIŞMA ZAMANLAMASI SEKMESI -->
-  <div id="tp-schedule" class="tp">
-    <div class="card">
-      <div class="ct">📅 Çalışma Zamanlaması</div>
-      <div style="margin-bottom:12px;">
-        <label style="display:flex;gap:8px;margin-bottom:10px;">
-          <input type="radio" name="sch-type" value="weekly" onchange="document.getElementById('monthly-opts').style.display='none';document.getElementById('weekly-opts').style.display='block';" checked/>
-          <span>Haftalık Plan</span>
-        </label>
-        <label style="display:flex;gap:8px;margin-bottom:10px;">
-          <input type="radio" name="sch-type" value="monthly" onchange="document.getElementById('weekly-opts').style.display='none';document.getElementById('monthly-opts').style.display='block';"/>
-          <span>Aylık Plan</span>
-        </label>
-      </div>
-      
-      <div id="weekly-opts">
-        <label>Çalışma Günleri (Haftalık)</label>
-        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:10px;">
-          ${['Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi','Pazar'].map((d,i) => `
-            <label style="display:flex;gap:4px;"><input type="checkbox" data-day="${d}" /> ${d}</label>
-          `).join('')}
-        </div>
-      </div>
-      
-      <div id="monthly-opts" style="display:none;">
-        <label>Çalışma Günleri (Ayda)</label>
-        <input type="text" placeholder="6, 13, 20, 27" style="margin-bottom:10px;" id="monthly-days-input"/>
-      </div>
-      
-      <textarea id="sch-notes" rows="2" placeholder="Notlar..."></textarea>
-      <button class="btn btnp" onclick="window.saveFieldWorkSchedule(window.CUR?.id)" style="width:100%;margin-top:8px;">💾 Zamanlamayı Kaydet</button>
-    </div>
-    <div class="card" id="schedule-render"></div>
   </div>
 
   <div id="tp-ev" class="tp">
@@ -289,7 +238,7 @@
     </div>
     <div>
       <div class="card"><div class="ct">Bu Ay Olaylar</div><div id="cal-evs"></div></div>
-      <div class="card"><div class="ct">Akıllı Tarımsal Öneriler</div><div id="cal-recs"></div></div>
+      <div class="card"><div class="ct">AI Önerileri</div><div id="cal-ai"></div></div>
     </div>
   </div>
 </div>
@@ -297,10 +246,8 @@
 <!-- REPORTS -->
 <div id="page-rep" class="page">
   <div class="ph"><div class="ph-title">📊 Raporlar & Analiz</div></div>
-  <div style="display:flex; justify-content:flex-end; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
-    <button class="btn btns" onclick="window.generateComprehensiveReportView()">📈 Genel Rapor</button>
-    <button class="btn btnp" onclick="window.exportReportToCSV()">📎 CSV Dışa Aktar</button>
-    <button class="btn btnp" onclick="window.exportReportToPDF()">📄 PDF İndir</button>
+  <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
+    <button class="btn btnp" onclick="window.exportToCSV()">📎 CSV Dışa Aktar</button>
   </div>
   <div id="rep-content"></div>
 </div>
@@ -314,18 +261,6 @@
     <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
       <button class="btn btnd" onclick="window.doSignOut()">Çıkış Yap</button>
     </div>
-  </div>
-  <div class="card">
-    <div class="ct">🤖 Haftalık AI Analizi & Email</div>
-    <div id="ai-email-settings"></div>
-  </div>
-  <div class="card">
-    <div class="ct">🚜 Garaj (Ekipman Yönetimi)</div>
-    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
-      <button class="btn btnp" onclick="window.openGarageModal()">+ Ekipman Ekle</button>
-      <button class="btn" onclick="window.renderGarageInventory()">📊 Envanteri Göster</button>
-    </div>
-    <div id="garage-inventory"></div>
   </div>
   <div class="card">
     <div class="ct">🌤️ Hava Durumu (opsiyonel)</div>
@@ -347,6 +282,13 @@
       <input type="file" id="imp" accept=".json" style="display:none" onchange="window.impData(event)"/>
     </div>
   </div>
+  <div class="card">
+  <div class="ct">🌍 Toprak Tipi Toplu Güncelleme</div>
+  <div style="display:flex; gap:7px; flex-wrap:wrap;">
+    <button class="btn btnp" onclick="window.updateAllSoilTypes()">🌱 Tüm Tarlaları Güncelle</button>
+    <span class="hint">ISRIC SoilGrids üzerinden koordinatlara göre toprak tipini yeniler.</span>
+  </div>
+  </div>
 </div>
   
 </div><!-- /main -->
@@ -359,7 +301,7 @@
   <div class="ph-viewer-info" id="ph-viewer-info"></div>
   <div class="ph-viewer-actions">
     <button class="btn btnb" onclick="window.editPhNote()">✏️ Not Düzenle</button>
-    <button class="btn btnd" onclick="window.delCurPh()">🗑️ Sil</button>
+    <button class="btn btnd" onclick="window.deleteCurrentPh()">🗑️ Sil</button>
   </div>
 </div>
 
@@ -520,77 +462,8 @@
 </div>
 </div>
 
-<!-- ALT ÜRÜN MODAL -->
-<div class="mback" id="m-subcrop" onclick="if(event.target===this)window.closeM('subcrop')">
-<div class="modal">
-  <button class="mclose" onclick="window.closeM('subcrop')">✕</button>
-  <div class="mtitle">Alt Ürün Ekle</div>
-  <div class="fr">
-    <div class="fg"><label>Ürün Kategorisi</label>
-      <select id="sc-cat" onchange="window.fillSubCropSelect()">
-        <option value="">— Seçin —</option>
-        <option value="tahil">Tahıllar</option><option value="sebze">Sebzeler</option>
-        <option value="meyve">Meyveler</option>
-      </select>
-    </div>
-    <div class="fg"><label>Ürün *</label><select id="sc-crop"><option>Kategori seçin</option></select></div>
-  </div>
-  <div class="fr3">
-    <div class="fg"><label>Alan</label><input type="number" id="sc-area" placeholder="0" min="0" step="0.1"/></div>
-    <div class="fg"><label>Birim</label><select id="sc-aunit"><option value="dönüm">Dönüm</option><option value="hektar">Hektar</option></select></div>
-    <div class="fg"><label>Renk</label><input type="color" id="sc-color" value="#40916c"/></div>
-  </div>
-  <div class="fr">
-    <div class="fg"><label>Ekim Tarihi</label><input type="date" id="sc-plant"/></div>
-    <div class="fg"><label>Hasat Tarihi</label><input type="date" id="sc-harvest"/></div>
-  </div>
-  <div class="fg"><label>Notlar</label><textarea id="sc-notes" rows="2" placeholder="Notlar..."></textarea></div>
-  <div class="mfoot">
-    <button class="btn" onclick="window.closeM('subcrop')">İptal</button>
-    <button class="btn btnp" onclick="window.saveSubCrop()">Kaydet</button>
-  </div>
-</div>
-</div>
-
-<!-- EKIPMAN MODAL -->
-<div class="mback" id="m-garage" onclick="if(event.target===this)window.closeM('garage')">
-<div class="modal">
-  <button class="mclose" onclick="window.closeM('garage')">✕</button>
-  <div class="mtitle">Ekipman Ekle</div>
-  <div class="fg">
-    <label>Ekipman Türü *</label>
-    <select id="g-type">
-      <option value="tractor">🚜 Traktör</option>
-      <option value="truck">🚚 Kamyon/Araç</option>
-      <option value="thresher">⚙️ Harman Makinesi</option>
-      <option value="pump">💧 Su Pompası</option>
-      <option value="sprayer">💨 Sprayer / İlaçlama</option>
-      <option value="plow">⛏️ Pulluk</option>
-      <option value="other">📦 Diğer</option>
-    </select>
-  </div>
-  <div class="fg"><label>Model *</label><input type="text" id="g-model" placeholder="Örn: CASE IH Magnum"/></div>
-  <div class="fr">
-    <div class="fg"><label>Alım Yılı</label><input type="number" id="g-year" placeholder="2020" min="1990" max="2030"/></div>
-    <div class="fg"><label>Alım Fiyatı (₺)</label><input type="number" id="g-price" placeholder="0" min="0"/></div>
-  </div>
-  <div id="g-extra"></div>
-  <div class="mfoot">
-    <button class="btn" onclick="window.closeM('garage')">İptal</button>
-    <button class="btn btnp" onclick="window.saveEquipment()">Kaydet</button>
-  </div>
-</div>
-</div>
-
 <div id="toast"></div>
 <script src="cropData.js"></script>
-<script src="soilMoistureModel.js"></script>
-<script src="multiCropManagement.js"></script>
-<script src="workScheduleManagement.js"></script>
-<script src="garageManagement.js"></script>
-<script src="weeklyAIAnalysis.js"></script>
-<script src="smartRecommendations.js"></script>
-<script src="reportingSystem.js"></script>
 <script defer src="app.js"></script>
 </body>
 </html>
