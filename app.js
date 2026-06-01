@@ -1051,7 +1051,7 @@ KURALLAR:
     });
     const apiKey = await window.getGeminiKey();
 if(!apiKey) { toast('Gemini API anahtarı alınamadı. Remote Config kontrol edin.', true); return; }
-    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${await window.getGeminiKey()}`;
+    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${await window.getGeminiKey()}`;
     const resp=await fetch(url,{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({contents:[{role:'user',parts}],generationConfig:{temperature:0.62,maxOutputTokens:8192}})
@@ -1099,7 +1099,7 @@ window.sendChat = async () => {
   try{
     const apiKey = await window.getGeminiKey();
 if(!apiKey) { toast('Gemini API anahtarı alınamadı. Remote Config kontrol edin.', true); return; }
-    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${await window.getGeminiKey()}`;
+    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${await window.getGeminiKey()}`;
     const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents,generationConfig:{temperature:0.72,maxOutputTokens:4096}})});
     if(!r.ok){ const e=await r.json(); throw new Error(e.error?.message||'Gemini '+r.status); }
     const d=await r.json();
@@ -1155,7 +1155,7 @@ Türkçe, uzman görüşü:
     ];
     const apiKey = await window.getGeminiKey();
 if(!apiKey) { toast('Gemini API anahtarı alınamadı. Remote Config kontrol edin.', true); return; }
-    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${await window.getGeminiKey()}`;
+    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${await window.getGeminiKey()}`;
     const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts}],generationConfig:{maxOutputTokens:2000}})});
     if(!r.ok){ const e=await r.json(); throw new Error(e.error?.message||r.status); }
     const d=await r.json();
@@ -1801,7 +1801,7 @@ Türkçe, kısa ve uygulanabilir. Maksimum 4-5 madde.`;
     
     const apiKey = await window.getGeminiKey();
     if (!apiKey) { el.innerHTML = '<div style="color:var(--red);font-size:12px;">API anahtarı alınamadı.</div>'; return; }
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${apiKey}`;
     const resp = await fetch(url, {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({contents:[{role:'user',parts:[{text:prompt}]}], generationConfig:{temperature:0.55, maxOutputTokens:1500}})
