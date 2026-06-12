@@ -8,13 +8,12 @@
 <title>Tarla Takip</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<!-- EXIF.js for photo metadata -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
-<!--Firebase-->
 <script type="module" src="firebase-config.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+
 <!-- ══ AUTH SCREEN ══ -->
 <div id="auth-screen">
   <div class="auth-box">
@@ -23,7 +22,7 @@
       TarlaTakip
     </div>
     <div id="no-fb-note" style="display:none;">
-      ⚠️ Firebase yapılandırılmamış. Ayarlar > Firebase Kurulumu bölümünden config girin veya yerel modda kullanmaya devam edin.
+      ⚠️ Firebase yapılandırılmamış. Yerel modda kullanabilirsiniz.
       <br/><br/><button class="btn btnp" onclick="window.enterLocalMode()" style="width:100%;justify-content:center;">Yerel Modda Kullan</button>
     </div>
     <div id="auth-form-wrap">
@@ -92,7 +91,7 @@
     <div class="ph-row">
       <div><div class="ph-title">Genel Bakış</div><div class="ph-sub" id="ddate"></div></div>
       <div class="ph-act">
-        <button class="btn btns" onclick="window.syncFromDB()" title="Verileri yenile">🔄</button>
+        <button class="btn btns" onclick="window.syncFromDB()" title="Verileri yenile">🔄 Yenile</button>
         <button class="btn btns btnp" onclick="window.openFM()">+ Yeni Tarla</button>
       </div>
     </div>
@@ -136,6 +135,7 @@
     <div class="tab" data-t="ai">🤖 AI</div>
   </div>
 
+  <!-- MAP TAB -->
   <div id="tp-map" class="tp on">
     <div id="mapwrap"><div id="lmap"></div></div>
     <div class="g2" id="map-info-panels">
@@ -144,42 +144,50 @@
     </div>
   </div>
 
+  <!-- WEATHER TAB -->
   <div id="tp-wx" class="tp">
     <div class="card">
       <div class="ct">Veri Kaynakları <button class="btn btns" onclick="window.fetchWX()">🔄 Yenile</button></div>
       <div class="wxsrc" id="wxsrc"></div>
     </div>
-    <div class="card"><div class="ct">Son 7 Gün <span class="tag tgr">Gerçek/Geçmiş</span></div><div class="wxstrip wx7" id="wx-past"></div></div>
+    <div class="card"><div class="ct">Son 7 Gün <span class="tag tgr">Geçmiş</span></div><div class="wxstrip wx7" id="wx-past"></div></div>
     <div class="card"><div class="ct">Bugün <span class="tag tg">Anlık</span></div><div id="wx-today"></div></div>
     <div class="card"><div class="ct">Önümüzdeki 7 Gün <span class="tag tb">Tahmin</span></div><div class="wxstrip wx7" id="wx-fut"></div></div>
     <div class="card"><div class="ct">14 Günlük Özet</div><div id="wx-sum"></div></div>
   </div>
 
+  <!-- SOIL TAB — ÇİFT KATMAN -->
   <div id="tp-soil" class="tp">
-    <div class="g2">
-      <div class="card"><div class="ct">Toprak Nem Tahmini</div><div id="sg"></div></div>
-      <div class="card"><div class="ct">Su İhtiyacı Analizi</div><div id="sw"></div></div>
+    <div class="card">
+      <div class="ct">💧 Çift Katman Toprak Nem Modeli <span class="tag tg">0–10cm & 10–30cm</span></div>
+      <div id="sg"></div>
     </div>
-    <div class="card"><div class="ct">7 Günlük Su Dengesi</div><div id="st"></div></div>
+    <div class="card"><div class="ct">Su İhtiyacı Analizi</div><div id="sw"></div></div>
+    <div class="card">
+      <div class="ct">7 Günlük Su Dengesi <span style="font-size:10px;color:var(--text3);font-weight:400;">— Yüzey & Derin ayrı takip</span></div>
+      <div id="st"></div>
+    </div>
   </div>
 
+  <!-- SAT TAB -->
   <div id="tp-sat" class="tp">
     <div class="card">
       <div class="ct">🛰️ Tarımsal Uydu Analizi <button class="btn btns btnp" onclick="window.fetchSat()">🔄 Güncelle</button></div>
-      <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Sentinel-2 (ESA/Copernicus) · NASA POWER · Open-Meteo Agro · STAC — Ücretsiz veri kaynakları</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Sentinel-2 · NASA POWER · Open-Meteo Agro — Ücretsiz veri kaynakları</div>
       <div class="wxsrc" id="sat-src"></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
       <div class="card"><div class="ct">NDVI — Bitki Canlılığı</div><div id="sat-ndvi"></div></div>
       <div class="card"><div class="ct">EVI — Vejetasyon İndeksi</div><div id="sat-evi"></div></div>
       <div class="card"><div class="ct">NDWI — Bitki Su İçeriği</div><div id="sat-ndwi"></div></div>
-      <div class="card"><div class="ct">LST — Yüzey / Toprak Sıcaklığı</div><div id="sat-lst"></div></div>
+      <div class="card"><div class="ct">LST & Toprak Nemi (Katmanlar)</div><div id="sat-lst"></div></div>
     </div>
-    <div class="card"><div class="ct">📈 Solar Radyasyon Trendi (14 Gün)</div><div id="sat-trend"></div></div>
+    <div class="card"><div class="ct">📈 Solar Radyasyon Trendi</div><div id="sat-trend"></div></div>
     <div class="card"><div class="ct">🌿 Vejetasyon Sağlık Yorumu</div><div id="sat-interp"></div></div>
-    <div class="card"><div class="ct">🔗 Uydu Görüntü Platformları</div><div id="sat-links"></div></div>
+    <div class="card"><div class="ct">🔗 Uydu Platformları</div><div id="sat-links"></div></div>
   </div>
 
+  <!-- EVENTS TAB -->
   <div id="tp-ev" class="tp">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
       <span style="font-size:14px;font-weight:700;">Olay & Maliyet Kayıtları</span>
@@ -196,6 +204,7 @@
     <div class="card"><div class="ct">Maliyet Dağılımı</div><div id="ev-cost"></div></div>
   </div>
 
+  <!-- RECS TAB -->
   <div id="tp-rec" class="tp">
     <div class="card"><div class="ct">🌱 Fenoloji & GDD Hasat Tahmini</div><div id="rec-pheno"></div></div>
     <div class="card" style="background:var(--glt);border-color:var(--gbg);">
@@ -206,6 +215,7 @@
     <div class="card"><div class="ct">🤖 Son AI Analizi</div><div id="rec-ai"></div></div>
   </div>
 
+  <!-- PHOTO TAB -->
   <div id="tp-ph" class="tp">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
       <span style="font-size:14px;font-weight:700;">Fotoğraflar</span>
@@ -214,10 +224,17 @@
     <div class="ph-grid" id="ph-grid"></div>
   </div>
 
+  <!-- AI TAB -->
   <div id="tp-ai" class="tp">
     <div class="card">
-      <div class="ct">🤖 AI Tarım Asistanı <button class="btn btns" onclick="window.clrChat()">Temizle</button></div>
-      <div id="ai-chat" style="max-height:340px;overflow-y:auto;margin-bottom:10px;"></div>
+      <div class="ct" style="flex-wrap:wrap;gap:6px;">
+        🤖 AI Tarım Asistanı
+        <div style="display:flex;gap:5px;margin-left:auto;">
+          <button class="btn btns" onclick="window.clrChat()">🗑 Ekranı Temizle</button>
+          <button class="btn btns btnd" onclick="window.clearAIMemory()" title="Kalıcı hafızayı sil">🧹 Hafızayı Sil</button>
+        </div>
+      </div>
+      <div id="ai-chat" style="max-height:380px;overflow-y:auto;margin-bottom:10px;"></div>
       <div style="display:flex;gap:7px;">
         <input type="text" id="ai-inp" placeholder="Sorunuzu yazın..." onkeydown="if(event.key==='Enter')window.sendChat()"/>
         <button class="btn btnp" onclick="window.sendChat()">Sor</button>
@@ -225,6 +242,7 @@
       <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:7px;" id="qqbtns"></div>
     </div>
   </div>
+
 </div><!-- /page-field -->
 
 <!-- CALENDAR -->
@@ -245,9 +263,13 @@
 
 <!-- REPORTS -->
 <div id="page-rep" class="page">
-  <div class="ph"><div class="ph-title">📊 Raporlar & Analiz</div></div>
-  <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
-    <button class="btn btnp" onclick="window.exportToCSV()">📎 CSV Dışa Aktar</button>
+  <div class="ph">
+    <div class="ph-row">
+      <div><div class="ph-title">📊 Raporlar & Analiz</div></div>
+      <div class="ph-act">
+        <button class="btn btns btnp" onclick="window.exportToCSV()">📎 CSV Dışa Aktar</button>
+      </div>
+    </div>
   </div>
   <div id="rep-content"></div>
 </div>
@@ -255,6 +277,7 @@
 <!-- SETTINGS -->
 <div id="page-cfg" class="page">
   <div class="ph"><div class="ph-title">⚙️ Ayarlar</div></div>
+
   <div class="card">
     <div class="ct">👤 Hesap</div>
     <div id="account-info"></div>
@@ -262,39 +285,41 @@
       <button class="btn btnd" onclick="window.doSignOut()">Çıkış Yap</button>
     </div>
   </div>
+
   <div class="card">
-    <div class="ct">🌤️ Hava Durumu (opsiyonel)</div>
+    <div class="ct">🌤️ Hava Durumu API (Opsiyonel)</div>
     <div class="fg">
       <label>AccuWeather API Key (ücretsiz 50 istek/gün)</label>
       <input type="password" id="acu-key" placeholder="AccuWeather key..." oninput="saveSettings()"/>
     </div>
   </div>
+
   <div class="card">
-    <div class="ct">🌱 Toprak Verisi (SoilGrids / ISRIC)</div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Koordinatlara göre tüm tarlaların toprak tipini SoilGrids veritabanından otomatik günceller.</div>
+    <div class="ct">🌱 Toprak Verisi — SoilGrids / ISRIC</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Koordinatlara göre tüm tarlaların toprak tipini SoilGrids'den otomatik günceller (kil/kum/silt yüzdeleri dahil).</div>
     <button class="btn btnp" onclick="updateAllSoilTypes()">🔄 Tüm Tarlaları Güncelle</button>
   </div>
+
   <div class="card">
-    <div class="ct">💾 Veri (Yerel Yedek)</div>
+    <div class="ct">💾 Veri Yedekleme</div>
     <div style="display:flex;gap:7px;flex-wrap:wrap;">
-      <button class="btn" onclick="window.expData()">⬇ JSON Dışa</button>
-      <button class="btn" onclick="document.getElementById('imp').click()">⬆ JSON İçe</button>
+      <button class="btn" onclick="window.expData()">⬇ JSON Dışa Aktar</button>
+      <button class="btn" onclick="document.getElementById('imp').click()">⬆ JSON İçe Aktar</button>
       <input type="file" id="imp" accept=".json" style="display:none" onchange="window.impData(event)"/>
     </div>
   </div>
+
   <div class="card">
-  <div class="ct">🌍 Toprak Tipi Toplu Güncelleme</div>
-  <div style="display:flex; gap:7px; flex-wrap:wrap;">
-    <button class="btn btnp" onclick="window.updateAllSoilTypes()">🌱 Tüm Tarlaları Güncelle</button>
-    <span class="hint">ISRIC SoilGrids üzerinden koordinatlara göre toprak tipini yeniler.</span>
-  </div>
+    <div class="ct">📅 6 Aylık Hava Geçmişi</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">GDD ve hasat tahminleri için son 6 aya kadar hava verisi otomatik indirilir ve sıkıştırılmış şekilde yerel depolanır. Bu sayede hesaplamalar çok daha güvenilir olur.</div>
+    <button class="btn btnp" onclick="Promise.allSettled(DB.fields.map(f=>window.fetchWXHistory(f))).then(()=>toast('Hava geçmişleri güncellendi ✓'))">🔄 Geçmişleri Güncelle</button>
   </div>
 </div>
-  
+
 </div><!-- /main -->
 </div><!-- /layout -->
 
-<!-- PHOTO VIEWER -->
+<!-- ══ PHOTO VIEWER ══ -->
 <div id="ph-viewer">
   <button id="ph-viewer-close" onclick="window.closePhViewer()">✕</button>
   <img id="ph-viewer-img" src="" alt=""/>
@@ -305,24 +330,25 @@
   </div>
 </div>
 
-<!-- FIELD MODAL -->
+<!-- ══ FIELD MODAL ══ -->
 <div class="mback" id="m-field" onclick="if(event.target===this)window.closeM('field')">
-<div class="modal">
+<div class="modal" style="max-width:580px;">
   <button class="mclose" onclick="window.closeM('field')">✕</button>
   <div class="mtitle" id="fm-title">Yeni Tarla Ekle</div>
 
-  <!-- File import -->
+  <!-- Dosya import -->
   <div class="fg">
-    <label>JSON / KML / GeoJSON Dosyası (Otomatik veri çekimi)</label>
+    <label>📂 JSON / KML / GeoJSON Dosyası</label>
     <input type="file" id="f-file" accept=".json,.geojson,.kml" onchange="window.importFieldFile(event)"/>
-    <div class="hint">Koordinat, alan, isim ve diğer tüm veriler otomatik çekilir</div>
+    <div class="hint">Koordinat, alan, poligon sınırı otomatik çekilir</div>
   </div>
   <div id="f-import-preview" style="display:none;background:var(--glt);border:1px solid var(--gbg);border-radius:var(--r);padding:10px;font-size:12px;margin-bottom:10px;"></div>
   <div class="divider"></div>
 
+  <!-- Temel bilgiler -->
   <div class="fr">
-    <div class="fg"><label>Enlem (Lat)</label><input type="number" id="f-lat" placeholder="36.8969" step="0.0001" onblur="window.autoFillSoilFromCoords()"/></div>
-    <div class="fg"><label>Boylam (Lon)</label><input type="number" id="f-lon" placeholder="30.7133" step="0.0001" onblur="window.autoFillSoilFromCoords()"/></div>
+    <div class="fg"><label>Enlem (Lat) *</label><input type="number" id="f-lat" placeholder="36.8969" step="0.0001" onblur="window.autoFillSoilFromCoords()"/></div>
+    <div class="fg"><label>Boylam (Lon) *</label><input type="number" id="f-lon" placeholder="30.7133" step="0.0001" onblur="window.autoFillSoilFromCoords()"/></div>
   </div>
   <div class="fr">
     <div class="fg"><label>Tarla Adı *</label><input type="text" id="f-name" placeholder="Örn: Doğu Tarlası"/></div>
@@ -339,32 +365,43 @@
       </select>
     </div>
     <div class="fg">
-      <label>Toprak Tipi <span id="soil-auto-badge" style="display:none;font-size:10px;color:var(--green2);font-weight:400;">🌱 Koordinatlardan otomatik belirlendi</span></label>
+      <label>Toprak Tipi <span id="soil-auto-badge" style="display:none;font-size:10px;color:var(--green2);font-weight:400;">🌱 Otomatik</span></label>
       <select id="f-soil">
-        <option value="killiTin">Killi-Tın</option><option value="tinli">Tınlı</option>
-        <option value="killi">Killi</option><option value="kumlu">Kumlu</option>
-        <option value="humuslu">Humuslu</option><option value="kalkerli">Kalkerli</option>
+        <option value="killiTin">Killi-Tın</option>
+        <option value="tinli">Tınlı</option>
+        <option value="killi">Killi</option>
+        <option value="kumlu">Kumlu</option>
+        <option value="humuslu">Humuslu</option>
+        <option value="kalkerli">Kalkerli</option>
       </select>
-      <div class="hint" id="soil-hint" style="color:var(--text3);">Koordinat girildiğinde SoilGrids (ISRIC) verisinden otomatik belirlenir · Manuel değiştirilebilir</div>
+      <div class="hint">Koordinat girilince SoilGrids'den otomatik belirlenir</div>
     </div>
   </div>
+
   <div class="fg">
-  <label>Durum</label>
-  <select id="f-status">
-    <option value="active">🌱 Aktif (Ürün ekili)</option>
-    <option value="fallow">🌾 Nadas</option>
-    <option value="planned">📅 Planlanan</option>
-  </select>
+    <label>Durum</label>
+    <select id="f-status">
+      <option value="active">🌱 Aktif (Ürün ekili)</option>
+      <option value="fallow">🌾 Nadas</option>
+      <option value="planned">📅 Planlanan</option>
+    </select>
   </div>
+
+  <!-- Ürün -->
   <div class="fr">
     <div class="fg"><label>Ürün Kategorisi</label>
       <select id="f-cat" onchange="window.fillCrops()">
         <option value="">— Seçin —</option>
-        <option value="tahil">Tahıllar</option><option value="sebze">Sebzeler</option>
-        <option value="meyve">Meyveler</option><option value="narenciye">Narenciye</option>
-        <option value="baklagil">Baklagiller</option><option value="endustri">Endüstri Bitkileri</option>
-        <option value="yembitki">Yem Bitkileri</option><option value="sera">Sera Ürünleri</option>
-        <option value="zeytin">Zeytin</option><option value="bostanlik">Bostanlık</option>
+        <option value="tahil">Tahıllar</option>
+        <option value="sebze">Sebzeler</option>
+        <option value="meyve">Meyveler</option>
+        <option value="narenciye">Narenciye</option>
+        <option value="baklagil">Baklagiller</option>
+        <option value="endustri">Endüstri Bitkileri</option>
+        <option value="yembitki">Yem Bitkileri</option>
+        <option value="sera">Sera Ürünleri</option>
+        <option value="zeytin">Zeytin</option>
+        <option value="bostanlik">Bostanlık</option>
       </select>
     </div>
     <div class="fg"><label>Ürün</label><select id="f-crop"><option>Kategori seçin</option></select></div>
@@ -372,24 +409,91 @@
   <div class="fr3">
     <div class="fg"><label id="f-qty-lbl">Miktar</label><input type="number" id="f-qty" placeholder="0" min="0" step="0.1"/></div>
     <div class="fg"><label>Birim</label>
-      <select id="f-qunit"><option value="adet">Adet</option><option value="kg/da">Kg/da</option><option value="kg">Kg</option><option value="da">Dönüm</option></select>
+      <select id="f-qunit">
+        <option value="adet">Adet</option>
+        <option value="kg/da">Kg/da</option>
+        <option value="kg">Kg</option>
+        <option value="da">Dönüm</option>
+      </select>
     </div>
     <div class="fg"><label>Renk</label><input type="color" id="f-color" value="#40916c"/></div>
   </div>
+
+  <!-- Çok yıllık bitki yaşı -->
+  <div id="f-age-section" style="display:none;" class="fg">
+    <label>🌳 Dikim Yaşı (Çok Yıllık Bitkiler)</label>
+    <input type="number" id="f-planting-age" placeholder="Örn: 5 (yıl)" min="0" step="1"/>
+    <div class="hint">Fidan/ağaç dikiminden bu yana geçen yıl sayısı — GDD ve hasat tahmini için kullanılır</div>
+  </div>
+
+  <!-- Tarihler -->
   <div class="fr">
     <div class="fg"><label>Ekim/Dikim Tarihi</label><input type="date" id="f-plant"/></div>
     <div class="fg"><label>Tahmini Hasat Tarihi</label><input type="date" id="f-harvest"/></div>
   </div>
-  <div class="fg"><label>Notlar</label><textarea id="f-notes" rows="2" placeholder="Tarla hakkında notlar..."></textarea></div>
+
+  <div class="divider"></div>
+
+  <!-- ALTYAPI AYARLARI -->
+  <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;">🏗️ Tarla Altyapısı</div>
+  <div class="fr">
+    <div class="fg">
+      <label>💧 Sulama Sistemi</label>
+      <select id="f-irrigation">
+        <option value="">— Belirtilmemiş —</option>
+        <option value="Damla sulama">💧 Damla sulama</option>
+        <option value="Yağmurlama">🌧️ Yağmurlama</option>
+        <option value="Salma sulama">🌊 Salma sulama</option>
+        <option value="Karık sulama">🌿 Karık sulama</option>
+        <option value="El ile sulama">🪣 El ile sulama</option>
+        <option value="Sulama sistemi yok">❌ Sulama sistemi yok</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label>🚿 Su Kaynağı</label>
+      <select id="f-water-source">
+        <option value="">— Belirtilmemiş —</option>
+        <option value="Sulama kanalı">🏞️ Sulama kanalı</option>
+        <option value="Kuyu (derin)">⛏️ Kuyu (derin)</option>
+        <option value="Kuyu (sığ)">🌊 Kuyu (sığ/yüzey)</option>
+        <option value="Gölet / havuz">🏊 Gölet / havuz</option>
+        <option value="Şebeke suyu">🚰 Şebeke suyu</option>
+        <option value="Yağmur suyu">🌧️ Yağmur suyu</option>
+        <option value="Su kaynağı yok">❌ Su kaynağı yok</option>
+      </select>
+    </div>
+  </div>
+  <div class="fr">
+    <div class="fg">
+      <label>🔒 Çit / Çevre Güvenliği</label>
+      <select id="f-fencing">
+        <option value="">— Belirtilmemiş —</option>
+        <option value="Tel örgü">🔗 Tel örgü</option>
+        <option value="Dikenli tel">🌵 Dikenli tel</option>
+        <option value="Beton duvar">🧱 Beton duvar</option>
+        <option value="Ahşap çit">🪵 Ahşap çit</option>
+        <option value="Canlı çit (çalı)">🌿 Canlı çit (çalı)</option>
+        <option value="Elektrikli çit">⚡ Elektrikli çit</option>
+        <option value="Yok">❌ Çit yok</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label>📐 Poligon (JSON koordinat)</label>
+      <input type="text" id="f-polygon" placeholder='[[lat,lon],[lat,lon],...]'/>
+      <div class="hint">GeoJSON/KML yüklenirse otomatik dolar — haritada tarla sınırı görünür</div>
+    </div>
+  </div>
+
+  <div class="fg"><label>📝 Notlar</label><textarea id="f-notes" rows="2" placeholder="Tarla hakkında notlar..."></textarea></div>
   <input type="hidden" id="f-eid"/>
   <div class="mfoot">
     <button class="btn" onclick="window.closeM('field')">İptal</button>
-    <button class="btn btnp" onclick="window.saveField()">Kaydet</button>
+    <button class="btn btnp" onclick="window.saveField()">💾 Kaydet</button>
   </div>
 </div>
 </div>
 
-<!-- EVENT MODAL -->
+<!-- ══ EVENT MODAL ══ -->
 <div class="mback" id="m-event" onclick="if(event.target===this)window.closeM('event')">
 <div class="modal">
   <button class="mclose" onclick="window.closeM('event')">✕</button>
@@ -398,12 +502,18 @@
     <div class="fg"><label>Tarih *</label><input type="date" id="e-date"/></div>
     <div class="fg"><label>Tür *</label>
       <select id="e-type" onchange="window.updEF()">
-        <option value="ekim">🌱 Ekim</option><option value="dikim">🪴 Dikim</option>
-        <option value="sulama">💧 Sulama</option><option value="gübre">🧪 Gübreleme</option>
-        <option value="ilaç">🔬 İlaçlama</option><option value="çapa">⛏️ Çapalama</option>
-        <option value="hasat">🌾 Hasat</option><option value="budama">✂️ Budama</option>
-        <option value="toprak">🚜 Toprak İşleme</option><option value="analiz">📊 Analiz</option>
-        <option value="yakıt">⛽ Akaryakıt</option><option value="işçilik">👷 İşçilik</option>
+        <option value="ekim">🌱 Ekim</option>
+        <option value="dikim">🪴 Dikim</option>
+        <option value="sulama">💧 Sulama</option>
+        <option value="gübre">🧪 Gübreleme</option>
+        <option value="ilaç">🔬 İlaçlama</option>
+        <option value="çapa">⛏️ Çapalama</option>
+        <option value="hasat">🌾 Hasat</option>
+        <option value="budama">✂️ Budama</option>
+        <option value="toprak">🚜 Toprak İşleme</option>
+        <option value="analiz">📊 Analiz</option>
+        <option value="yakıt">⛽ Akaryakıt</option>
+        <option value="işçilik">👷 İşçilik</option>
         <option value="diğer">📝 Diğer</option>
       </select>
     </div>
@@ -415,28 +525,36 @@
     <div class="fg"><label id="e-qlbl">Miktar</label><input type="number" id="e-qty" placeholder="1" min="0" step="0.01"/></div>
     <div class="fg"><label>Birim</label>
       <select id="e-unit">
-        <option value="toplam">Toplam</option><option value="dönüm">₺/Dönüm</option>
-        <option value="kg">kg</option><option value="lt">litre</option>
-        <option value="adet">adet</option><option value="saat">saat</option><option value="ton">ton</option>
+        <option value="toplam">Toplam</option>
+        <option value="dönüm">₺/Dönüm</option>
+        <option value="kg">kg</option>
+        <option value="lt">litre</option>
+        <option value="adet">adet</option>
+        <option value="saat">saat</option>
+        <option value="ton">ton</option>
+        <option value="mm">mm (sulama)</option>
       </select>
     </div>
   </div>
   <div class="fg"><label>Durum</label>
-    <select id="e-status"><option value="done">✅ Gerçekleşti</option><option value="planned">📅 Planlandı</option></select>
+    <select id="e-status">
+      <option value="done">✅ Gerçekleşti</option>
+      <option value="planned">📅 Planlandı</option>
+    </select>
   </div>
   <input type="hidden" id="e-eid"/>
   <div class="mfoot">
     <button class="btn" onclick="window.closeM('event')">İptal</button>
-    <button class="btn btnp" onclick="window.saveEvent()">Kaydet</button>
+    <button class="btn btnp" onclick="window.saveEvent()">💾 Kaydet</button>
   </div>
 </div>
 </div>
 
-<!-- PHOTO MODAL -->
+<!-- ══ PHOTO MODAL ══ -->
 <div class="mback" id="m-photo" onclick="if(event.target===this)window.closeM('photo')">
 <div class="modal">
   <button class="mclose" onclick="window.closeM('photo')">✕</button>
-  <div class="mtitle">Fotoğraf Ekle & Analiz Et</div>
+  <div class="mtitle">📷 Fotoğraf Ekle & AI Analiz</div>
   <div class="fg">
     <label>Fotoğraf * <span style="font-size:11px;color:var(--text3);">(Otomatik sıkıştırılır ~150KB)</span></label>
     <input type="file" id="p-file" accept="image/*" onchange="window.prevPhoto(event)"/>
@@ -447,8 +565,11 @@
     <div class="fg"><label>Tarih</label><input type="date" id="p-date"/></div>
     <div class="fg"><label>Tür</label>
       <select id="p-type">
-        <option value="genel">Genel Görünüm</option><option value="urun">Ürün Durumu</option>
-        <option value="hastalik">Hastalık/Zararlı</option><option value="toprak">Toprak</option><option value="hasat">Hasat</option>
+        <option value="genel">Genel Görünüm</option>
+        <option value="urun">Ürün Durumu</option>
+        <option value="hastalik">Hastalık/Zararlı</option>
+        <option value="toprak">Toprak</option>
+        <option value="hasat">Hasat</option>
       </select>
     </div>
   </div>
@@ -457,7 +578,7 @@
   <div class="mfoot">
     <button class="btn" onclick="window.closeM('photo')">İptal</button>
     <button class="btn btna" onclick="window.analyzePhoto()">🤖 AI Analiz</button>
-    <button class="btn btnp" onclick="window.savePhoto()">Kaydet</button>
+    <button class="btn btnp" onclick="window.savePhoto()">💾 Kaydet</button>
   </div>
 </div>
 </div>
