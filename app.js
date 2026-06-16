@@ -373,6 +373,9 @@ window.calcSoilRZWB = async (field, force=false) => {
   const today = tstr();
   const uid = window.FB_USER?.uid;
 
+  // 🟢 EKLEMEN GEREKEN SATIR: Hava geçmişi verisinin yüklendiğinden emin oluyoruz
+  await window.fetchWXHistory(field);
+
   // ── 1. Ledger'ı yükle (Firebase > localStorage > boş) ──────────
   let ledger = []; // [{date, Dr_s, Dr_d, ...}]
 
@@ -440,6 +443,18 @@ window.calcSoilRZWB = async (field, force=false) => {
   // ── 3. Simülasyon gün listesini hazırla ────────────────────────
   // Başlangıç tarihinden bugüne kadar olan, ledger'da eksik olan günler
   const wxAll = window.getBestWXDays(field);
+
+  // 🟢 EKLEMEN GEREKEN KORUMA BLOĞU:
+if (!wxAll || wxAll.length === 0) {
+  console.warn(`⚠️ ${field.name} için hava durumu verisi henüz hazır değil, varsayılan nem yükleniyor.`);
+  return {
+    surface: { pct: 55, moist: Math.round(fcs * 0.55), fc: fcs, Dr: taw_s * 0.45, taw: taw_s, raw: params.raw_s, Ks: 1 },
+    deep:    { pct: 50, moist: Math.round(fcd * 0.50), fc: fcd, Dr: taw_d * 0.50, taw: taw_d, raw: params.raw_d, Ks: 1 },
+    et: window.agrd(field.crop).et, kc: 0.7, Ks: 1, ETc: 0, log: [], params, satCalibrated: false,
+    pct: 55, moist: Math.round(fcs * 0.55), fc: fcs // Geriye dönük uyumluluk
+  };
+}
+  
   const existingDates = new Set(ledger.map(r => r.date));
 
   // Simülasyon başlangıcı: son ledger kaydı (veya bugünden 7 gün önce)
@@ -577,6 +592,10 @@ window.computeAllSoils = async (force = false) => {
   if (!force && window.SOIL_CACHE.data && (now - window.SOIL_CACHE.lastUpdated < 300000)) {
     return window.SOIL_CACHE.data;
   }
+
+  // Tarlalar dönülürken her birinin hava geçmişini önceden parallel olarak tetikleyelim
+  await Promise.all(DB.fields.map(f => window.fetchWXHistory(f)));
+  
   const soilData = await Promise.all(DB.fields.map(async f => {
     invSoil(f.id);
     const s = await calcSoil(f);
