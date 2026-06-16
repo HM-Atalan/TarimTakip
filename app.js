@@ -508,6 +508,13 @@ if (!wxAll || wxAll.length === 0) {
     const userLedger = ledger ? ledger.find(l => l.date === day.date) : null;
     const irr = userLedger ? (Number(userLedger.irrigation) || 0) : 0;
 
+    // 🌍 GERÇEK GLOBAL KC ÇÖZÜMÜ: 
+    // Kodun içine hiçbir ürün adı gömmüyoruz. app.js içindeki mevcut fenoloji motorunu 
+    // (calcPheno) kullanarak, simülasyonun döndüğü O GÜNKÜ gerçek kc değerini hesaplatıyoruz.
+    // Eğer fenoloji motorundan dinamik bir kc dönmezse, field nesnesindeki varsayılanı, o da yoksa FAO standardı olan 0.70'i baz alıyoruz.
+    const currentPheno = window.calcPheno ? window.calcPheno(field, day.date) : null;
+    const kc = (currentPheno && currentPheno.kc !== undefined) ? currentPheno.kc : (field.kc || 0.70);
+
     // 2. Yüzey Katmanı (0-10cm) Net Su Girişi (Açığı azaltıyoruz)
     // Su girdikçe potansiyel su açığı (pot_Dr_s) sıfırın altına doğru düşer
     let pot_Dr_s = prev.Dr_s - rain - irr;
