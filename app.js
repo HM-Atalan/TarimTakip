@@ -113,7 +113,7 @@ window.fetchWXHistory = async (field) => {
     const ed = endDate.toISOString().slice(0,10);
     const sd = startDate.toISOString().slice(0,10);
     
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${field.lat}&longitude=${field.lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,et0_fao_evapotranspiration,shortwave_radiation_sum&start_date=${sd}&end_date=${ed}&timezone=Europe%2FIstanbul&cell_selection=land`;
+    const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${field.lat}&longitude=${field.lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,et0_fao_evapotranspiration,shortwave_radiation_sum&start_date=${sd}&end_date=${ed}&timezone=Europe%2FIstanbul&cell_selection=land`;
     const r = await fetch(url);
     if(!r.ok) throw new Error('HTTP '+r.status);
     const d = await r.json();
