@@ -417,26 +417,35 @@ window.calcSoilRZWB = async (field, force=false) => {
 
   let initDr_s, initDr_d, initDate, satCalibrated = false;
 
-  if(agroMid > 0.01 && satDate && (Date.now()-satDate) < 43200000) { // 12 saatte taze
-    // Uydu verisiyle kilitle: θ (volumetric) → mm → Dr = FC - mm
-    const sat_moist_s = Math.min(fcs, agroMid  * fcs * 1.15);
-    const sat_moist_d = Math.min(fcd, (agroDeep||agroMid*0.88) * fcd);
-    initDr_s = Math.max(0, fcs - sat_moist_s);
-    initDr_d = Math.max(0, fcd - sat_moist_d);
-    // Geriye doğru başlangıç tarihi: uydu verisinin ait olduğu gün (yaklaşık bugün)
-    initDate  = today;
+  // 🌍 GLOBAL ADIM-1: Ledger (geçmiş kayıtlar) varsa, kronolojik sıraya sokup en eski tarihe gidiyoruz.
+  if (ledger && ledger.length > 0) {
+    // Kayıtları eskiden yeniye doğru (kronolojik) sıralıyoruz
+    ledger.sort((a, b) => a.date.localeCompare(b.date));
+    
+    // Simülasyonun miladını, sisteme girilmiş en eski kaydın tarihi yapıyoruz (Örn: 1 ay önceki ilk sulama)
+    initDate = ledger[0].date; 
+    
+    // İlk günün su açığı stoklarını, tarlanın fiziksel sınırlarına (taw_s/taw_d) kırparak güvenle alıyoruz
+    initDr_s = Math.max(0, Math.min(taw_s, ledger[0].Dr_s ?? (taw_s * 0.45)));
+    initDr_d = Math.max(0, Math.min(taw_d, ledger[0].Dr_d ?? (taw_d * 0.40)));
+    
+    console.log(`📖 RZWB Küresel Başlangıç (En Eski Ledger: ${initDate}) -> Başlangıç Açığı: Dr_s=${initDr_s.toFixed(1)}, Dr_d=${initDr_d.toFixed(1)}`);
+
+  // Eğer ledger'da kayıt yok ama taze uydu verisi varsa (B Planı)
+  } else if (agroMid > 0.01 && satDate && (Date.now() - satDate) < 43200000) { 
+    const sat_moist_s = Math.min(fcs, agroMid * fcs * 1.15);
+    const sat_moist_d = Math.min(fcd, (agroDeep || agroMid * 0.88) * fcd);
+    initDr_s = Math.max(0, Math.min(taw_s, fcs - sat_moist_s));
+    initDr_d = Math.max(0, Math.min(taw_d, fcd - sat_moist_d));
+    initDate = today;
     satCalibrated = true;
-    console.log(`🛰️ RZWB uydu kalibrasyonu: Dr_s=${initDr_s.toFixed(1)} Dr_d=${initDr_d.toFixed(1)}`);
-  } else if(lastRec) {
-    initDr_s = lastRec.Dr_s;
-    initDr_d = lastRec.Dr_d;
-    initDate  = lastRec.date;
-    console.log(`📖 RZWB ledger'dan devam: ${initDate} Dr_s=${initDr_s} Dr_d=${initDr_d}`);
+    console.log(`🛰️ RZWB uydu kalibrasyonu ile başlangıç: Dr_s=${initDr_s.toFixed(1)} Dr_d=${initDr_d.toFixed(1)}`);
+
+  // Hiçbir geçmiş veri veya uydu yoksa (C Planı - İlk Kurulum)
   } else {
-    // Hiç veri yoksa orta nem varsay (%55 FC → Dr = %45 FC)
     initDr_s = taw_s * 0.45;
     initDr_d = taw_d * 0.40;
-    initDate  = null;
+    initDate = null;
     console.log(`⚠️ RZWB ilk başlangıç (varsayılan): Dr_s=${initDr_s.toFixed(1)} Dr_d=${initDr_d.toFixed(1)}`);
   }
 
@@ -486,101 +495,94 @@ if (!wxAll || wxAll.length === 0) {
       irrMap[e.date] = (irrMap[e.date]||0) + mm;
     });
 
-  // ── 5. Günlük FAO-56 adımlarını çalıştır ──────────────────────
-  let prev = { Dr_s: initDr_s, Dr_d: initDr_d };
+  // ─── 🌍 KÜRESEL HİDROLOJİK MOTOR VE TAŞMA MANTIKLI YENİ BLOK ───
+  let prev = { Dr_s: initDr_s, Dr_d: initDr_d, date: initDate || today };
   const newRecords = [];
 
-  simDays.forEach(dayWx => {
-    const irrMm = irrMap[dayWx.date] || 0;
-    const step  = window.rzwbStep(prev, dayWx, irrMm, params, field);
-    const rec   = { date: dayWx.date, ...step };
-    newRecords.push(rec);
-    prev = { Dr_s: step.Dr_s, Dr_d: step.Dr_d };
-  });
+  for (const day of simDays) {
+    // 1. O güne ait hava durumunu alıyoruz
+    const ET0 = day.et0 || 0;
+    const rain = day.rain || 0;
+    
+    // Kullanıcının o gün sisteme kaydettiği sulama miktarını ledger'dan tarih eşleşmesiyle çekiyoruz
+    const userLedger = ledger ? ledger.find(l => l.date === day.date) : null;
+    const irr = userLedger ? (Number(userLedger.irrigation) || 0) : 0;
 
-  // ── 6. Ledger'ı güncelle ve kaydet ────────────────────────────
-  if(newRecords.length) {
-    // SatCalibrated modunda bugünkü kaydı güncelle (eski yerini bul/sil)
-    if(satCalibrated) {
-      ledger = ledger.filter(r => r.date !== today);
+    // 2. Yüzey Katmanı (0-10cm) Net Su Girişi (Açığı azaltıyoruz)
+    // Su girdikçe potansiyel su açığı (pot_Dr_s) sıfırın altına doğru düşer
+    let pot_Dr_s = prev.Dr_s - rain - irr;
+    let deep_percolation = 0;
+
+    if (pot_Dr_s < 0) {
+      // 🌊 TAŞMA MANTIĞI (PERCOLATION): Yüzey katmanı kapasitesi (taw_s) tamamen doydu! 
+      // Sığmayan fazla su (stok), alt derin katmana süzülme olarak aktarılıyor.
+      deep_percolation = Math.abs(pot_Dr_s);
+      prev.Dr_s = 0; // Yüzeyde açık kalmadı, suya doydu.
+    } else {
+      // Eğer su yetmediyse kalan açık tarlanın fiziksel kapasitesini (taw_s) aşamaz
+      prev.Dr_s = Math.min(taw_s, pot_Dr_s);
     }
-    ledger = [...ledger, ...newRecords].sort((a,b)=>a.date.localeCompare(b.date));
 
-    // 90 günden eskiyi yine temizle
-    ledger = ledger.filter(r => r.date >= cutoff90str);
+    // 3. Derin Katman (10-30cm) Hesaplaması
+    // Üst katmandan süzülüp gelen devasa su (deep_percolation) buradaki açığı kapatır / stoklanır
+    let pot_Dr_d = prev.Dr_d - deep_percolation;
 
-    // localStorage'a hemen yaz (hızlı)
-    try { localStorage.setItem(fbKey, JSON.stringify(ledger)); } catch(e) {}
-
-    // Firebase'e async yaz (yavaş — UI'yi bloklama)
-    if(uid && window.FB_MODE) {
-      window.fbSaveRZWB(uid, field.id, ledger)
-        .then(() => {
-          window.RZWB_CACHE[field.id] = { records: ledger, loadedAt: Date.now() };
-        })
-        .catch(e => console.warn('RZWB async yazma:', e.message));
+    if (pot_Dr_d < 0) {
+      // Eğer derin katman da tamamen doyduysa, geçen ayki sulamandan kalan aşırı fazlalık 
+      // taban suyuna karışır veya drenajla (Runoff) tarladan uzaklaşır.
+      prev.Dr_d = 0; 
+    } else {
+      prev.Dr_d = Math.min(taw_d, pot_Dr_d);
     }
-  }
 
-  // ── 7. Bugünkü değerleri al ───────────────────────────────────
-  const todayRec = ledger.find(r => r.date === today)
-    || (prev.Dr_s !== undefined ? {
-        Dr_s: prev.Dr_s, Dr_d: prev.Dr_d,
-        pct_s: Math.round((1-prev.Dr_s/taw_s)*100),
-        pct_d: Math.round((1-prev.Dr_d/taw_d)*100),
-        moist_s: Math.round(fcs - prev.Dr_s),
-        moist_d: Math.round(fcd - prev.Dr_d),
-        kc:0.7, Ks_s:1, Ks_d:1, ETc_s:0, ETc_d:0,
-        et0:0, rain:0, irr:0, perc:0, netIn:0, date:today
-      } : null);
+    // 4. Bitki Tüketimi (Geçmiş hava verilerine göre gün gün buharlaşma / ETc düşüşü)
+    const Ks_s = prev.Dr_s < raw_s ? 1 : Math.max(0, (taw_s - prev.Dr_s) / ((taw_s - raw_s) || 1));
+    const ETc_s = ET0 * kc * 0.6 * Ks_s;
+    prev.Dr_s = Math.min(taw_s, prev.Dr_s + ETc_s);
 
-  if(!todayRec) {
-    // Hiç simüle edemedik — varsayılan orta nem döndür
-    const fallback = {
-      surface:{ pct:50, moist:Math.round(fcs*0.5), fc:fcs, Dr:taw_s*0.5, taw:taw_s, raw:params.raw_s },
-      deep:   { pct:45, moist:Math.round(fcd*0.45),fc:fcd, Dr:taw_d*0.55, taw:taw_d, raw:params.raw_d },
-      et:agrd(field.crop).et, log:[], params, satCalibrated:false,
-      // geriye dönük uyumluluk
-      pct:50, moist:Math.round(fcs*0.5), fc:fcs,
-    };
-    SC[cacheKey] = fallback;
-    return fallback;
-  }
+    const Ks_d = prev.Dr_d < raw_d ? 1 : Math.max(0, (taw_d - prev.Dr_d) / ((taw_d - raw_d) || 1));
+    const ETc_d = ET0 * kc * 0.4 * Ks_d;
+    prev.Dr_d = Math.min(taw_d, prev.Dr_d + ETc_d);
 
-  // ── 8. Çıktı nesnesi (renderSoil ve buildFieldContext uyumlu) ─
+    // Günlük durum kaydı (Döngü log listesi)
+    newRecords.push({
+      date: day.date,
+      Dr_s: Math.round(prev.Dr_s * 10) / 10,
+      Dr_d: Math.round(prev.Dr_d * 10) / 10,
+      pct_s: Math.round((1 - prev.Dr_s / (taw_s || 1)) * 100),
+      pct_d: Math.round((1 - prev.Dr_d / (taw_d || 1)) * 100),
+      et0: ET0,
+      rain,
+      irrigation: irr
+    });
+  } // <--- 'for const day of simDays' döngüsünün küresel kapanışı
+
+  // ─── ADIM 3: NİHAİ YÜZDE HESAPLAMALARI VE RETURN NESNESİ ───
+  // Yüzdeleri 0 ile 100 arasına kesin olarak hapsediyoruz (Matematiksel taşma koruması)
+  const final_pct_s = Math.max(0, Math.min(100, Math.round((1 - prev.Dr_s / (taw_s || 1)) * 100)));
+  const final_pct_d = Math.max(0, Math.min(100, Math.round((1 - prev.Dr_d / (taw_d || 1)) * 100)));
+
   const result = {
     surface: {
-      pct:   Math.max(0, Math.min(100, todayRec.pct_s)),
-      moist: Math.max(0, todayRec.moist_s),
-      fc:    fcs,
-      Dr:    todayRec.Dr_s,
-      taw:   taw_s,
-      raw:   params.raw_s,
-      Ks:    todayRec.Ks_s,
+      pct: final_pct_s,
+      moist: Math.round(fcs * (final_pct_s / 100) * 100) / 100,
+      fc: fcs, Dr: prev.Dr_s, taw: taw_s, raw: params.raw_s, Ks: 1
     },
     deep: {
-      pct:   Math.max(0, Math.min(100, todayRec.pct_d)),
-      moist: Math.max(0, todayRec.moist_d),
-      fc:    fcd,
-      Dr:    todayRec.Dr_d,
-      taw:   taw_d,
-      raw:   params.raw_d,
-      Ks:    todayRec.Ks_d,
+      pct: final_pct_d,
+      moist: Math.round(fcd * (final_pct_d / 100) * 100) / 100,
+      fc: fcd, Dr: prev.Dr_d, taw: taw_d, raw: params.raw_d, Ks: 1
     },
-    et:      agrd(field.crop).et,
-    kc:      todayRec.kc,
-    Ks:      Math.min(todayRec.Ks_s, todayRec.Ks_d),
-    ETc:     +(todayRec.ETc_s + todayRec.ETc_d).toFixed(1),
-    log:     ledger.slice(-7),   // son 7 gün (tablo için)
+    et: window.agrd(field.crop).et,
+    kc,
+    Ks: 1,
+    ETc: 0,
+    log: newRecords,
     params,
     satCalibrated,
-    // geriye dönük uyumluluk (eski renderSoil/buildAutoRecs okur)
-    pct:   Math.max(0, Math.min(100, todayRec.pct_s)),
-    moist: Math.max(0, todayRec.moist_s),
-    fc:    fcs,
+    pct: Math.round((final_pct_s + final_pct_d) / 2) // Genel ortalama nem oranı
   };
 
-  SC[cacheKey] = result;
   return result;
 };
 
