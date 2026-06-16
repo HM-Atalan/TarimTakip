@@ -419,7 +419,12 @@ window.calcSoilRZWB = async (field, force = false) => {
     console.log(`⚠️ RZWB Varsayılan Başlangıç: Dr_s=${initDr_s.toFixed(1)} Dr_d=${initDr_d.toFixed(1)}`);
   }
 
-  const simStart = initDate || window.g7d();
+  // 🟢 KÜRESEL DÜZELTME: Orijinal fonksiyona (g7df) yönlendiriyoruz, eğer o da yoksa JS ile dinamik hesaplıyoruz.
+  const simStart = initDate || (window.g7df ? window.g7df() : (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return d.toISOString().split('T')[0];
+  })());
   const wxAll = window.getBestWXDays ? window.getBestWXDays(field) : [];
 
   if (!wxAll || wxAll.length === 0) {
