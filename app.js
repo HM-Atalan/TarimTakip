@@ -44,7 +44,14 @@ window.WX_HISTORY = {};
 
 const qs = s => document.querySelector(s);
 const gid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
-window.tstr = () => new Date().toISOString().slice(0,10);
+window.dateKey = (date = new Date()) => {
+  const d = new Date(date);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+window.tstr = () => window.dateKey();
 const fd = s => s ? new Date(s+'T12:00:00').toLocaleDateString('tr-TR',{day:'numeric',month:'short',year:'numeric'}) : '—';
 window.toast = (msg, err=false) => {
   const t = qs('#toast'); if(!t) return;
@@ -96,8 +103,8 @@ window.fetchWXHistory = async (field) => {
   try {
     const endDate   = new Date(); endDate.setDate(endDate.getDate() - 1);
     const startDate = new Date(); startDate.setDate(startDate.getDate() - 90);
-    const ed = endDate.toISOString().slice(0,10);
-    const sd = startDate.toISOString().slice(0,10);
+    const ed = window.dateKey(endDate);
+    const sd = window.dateKey(startDate);
     const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${field.lat}&longitude=${field.lon}` +
       `&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,et0_fao_evapotranspiration,shortwave_radiation_sum` +
       `&start_date=${sd}&end_date=${ed}&timezone=Europe%2FIstanbul`;
@@ -226,7 +233,7 @@ window.normalizeRZWBRecord = (rec, params) => {
 window.isIncompleteRZWBRecord = (rec) => {
   if(!rec) return true;
   return ['Pe', 'ETc_s', 'ETc_d', 'Ks_s', 'Ks_d'].some(k => rec[k] === undefined || rec[k] === null)
-    || ((rec.ETc_s ?? 0) === 0 && (rec.ETc_d ?? 0) === 0 && (rec.et0 ?? 0) === 0);
+    || ((rec.ETc_s ?? 0) === 0 && (rec.ETc_d ?? 0) === 0);
 };
 
 window.parseIrrMm = (evt, fcs) => {
@@ -357,7 +364,7 @@ window.calcSoilRZWB = async (field, force = false) => {
   }
 
   const cutoff90 = new Date(); cutoff90.setDate(cutoff90.getDate() - 90);
-  const cutoff90str = cutoff90.toISOString().slice(0,10);
+  const cutoff90str = window.dateKey(cutoff90);
   ledger = ledger.filter(r => r.date >= cutoff90str && r.date <= today);
 
   const irrMap = {};
@@ -401,7 +408,7 @@ window.calcSoilRZWB = async (field, force = false) => {
     initDr_d = lastRec.Dr_d;
     const nextDay = new Date(lastRec.date + 'T12:00:00');
     nextDay.setDate(nextDay.getDate() + 1);
-    simStart = nextDay.toISOString().slice(0, 10);
+    simStart = window.dateKey(nextDay);
     console.log(`📖 Ledger devam: ${lastRec.date} → ${simStart} Dr_s=${initDr_s} Dr_d=${initDr_d}`);
   }
 
@@ -442,27 +449,36 @@ window.calcSoilRZWB = async (field, force = false) => {
 
   let repaired = false;
   const wxByDate = Object.fromEntries(wxAll.map(d => [d.date, d]));
-  ledger = ledger
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .map((rec, idx, arr) => {
+  ledger = ledger.sort((a, b) => a.date.localeCompare(b.date));
+  const repairFrom = ledger.findIndex(rec => wxByDate[rec.date] && window.isIncompleteRZWBRecord(rec));
+  if(repairFrom >= 0) {
+    const repairedLedger = ledger.slice(0, repairFrom);
+    let repairPrev = repairFrom > 0
+      ? { Dr_s: ledger[repairFrom - 1].Dr_s, Dr_d: ledger[repairFrom - 1].Dr_d }
+      : { Dr_s: ledger[repairFrom].Dr_s, Dr_d: ledger[repairFrom].Dr_d };
+
+    for(let i = repairFrom; i < ledger.length; i++) {
+      const rec = ledger[i];
       const dayWx = wxByDate[rec.date];
-      const prevRec = arr[idx - 1];
-      if(!dayWx || !window.isIncompleteRZWBRecord(rec)) return rec;
+      if(!dayWx) {
+        repairedLedger.push(rec);
+        repairPrev = { Dr_s: rec.Dr_s, Dr_d: rec.Dr_d };
+        continue;
+      }
       const step = window.rzwbStep(
-        { Dr_s: prevRec?.Dr_s ?? rec.Dr_s, Dr_d: prevRec?.Dr_d ?? rec.Dr_d },
+        repairPrev,
         dayWx,
         irrMap[rec.date] || 0,
         params,
         field
       );
-      repaired = true;
-      return prevRec ? { ...rec, ...step } : {
-        ...rec,
-        ...step,
-        Dr_s: rec.Dr_s,
-        Dr_d: rec.Dr_d,
-      };
-    });
+      repairedLedger.push({ ...rec, ...step });
+      repairPrev = { Dr_s: step.Dr_s, Dr_d: step.Dr_d };
+    }
+
+    ledger = repairedLedger;
+    repaired = true;
+  }
 
   if(repaired) {
     try { localStorage.setItem(fbKey, JSON.stringify(ledger)); } catch(e) {}
@@ -773,7 +789,7 @@ window.simWX = (lat, lon) => {
     const base=16+Math.sin(d.getMonth()/2)*13+(lat>38?-3:3);
     const tmax=Math.round(base+sd%10-2);
     const rain=sd<18?+(sd*1.4).toFixed(1):sd<28?+((sd-18)*0.3).toFixed(1):0;
-    days.push({date:d.toISOString().slice(0,10),tmax,tmin:tmax-Math.round(5+sd%7),rain,wind:Math.round(8+sd%22),code:rain>5?63:rain>0?80:sd>60?2:0,et0:+((tmax-5)*0.15).toFixed(1)});
+    days.push({date:window.dateKey(d),tmax,tmin:tmax-Math.round(5+sd%7),rain,wind:Math.round(8+sd%22),code:rain>5?63:rain>0?80:sd>60?2:0,et0:+((tmax-5)*0.15).toFixed(1)});
   }
   return days;
 }
