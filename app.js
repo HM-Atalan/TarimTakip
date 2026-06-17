@@ -344,7 +344,6 @@ window.calcSoilRZWB = async (field, force = false) => {
       const sat_moist_d = Math.min(fcd, (agroDeep || agroMid * 0.88) * fcd);
       initDr_s = Math.max(0, fcs - sat_moist_s);
       initDr_d = Math.max(0, fcd - sat_moist_d);
-      // Sınırla – TAW’ı aşmasın
       initDr_s = Math.min(initDr_s, taw_s);
       initDr_d = Math.min(initDr_d, taw_d);
       satCalibrated = true;
@@ -403,16 +402,14 @@ window.calcSoilRZWB = async (field, force = false) => {
 
   let todayRec = ledger.find(r => r.date === today);
 
-  // Eski ledger kayıtlarında pct_s/pct_d yoksa Dr/TAW üzerinden hesapla
+  // ★ DÜZELTME: todayRec varsa bile pct_s/pct_d'yi yeniden hesapla (eski hatalı değerleri düzelt)
   if(todayRec) {
-    if(todayRec.pct_s === undefined) {
-      const taw_s = params.taw_s;
-      const taw_d = params.taw_d;
-      todayRec.pct_s = Math.round((1 - todayRec.Dr_s / Math.max(1, taw_s)) * 100);
-      todayRec.pct_d = Math.round((1 - todayRec.Dr_d / Math.max(1, taw_d)) * 100);
-      todayRec.moist_s = Math.max(0, Math.round(fcs - todayRec.Dr_s));
-      todayRec.moist_d = Math.max(0, Math.round(fcd - todayRec.Dr_d));
-    }
+    const taw_s = params.taw_s;
+    const taw_d = params.taw_d;
+    todayRec.pct_s = Math.round((1 - todayRec.Dr_s / Math.max(1, taw_s)) * 100);
+    todayRec.pct_d = Math.round((1 - todayRec.Dr_d / Math.max(1, taw_d)) * 100);
+    todayRec.moist_s = Math.max(0, Math.round(fcs - todayRec.Dr_s));
+    todayRec.moist_d = Math.max(0, Math.round(fcd - todayRec.Dr_d));
   }
 
   if(!todayRec && prev.Dr_s !== undefined) {
@@ -474,7 +471,7 @@ window.calcSoilRZWB = async (field, force = false) => {
     params,
     satCalibrated,
     isBootstrap,
-    pct:   pct_s_out,   // geriye dönük uyumluluk
+    pct:   pct_s_out,
     moist: moist_s_out,
     fc:    fcs,
   };
