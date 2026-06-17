@@ -893,6 +893,8 @@ window.renderSat = (field, R) => {
 
   const lnkel=qs('#sat-links');
   if(lnkel){
+    const lat = Number(field.lat);
+    const lon = Number(field.lon);
     const bbox=`${(lon-0.02).toFixed(4)},${(lat-0.02).toFixed(4)},${(lon+0.02).toFixed(4)},${(lat+0.02).toFixed(4)}`;
     lnkel.innerHTML=[
       [`https://apps.sentinel-hub.com/sentinel-playground/?lat=${lat}&lng=${lon}&zoom=14`,'🛰️ Sentinel Playground (Gerçek Renkli / NDVI)'],
