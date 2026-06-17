@@ -2,10 +2,9 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getAuth, onAuthStateChanged, signInWithPopup, signInWithEmailAndPassword,
          createUserWithEmailAndPassword, GoogleAuthProvider, signOut }
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-// import { getFirestore, doc, collection, getDocs, setDoc, deleteDoc, onSnapshot, query, orderBy }
-//  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-import { getFirestore, doc, collection, getDocs, setDoc, deleteDoc, onSnapshot, query, orderBy, initializeFirestore }
+import { getFirestore, doc, collection, getDocs, setDoc, deleteDoc, onSnapshot, query, orderBy }
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
 import { getRemoteConfig, fetchAndActivate, getValue } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-remote-config.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
 
@@ -31,11 +30,7 @@ function initFirebase(){
   try{
     app = initializeApp(FB_CONFIG);
     auth = getAuth(app);
-    //db = getFirestore(app);
-    // Standart getFirestore yerine long-polling ayarlı initializeFirestore kullanıyoruz:
-         db = initializeFirestore(app, {
-           experimentalAutoDetectLongPolling: true
-         });
+    db = getFirestore(app);
     remoteConfig = getRemoteConfig(app);
     remoteConfig.settings = { minimumFetchIntervalMillis: 3600000 };
     window.FB_AUTH = auth;
