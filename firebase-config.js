@@ -7,6 +7,19 @@ import { getFirestore, doc, collection, getDocs, setDoc, deleteDoc, onSnapshot, 
 import { getRemoteConfig, fetchAndActivate, getValue } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-remote-config.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
 
+// Gemini firebase-firestore eklemesi
+import { initializeFirestore, initializeApp } from "firebase/firestore";
+
+const app = initializeApp(firebaseConfig);
+
+// Firestore'u long-polling (uzun anketleme) kullanmaya zorlayın
+const db = initializeFirestore(app, {
+  experimentalAutoDetectLongPolling: true, // Ağ sorunlarında otomatik geçiş yapar
+  // VEYA direkt olarak:
+  // forceLongPolling: true 
+});
+// Gemini firebase-firestore eklemesi
+
 // ── FIREBASE CONFIG ──────────────────────────────
 const FB_CONFIG = {
   apiKey: "AIzaSyADxLyBiXEf93EsXVFlyCar7rxupJU0pNM",
