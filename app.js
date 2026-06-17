@@ -194,6 +194,33 @@ window.getRZWBParams = (field) => {
   return { fcs, wps, fcd, wpd, taw_s, taw_d, raw_s, raw_d, mad };
 };
 
+window.calcMoistureState = (fc, taw, Dr) => {
+  const fcSafe = Math.max(1, Number(fc) || 1);
+  const tawSafe = Math.max(1, Number(taw) || 1);
+  const drSafe = Math.max(0, Math.min(tawSafe, Number(Dr) || 0));
+  const moist = Math.max(0, Math.min(fcSafe, fcSafe - drSafe));
+  return {
+    Dr: +drSafe.toFixed(1),
+    moist: Math.round(moist),
+    pct: Math.max(0, Math.min(100, Math.round((moist / fcSafe) * 100))),
+  };
+};
+
+window.normalizeRZWBRecord = (rec, params) => {
+  if(!rec) return rec;
+  const surf = window.calcMoistureState(params.fcs, params.taw_s, rec.Dr_s);
+  const deep = window.calcMoistureState(params.fcd, params.taw_d, rec.Dr_d);
+  return {
+    ...rec,
+    Dr_s: surf.Dr,
+    Dr_d: deep.Dr,
+    pct_s: surf.pct,
+    pct_d: deep.pct,
+    moist_s: surf.moist,
+    moist_d: deep.moist,
+  };
+};
+
 window.parseIrrMm = (evt, fcs) => {
   const qty = parseFloat(evt.qty)||0, u = evt.unit||'';
   let mm = 25;
@@ -273,20 +300,19 @@ window.rzwbStep = (prev, dayWx, irrMm, params, field) => {
   const Dr_s = Math.max(0, Math.min(taw_s, rawDr_s));
   const Dr_d = Math.max(0, Math.min(taw_d, prev.Dr_d - perc + ETc_d));
 
-  const pct_s   = Math.round((1 - Dr_s / Math.max(1, taw_s)) * 100);
-  const pct_d   = Math.round((1 - Dr_d / Math.max(1, taw_d)) * 100);
-  const moist_s = Math.round(Math.max(0, fcs - Dr_s));
-  const moist_d = Math.round(Math.max(0, fcd - Dr_d));
+  const surfState = window.calcMoistureState(fcs, taw_s, Dr_s);
+  const deepState = window.calcMoistureState(fcd, taw_d, Dr_d);
 
   return {
-    Dr_s: +Dr_s.toFixed(1), Dr_d: +Dr_d.toFixed(1),
+    Dr_s: surfState.Dr, Dr_d: deepState.Dr,
     kc:   +kc.toFixed(3),
     Ks_s: +ks_s.toFixed(3), Ks_d: +ks_d.toFixed(3),
     ETc_s: +ETc_s.toFixed(1), ETc_d: +ETc_d.toFixed(1),
     et0: +et0.toFixed(1), rain: +rain.toFixed(1),
     Pe, irr: +irrMm.toFixed(1),
     perc: +perc.toFixed(1), netIn: +(Pe + irrMm).toFixed(1),
-    pct_s, pct_d, moist_s, moist_d,
+    pct_s: surfState.pct, pct_d: deepState.pct,
+    moist_s: surfState.moist, moist_d: deepState.moist,
   };
 };
 
@@ -406,27 +432,23 @@ window.calcSoilRZWB = async (field, force = false) => {
     }
   }
 
+  ledger = ledger.map(r => window.normalizeRZWBRecord(r, params));
+
   // ── Bugünün kaydını al, yoksa oluştur ──
   let todayRec = ledger.find(r => r.date === today);
 
   // ★ DÜZELTME 1: todayRec varsa pct_s/pct_d'yi Dr ve TAW üzerinden yeniden hesapla
   if(todayRec) {
-    const taw_s = params.taw_s;
-    const taw_d = params.taw_d;
-    todayRec.pct_s = Math.round((1 - todayRec.Dr_s / Math.max(1, taw_s)) * 100);
-    todayRec.pct_d = Math.round((1 - todayRec.Dr_d / Math.max(1, taw_d)) * 100);
-    todayRec.moist_s = Math.max(0, Math.round(fcs - todayRec.Dr_s));
-    todayRec.moist_d = Math.max(0, Math.round(fcd - todayRec.Dr_d));
+    todayRec = window.normalizeRZWBRecord(todayRec, params);
   }
 
   if(!todayRec && prev.Dr_s !== undefined) {
-    const pct_s   = Math.round((1 - prev.Dr_s / Math.max(1, taw_s)) * 100);
-    const pct_d   = Math.round((1 - prev.Dr_d / Math.max(1, taw_d)) * 100);
-    const moist_s = Math.max(0, Math.round(fcs - prev.Dr_s));
-    const moist_d = Math.max(0, Math.round(fcd - prev.Dr_d));
+    const surfState = window.calcMoistureState(fcs, taw_s, prev.Dr_s);
+    const deepState = window.calcMoistureState(fcd, taw_d, prev.Dr_d);
     todayRec = {
-      Dr_s: prev.Dr_s, Dr_d: prev.Dr_d,
-      pct_s, pct_d, moist_s, moist_d,
+      Dr_s: surfState.Dr, Dr_d: deepState.Dr,
+      pct_s: surfState.pct, pct_d: deepState.pct,
+      moist_s: surfState.moist, moist_d: deepState.moist,
       kc: 0.7, Ks_s: 1, Ks_d: 1, ETc_s: 0, ETc_d: 0,
       et0: 0, rain: 0, irr: 0, perc: 0, netIn: 0, date: today,
     };
@@ -435,12 +457,12 @@ window.calcSoilRZWB = async (field, force = false) => {
   if(!todayRec) {
     const mid_s   = Math.round(taw_s * 0.45);
     const mid_d   = Math.round(taw_d * 0.50);
-    const pct_s   = Math.round((1 - mid_s / Math.max(1, taw_s)) * 100);
-    const pct_d   = Math.round((1 - mid_d / Math.max(1, taw_d)) * 100);
+    const surfState = window.calcMoistureState(fcs, taw_s, mid_s);
+    const deepState = window.calcMoistureState(fcd, taw_d, mid_d);
     todayRec = {
-      Dr_s: mid_s, Dr_d: mid_d,
-      pct_s, pct_d,
-      moist_s: Math.max(0, fcs - mid_s), moist_d: Math.max(0, fcd - mid_d),
+      Dr_s: surfState.Dr, Dr_d: deepState.Dr,
+      pct_s: surfState.pct, pct_d: deepState.pct,
+      moist_s: surfState.moist, moist_d: deepState.moist,
       kc: 0.7, Ks_s: 1, Ks_d: 1, ETc_s: 0, ETc_d: 0,
       et0: 0, rain: 0, irr: 0, perc: 0, netIn: 0, date: today,
     };
@@ -545,7 +567,7 @@ window.calcIrrigationNeed = (field, s) => {
   const { fcs, taw_s, raw_s, mad } = p;
   const Dr_s       = s.surface.Dr ?? Math.max(0, fcs - s.surface.moist);
   const Ks         = s.surface.Ks ?? 1;
-  const triggerPct = Math.round((1 - mad) * 100);
+  const triggerPct = Math.max(0, Math.min(100, Math.round(((fcs - raw_s) / Math.max(1, fcs)) * 100)));
   const targetMoist = fcs * 0.90;
   const deficitMm   = Math.round(Math.max(0, targetMoist - s.surface.moist));
   const wx      = WXC[field.id]?.days || simWX(field.lat, field.lon);
@@ -566,7 +588,7 @@ window.calcIrrigationNeed = (field, s) => {
   const stressLabel = Ks < 0.5 ? 'Ağır stres' : Ks < 0.8 ? 'Orta stres'
     : Ks < 1 ? 'Hafif stres' : 'Stres yok';
   const belowRaw   = Dr_s > raw_s;
-  const critical   = s.surface.pct < 20;
+  const critical   = s.surface.moist <= criticalMoist;
   const stressed   = Ks < 0.8;
   let urgency, label;
   if (critical)                        { urgency = 'kritik'; label = 'ACİL — kök bölgesi kritik, hemen sulayın'; }
