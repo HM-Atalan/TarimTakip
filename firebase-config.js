@@ -2,23 +2,12 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getAuth, onAuthStateChanged, signInWithPopup, signInWithEmailAndPassword,
          createUserWithEmailAndPassword, GoogleAuthProvider, signOut }
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-import { getFirestore, doc, collection, getDocs, setDoc, deleteDoc, onSnapshot, query, orderBy }
+// import { getFirestore, doc, collection, getDocs, setDoc, deleteDoc, onSnapshot, query, orderBy }
+//  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { getFirestore, doc, collection, getDocs, setDoc, deleteDoc, onSnapshot, query, orderBy, initializeFirestore }
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 import { getRemoteConfig, fetchAndActivate, getValue } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-remote-config.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
-
-// Gemini firebase-firestore eklemesi
-import { initializeFirestore, initializeApp } from "firebase/firestore";
-
-const app = initializeApp(firebaseConfig);
-
-// Firestore'u long-polling (uzun anketleme) kullanmaya zorlayın
-const db = initializeFirestore(app, {
-  experimentalAutoDetectLongPolling: true, // Ağ sorunlarında otomatik geçiş yapar
-  // VEYA direkt olarak:
-  // forceLongPolling: true 
-});
-// Gemini firebase-firestore eklemesi
 
 // ── FIREBASE CONFIG ──────────────────────────────
 const FB_CONFIG = {
@@ -42,7 +31,11 @@ function initFirebase(){
   try{
     app = initializeApp(FB_CONFIG);
     auth = getAuth(app);
-    db = getFirestore(app);
+    //db = getFirestore(app);
+    // Standart getFirestore yerine long-polling ayarlı initializeFirestore kullanıyoruz:
+         db = initializeFirestore(app, {
+           experimentalAutoDetectLongPolling: true
+         });
     remoteConfig = getRemoteConfig(app);
     remoteConfig.settings = { minimumFetchIntervalMillis: 3600000 };
     window.FB_AUTH = auth;
