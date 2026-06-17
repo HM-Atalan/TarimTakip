@@ -284,10 +284,10 @@ window.rzwbStep = (prev, dayWx, irrMm, params, field) => {
   };
 };
 
-// ═══ ANA RZWB FONKSİYONU (düzeltilmiş) ═══
+// ═══ ANA RZWB FONKSİYONU (cache'siz, her çağrıda yeniden hesapla) ═══
 window.calcSoilRZWB = async (field, force = false) => {
-  const cacheKey = field.id + '_' + tstr();
-  if(!force && SC[cacheKey]) return SC[cacheKey];
+  // cache kullanmıyoruz – her seferinde taze hesapla
+  // (force parametresi sadece uyumluluk için duruyor)
 
   const params  = window.getRZWBParams(field);
   const { fcs, fcd, taw_s, taw_d } = params;
@@ -400,9 +400,10 @@ window.calcSoilRZWB = async (field, force = false) => {
     }
   }
 
+  // ── Bugünün kaydını al, yoksa oluştur ──
   let todayRec = ledger.find(r => r.date === today);
 
-  // ★ DÜZELTME: todayRec varsa bile pct_s/pct_d'yi yeniden hesapla (eski hatalı değerleri düzelt)
+  // ★ DÜZELTME 1: todayRec varsa pct_s/pct_d'yi Dr ve TAW üzerinden yeniden hesapla
   if(todayRec) {
     const taw_s = params.taw_s;
     const taw_d = params.taw_d;
@@ -471,12 +472,15 @@ window.calcSoilRZWB = async (field, force = false) => {
     params,
     satCalibrated,
     isBootstrap,
-    pct:   pct_s_out,
+    pct:   pct_s_out,   // geriye dönük uyumluluk
     moist: moist_s_out,
     fc:    fcs,
   };
 
-  SC[cacheKey] = result;
+  // ★ DÜZELTME 2: Cache'e yazmıyoruz – her çağrıda taze hesapla
+  // (İsteğe bağlı olarak kısa süreli cache eklenebilir, ama şimdilik kaldırıldı)
+  // SC[cacheKey] = result;  // bu satır artık yok
+
   return result;
 };
 
