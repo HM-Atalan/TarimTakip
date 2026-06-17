@@ -2,11 +2,7 @@ window.DB = { fields: [], s: { acuKey: '' } };
 window.SOIL_CACHE = { data: null, lastUpdated: 0 };
 window.CUR = null;
 // ═══════════════════════════════════════════════════════════════════
-// TarlaTakip — Ana Script v2.0
-// Yenilikler: Çift Katman Nem Modeli (0-10cm / 10-30cm),
-//   Gelişmiş Raporlama, AI Sohbet Geçmişi, Poligon Harita,
-//   Tarla Ekipman Ayarları, Çok Yıllık Bitki Desteği,
-//   6 Aylık Hava Geçmişi Önbelleği, GDD Tutarlılık Güçlendirme
+// TarlaTakip — Ana Script v2.0 (FAO‑56 RZWB Çift Katman)
 // ═══════════════════════════════════════════════════════════════════
 
 const PEST_DATA = {
@@ -28,12 +24,10 @@ const PEST_DATA = {
 };
 
 const SOIL_FC = {killiTin:105, tinli:85, killi:120, kumlu:48, humuslu:95, kalkerli:68};
-// Derin katman (10-30cm) için FC genellikle yüzeyden %10-15 daha yüksektir
 const SOIL_FC_DEEP = {killiTin:118, tinli:95, killi:135, kumlu:52, humuslu:105, kalkerli:75};
 const EVI = {ekim:'🌱',dikim:'🪴',sulama:'💧',gübre:'🧪',ilaç:'🔬',çapa:'⛏️',hasat:'🌾',budama:'✂️',toprak:'🚜',analiz:'📊',yakıt:'⛽',işçilik:'👷',diğer:'📝'};
 const EVC = {ekim:'#d8f3dc',dikim:'#d8f3dc',sulama:'#d6eaf8',gübre:'#fef3cd',ilaç:'#e8daef',çapa:'#f0ebe0',hasat:'#d8f3dc',budama:'#fde8d8',toprak:'#eee',analiz:'#fadbd8',yakıt:'#fff3cd',işçilik:'#e8f4fd',diğer:'#f0f0f0'};
 
-// ─── DURUM DEĞİŞKENLERİ ───────────────────────────────────────────
 window.DB = {fields:[], s:{acuKey:''}};
 window.CUR = null;
 window.WXC = {};
@@ -41,16 +35,13 @@ window.SATC = {};
 window.SC = {};
 window.lmap = null;
 window.aiHist = [];
-// AI Konuşma Hafızası - tarla bazlı uzun dönem konuşma geçmişi
-window.AI_MEMORY = {}; // {fieldId: [{role, content, date}]}
+window.AI_MEMORY = {};
 window.pendPh = null;
 window.curTab = 'map';
 window.curPhIdx = null;
 window.LOCAL = false;
-// 6 Aylık hava geçmişi önbelleği
-window.WX_HISTORY = {}; // {fieldId: {days: [...], updatedAt: timestamp}}
+window.WX_HISTORY = {};
 
-// ─── YARDIMCI FONKSİYONLAR ───────────────────────────────────────
 const qs = s => document.querySelector(s);
 const gid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
 window.tstr = () => new Date().toISOString().slice(0,10);
@@ -70,7 +61,6 @@ window.togTheme = () => {
   localStorage.setItem('tt_theme', d.hasAttribute('dark') ? 'dark' : 'light');
 }
 
-// ─── FOTOĞRAF SIKIŞTIRMA ──────────────────────────────────────────
 window.compressImg = (file, maxKB=150, q=0.82) => {
   return new Promise(resolve => {
     const r = new FileReader();
@@ -91,44 +81,29 @@ window.compressImg = (file, maxKB=150, q=0.82) => {
   });
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// HAVA GEÇMİŞİ — RZWB LEDGERİN ARKAPLANI
-// ═══════════════════════════════════════════════════════════════════
-// WX_HISTORY artık RZWB bootstrap için 90 günlük ham hava verisi depolar.
-// Geçmiş veri için archive-api, gelecek/anlık için forecast API kullanılır.
-// ═══════════════════════════════════════════════════════════════════
+// ═══ HAVA GEÇMİŞİ ═══
 window.fetchWXHistory = async (field) => {
   const id  = field.id;
   const now = Date.now();
   const CACHE_TTL = 21600000; // 6 saat
-
-  // Memory cache taze ise direkt dön
   if(WX_HISTORY[id] && (now - WX_HISTORY[id].updatedAt < CACHE_TTL)) {
     return WX_HISTORY[id].days;
   }
-
-  // localStorage'dan yükle
   const stored = window.loadWXHistoryLocal(id);
   if(stored?.length) {
-    WX_HISTORY[id] = { days: stored, updatedAt: now - CACHE_TTL + 300000 }; // 5dk içinde yenile
+    WX_HISTORY[id] = { days: stored, updatedAt: now - CACHE_TTL + 300000 };
   }
-
   try {
-    // 90 gün penceresi — dünle biter (bugün için archive veri yok)
     const endDate   = new Date(); endDate.setDate(endDate.getDate() - 1);
     const startDate = new Date(); startDate.setDate(startDate.getDate() - 90);
     const ed = endDate.toISOString().slice(0,10);
     const sd = startDate.toISOString().slice(0,10);
-
-    // Geçmiş veri için archive-api (forecast API geçmişi tam vermez)
     const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${field.lat}&longitude=${field.lon}` +
       `&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,et0_fao_evapotranspiration,shortwave_radiation_sum` +
       `&start_date=${sd}&end_date=${ed}&timezone=Europe%2FIstanbul`;
-
     const r = await fetch(url);
     if(!r.ok) throw new Error('Archive HTTP ' + r.status);
     const data = await r.json();
-
     const days = (data.daily?.time || []).map((t, i) => ({
       date:  t,
       tmax:  Math.round(data.daily.temperature_2m_max[i] ?? 25),
@@ -137,15 +112,12 @@ window.fetchWXHistory = async (field) => {
       et0:   +(data.daily.et0_fao_evapotranspiration?.[i] || 0).toFixed(1),
       solar: +(data.daily.shortwave_radiation_sum?.[i] || 0).toFixed(1),
     })).filter(d => d.date >= sd);
-
-    // 90 gün sınırını uygula
     const cutoffStr = sd;
     const existingDays  = WX_HISTORY[id]?.days || [];
     const existingDates = new Set(existingDays.map(d => d.date));
     const merged = [...existingDays.filter(d => d.date >= cutoffStr),
                     ...days.filter(d => !existingDates.has(d.date))];
     merged.sort((a, b) => a.date.localeCompare(b.date));
-
     WX_HISTORY[id] = { days: merged, updatedAt: now };
     window.saveWXHistoryLocal(id, merged);
     console.log(`📅 ${field.name}: ${merged.length} günlük arşiv verisi (90g)`);
@@ -173,52 +145,18 @@ window.loadWXHistoryLocal = (fieldId) => {
   } catch(e) { return null; }
 };
 
-// Hava verisi birleştirme: arşiv (90g) + WXC (anlık/tahmin)
 window.getBestWXDays = (field) => {
   const hist = WX_HISTORY[field.id]?.days || [];
   const curr = WXC[field.id]?.days || [];
   if(!hist.length && !curr.length) return simWX(field.lat, field.lon);
   const combined = {};
   hist.forEach(d => { combined[d.date] = d; });
-  // Anlık/tahmin güncel olanı üzerine yazar
   curr.forEach(d => { combined[d.date] = { ...combined[d.date], ...d }; });
   return Object.values(combined).sort((a, b) => a.date.localeCompare(b.date));
 };
 
-// ═══════════════════════════════════════════════════════════════════
-// FAO-56 KÖK BÖLGESİ SU DENGESİ (Root Zone Water Balance — RZWB)
-// ═══════════════════════════════════════════════════════════════════
-// Referans: Allen et al. (1998) FAO Irrigation and Drainage Paper 56
-//
-// Temel kavramlar:
-//   FC   = Field Capacity        (Tarla Kapasitesi, mm — üst limit)
-//   WP   = Wilting Point         (Solma Noktası, mm — alt limit)
-//   TAW  = Total Available Water = FC - WP  (Toplam Kullanılabilir Su)
-//   RAW  = Readily Available Water = MAD × TAW  (Kolayca Alınabilir Su)
-//   Dr   = Root Zone Depletion   (Güncel açık, mm) — 0→kuru, TAW→FC
-//   Ks   = Stress coefficient    Dr≤RAW→Ks=1, Dr>RAW→Ks azalır (stres)
-//   ETc  = ET₀ × Kc × Ks        (Gerçek bitki su tüketimi)
-//
-// Mimari:
-//   • Firebase'de users/{uid}/rzwb/{fieldId} altında "ledger" (defter) tutulur:
-//     {date, Dr_surf, Dr_deep, Kc, Ks_surf, Ks_deep, ETc, rain, irr, perc, ...}
-//   • Her çağrıda: (a) son ledger kaydından başla, (b) eksik günleri simüle et,
-//     (c) bugünkü Dr değerini üret, (d) yeni kayıtları Firebase'e yaz.
-//   • Uydu kalibrasyonu (Open-Meteo Agro soilM3/soilMDeep) mevcutsa, ledger
-//     başlangıcında Dr değerleri uyduya kilitlenir.
-//
-// İki zon:
-//   Zone-S: 0-10cm yüzey  (sulama+yağış giriş noktası, hızlı değişir)
-//   Zone-D: 10-30cm derin (perkolasyon beslenmeli, yavaş değişir)
-// ═══════════════════════════════════════════════════════════════════
-
-window.agrd = (crop) => { return CROP_AGR[crop] || CROP_AGR.default; };
-
-// ─── RZWB PARAMETRELERİ ──────────────────────────────────────────
-// Toprak tipi → [FC_surf(mm/10cm), WP_surf(mm/10cm)] tablosu
-// Derin katman 20cm kalınlık (FC_deep = 2 × değer)
+// ═══ FAO‑56 RZWB PARAMETRELERİ ═══
 const RZWB_SOIL = {
-  //            FC_surf  WP_surf  FC_deep  WP_deep
   killiTin: { fcs:105, wps:42, fcd:115, wpd:46 },
   tinli:    { fcs: 85, wps:32, fcd: 95, wpd:36 },
   killi:    { fcs:120, wps:52, fcd:130, wpd:57 },
@@ -226,54 +164,44 @@ const RZWB_SOIL = {
   humuslu:  { fcs: 95, wps:38, fcd:105, wpd:42 },
   kalkerli: { fcs: 68, wps:22, fcd: 75, wpd:24 },
 };
-
-// MAD (Management Allowable Depletion) — ürün grubuna göre sulama tetik eşiği
 const MAD_TABLE = {
   sera:0.35, sebze:0.40, bostanlik:0.45, baklagil:0.50,
   narenciye:0.50, meyve:0.50, endustri:0.55, yembitki:0.55,
   tahil:0.55, zeytin:0.65,
 };
 
-// ─── RZWB YARDIMCI ───────────────────────────────────────────────
 window.getRZWBParams = (field) => {
   const soil = RZWB_SOIL[field.soilType] || RZWB_SOIL.tinli;
   let fcs = soil.fcs, wps = soil.wps, fcd = soil.fcd*2, wpd = soil.wpd*2;
-
-  // SoilGrids kil/kum/silt yüzdeleri varsa FC ve WP'yi ince ayarla (Saxton & Rawls 2006)
   if(field.soilComposition) {
     const { clay: cl, sand: sa, silt: si } = field.soilComposition;
-    const fc_calc  = (0.299 - 0.251*sa/100 + 0.195*cl/100) * 100; // mm/10cm
+    const fc_calc  = (0.299 - 0.251*sa/100 + 0.195*cl/100) * 100;
     const wp_calc  = (0.026 + 0.5*cl/100 - 0.013*sa/100) * 100;
     if(fc_calc>20 && fc_calc<180){ fcs=Math.round(fc_calc); fcd=Math.round(fc_calc*1.1)*2; }
     if(wp_calc>5  && wp_calc<80) { wps=Math.round(wp_calc); wpd=Math.round(wp_calc*1.1)*2; }
   }
-
   const mad  = MAD_TABLE[field.category] ?? 0.50;
-  const taw_s = Math.max(1, fcs - wps);  // Total Available Water, yüzey
-  const taw_d = Math.max(1, fcd - wpd);  // Total Available Water, derin
-  const raw_s = taw_s * mad;             // Readily Available Water, yüzey
-  const raw_d = taw_d * mad;             // Readily Available Water, derin
-
+  const taw_s = Math.max(1, fcs - wps);
+  const taw_d = Math.max(1, fcd - wpd);
+  const raw_s = taw_s * mad;
+  const raw_d = taw_d * mad;
   return { fcs, wps, fcd, wpd, taw_s, taw_d, raw_s, raw_d, mad };
 };
 
-// Sulama olayını net mm'ye çevir (farklı birimlerden)
 window.parseIrrMm = (evt, fcs) => {
   const qty = parseFloat(evt.qty)||0, u = evt.unit||'';
-  let mm = 25; // varsayılan
+  let mm = 25;
   if(u === 'mm' && qty > 0) mm = qty;
-  else if(u === 'lt' && qty > 0) mm = qty / 100;       // lt/m² → mm
-  else if(u === 'toplam' && qty > 100) mm = qty / 100;  // hacim → mm/m²
+  else if(u === 'lt' && qty > 0) mm = qty / 100;
+  else if(u === 'toplam' && qty > 100) mm = qty / 100;
   else if(u === 'saat') {
-    // Sulama süresi × sistem debisi tahmini
     const debit = evt.extra?.['e-sm'] === 'Damla sulama' ? 2.0
-      : evt.extra?.['e-sm'] === 'Yağmurlama' ? 5.0 : 3.0; // mm/saat
+      : evt.extra?.['e-sm'] === 'Yağmurlama' ? 5.0 : 3.0;
     mm = qty * debit;
   }
-  return Math.min(mm, fcs * 1.2); // FC'nin %120'sinden fazla olamaz
+  return Math.min(mm, fcs * 1.2);
 };
 
-// ─── FIREBASE RZWB LEDGER ────────────────────────────────────────
 window.fbSaveRZWB = async (uid, fieldId, records) => {
   if(!uid || !window.FB_MODE || !window.FB_DB) return;
   try {
@@ -293,17 +221,12 @@ window.fbLoadRZWB = async (uid, fieldId) => {
   } catch(e) { console.warn('RZWB Firebase yükleme hatası:', e.message); return null; }
 };
 
-// In-memory RZWB cache: { fieldId: { records:[...], loadedAt:ts } }
 window.RZWB_CACHE = {};
 
-// ─── FAO-56 GÜNLÜK ADIM ──────────────────────────────────────────
-// Bir günün Dr (tükeniş) değerini önceki günden ilerletir.
-// Dönüş: { Dr_s, Dr_d, Kc, Ks_s, Ks_d, ETc_s, ETc_d, perc, netIn }
 window.rzwbStep = (prev, dayWx, irrMm, params, field) => {
   const { fcs, wps, fcd, wpd, taw_s, taw_d, raw_s, raw_d } = params;
   const a = window.agrd(field.crop);
 
-  // ── Kc: fenolojik döneme göre ────────────────────────────────
   let kc = 0.7;
   if(field.status !== 'fallow' && field.plantDate && field.plantDate <= dayWx.date) {
     const gdd = window.calcGDD(field, dayWx.date);
@@ -319,48 +242,31 @@ window.rzwbStep = (prev, dayWx, irrMm, params, field) => {
     }
   }
 
-  // ── Ks: su stres katsayısı (FAO-56 Eq. 84) ──────────────────
-  // Dr ≤ RAW → Ks = 1  (stres yok)
-  // Dr > RAW → Ks doğrusal düşer, Dr = TAW'da Ks = 0
   const ks_s = prev.Dr_s <= raw_s ? 1.0
     : Math.max(0, (taw_s - prev.Dr_s) / Math.max(1, taw_s - raw_s));
   const ks_d = prev.Dr_d <= raw_d ? 1.0
     : Math.max(0, (taw_d - prev.Dr_d) / Math.max(1, taw_d - raw_d));
 
-  // ── ET₀ → ETc ────────────────────────────────────────────────
   const et0 = dayWx.et0 > 0 ? dayWx.et0
     : a.et * (dayWx.tmax > 38 ? 1.45 : dayWx.tmax > 33 ? 1.2 : 1.0);
 
-  // Yüzey %35, derin %65 (kök derinlik paylaşımı)
-  // Nadas durumunda: yalnızca yüzey buharlaşması, derin hemen hemen sıfır
   const isFallow = field.status === 'fallow';
   const ETc_s = isFallow
-    ? et0 * 0.20                        // çıplak buharlaşma
+    ? et0 * 0.20
     : et0 * kc * 0.35 * ks_s;
   const ETc_d = isFallow
     ? et0 * 0.03
     : et0 * kc * 0.65 * ks_d;
 
-  // ── Yağış etkinliği ──────────────────────────────────────────
   const rain = dayWx.rain || 0;
   const eff  = rain > 30 ? 0.70 : rain > 15 ? 0.82 : rain > 5 ? 0.92 : 1.0;
   const Pe   = +(rain * eff).toFixed(1);
 
-  // ── Yüzey su dengesi ─────────────────────────────────────────
-  // Dr_s azaldıkça (→ 0) nem artar (FC = Dr_s=0)
   const rawDr_s = prev.Dr_s - Pe - irrMm + ETc_s;
-
-  // Yüzey doyumu aşımı → perkolasyon olarak derine aktar
-  // rawDr_s < 0 demek FC'nin üzerinde su var → o fazla miktar derine geçer
   const perc = rawDr_s < 0 ? Math.min(-rawDr_s, taw_d) : 0;
-
   const Dr_s = Math.max(0, Math.min(taw_s, rawDr_s));
-
-  // ── Derin su dengesi ─────────────────────────────────────────
-  // Perkolasyon derine su ekler (Dr_d azaltır = nem artar)
   const Dr_d = Math.max(0, Math.min(taw_d, prev.Dr_d - perc + ETc_d));
 
-  // ── Nem yüzdesi ve mm ────────────────────────────────────────
   const pct_s   = Math.round((1 - Dr_s / Math.max(1, taw_s)) * 100);
   const pct_d   = Math.round((1 - Dr_d / Math.max(1, taw_d)) * 100);
   const moist_s = Math.round(Math.max(0, fcs - Dr_s));
@@ -378,18 +284,7 @@ window.rzwbStep = (prev, dayWx, irrMm, params, field) => {
   };
 };
 
-// ─── ANA RZWB FONKSİYONU ─────────────────────────────────────────
-// MİMARİ:
-//   • Ledger (Firebase/localStorage) varsa → sadece eksik günleri ilerlet.
-//   • Ledger yoksa (tarla ilk oluşturuldu) → Bootstrap:
-//       1. 90g arşiv hava verisini çek (fetchWXHistory)
-//       2. Tüm sulama kayıtlarını gün→mm haritasına al
-//       3. Başlangıç Dr değerini uydu nemi veya %55 FC varsayımından al
-//       4. 90g simülasyonu çalıştır, her günü kaydet
-//   • Bootstrap tamamlandıktan sonra bir daha çalışmaz; sadece ledger ilerler.
-//   • Nem 0 hatası sebebi: todayRec yokken prev.Dr_s=0 varsayılan değer
-//     moist_s = fcs - 0 = fcs → %100 değil, moist_s doğrudan kullanılınca
-//     Dr_s undefined olunca pct_s = NaN → bu düzeltildi.
+// ═══ ANA RZWB FONKSİYONU (düzeltilmiş) ═══
 window.calcSoilRZWB = async (field, force = false) => {
   const cacheKey = field.id + '_' + tstr();
   if(!force && SC[cacheKey]) return SC[cacheKey];
@@ -400,7 +295,6 @@ window.calcSoilRZWB = async (field, force = false) => {
   const uid     = window.FB_USER?.uid;
   const fbKey   = 'tt_rzwb_' + field.id;
 
-  // ── 1. Ledger yükle: Firebase → localStorage ─────────────────
   let ledger = [];
 
   if(uid && window.FB_MODE) {
@@ -422,12 +316,10 @@ window.calcSoilRZWB = async (field, force = false) => {
     } catch(e) {}
   }
 
-  // 90 günden eskiyi temizle
   const cutoff90 = new Date(); cutoff90.setDate(cutoff90.getDate() - 90);
   const cutoff90str = cutoff90.toISOString().slice(0,10);
   ledger = ledger.filter(r => r.date >= cutoff90str && r.date <= today);
 
-  // ── 2. Sulama haritası (tüm geçmiş) ──────────────────────────
   const irrMap = {};
   (field.events || [])
     .filter(e => e.type === 'sulama' && !e.planned && e.date <= today)
@@ -436,15 +328,12 @@ window.calcSoilRZWB = async (field, force = false) => {
       irrMap[e.date] = (irrMap[e.date] || 0) + mm;
     });
 
-  // ── 3. Başlangıç noktasını ve simülasyon günlerini belirle ───
   const lastRec  = ledger.length ? ledger[ledger.length - 1] : null;
-  const isBootstrap = !lastRec; // İLK AÇILIŞ — ledger boş
+  const isBootstrap = !lastRec;
 
   let simStart, initDr_s, initDr_d, satCalibrated = false;
 
   if(isBootstrap) {
-    // ── BOOTSTRAP: sadece ledger hiç yoksa çalışır ───────────
-    // Uydu verisi varsa başlangıca kilitle, yoksa %55 FC varsay
     const agroMid  = SATC[field.id]?.data?.soilM3;
     const agroDeep = SATC[field.id]?.data?.soilMDeep;
     const satDate  = SATC[field.id]?.at;
@@ -455,21 +344,20 @@ window.calcSoilRZWB = async (field, force = false) => {
       const sat_moist_d = Math.min(fcd, (agroDeep || agroMid * 0.88) * fcd);
       initDr_s = Math.max(0, fcs - sat_moist_s);
       initDr_d = Math.max(0, fcd - sat_moist_d);
+      // Sınırla – TAW’ı aşmasın
+      initDr_s = Math.min(initDr_s, taw_s);
+      initDr_d = Math.min(initDr_d, taw_d);
       satCalibrated = true;
       console.log(`🛰️ Bootstrap uydu: Dr_s=${initDr_s.toFixed(1)} Dr_d=${initDr_d.toFixed(1)}`);
     } else {
-      // Varsayılan: orta kuru toprak (%45 TAW dolu)
-      initDr_s = taw_s * 0.55;
-      initDr_d = taw_d * 0.50;
+      initDr_s = Math.min(taw_s * 0.55, taw_s);
+      initDr_d = Math.min(taw_d * 0.50, taw_d);
       console.log(`⚠️ Bootstrap varsayılan: Dr_s=${initDr_s.toFixed(1)} Dr_d=${initDr_d.toFixed(1)}`);
     }
 
-    // 90 günlük arşiv verisini çek (bootstrap için gerekli)
     await window.fetchWXHistory(field);
-    simStart = cutoff90str; // 90 gün öncesinden başla
-
+    simStart = cutoff90str;
   } else {
-    // ── NORMAL ÇALIŞMA: son ledger kaydından sonraki gün ─────
     initDr_s = lastRec.Dr_s;
     initDr_d = lastRec.Dr_d;
     const nextDay = new Date(lastRec.date + 'T12:00:00');
@@ -478,18 +366,15 @@ window.calcSoilRZWB = async (field, force = false) => {
     console.log(`📖 Ledger devam: ${lastRec.date} → ${simStart} Dr_s=${initDr_s} Dr_d=${initDr_d}`);
   }
 
-  // ── 4. Simülasyon günleri ─────────────────────────────────────
   const wxAll = window.getBestWXDays(field);
   const existingDates = new Set(ledger.map(r => r.date));
 
-  // simStart'tan bugüne kadar, ledger'da olmayan günler
   const simDays = wxAll.filter(d =>
     d.date >= simStart &&
     d.date <= today &&
     !existingDates.has(d.date)
   );
 
-  // ── 5. Günlük FAO-56 adımları ─────────────────────────────────
   let prev = { Dr_s: initDr_s, Dr_d: initDr_d };
   const newRecords = [];
 
@@ -500,16 +385,13 @@ window.calcSoilRZWB = async (field, force = false) => {
     prev = { Dr_s: step.Dr_s, Dr_d: step.Dr_d };
   }
 
-  // ── 6. Ledger güncelle + kaydet ───────────────────────────────
   if(newRecords.length) {
     ledger = [...ledger, ...newRecords]
       .sort((a, b) => a.date.localeCompare(b.date))
       .filter(r => r.date >= cutoff90str && r.date <= today);
 
-    // localStorage (hızlı, senkron)
     try { localStorage.setItem(fbKey, JSON.stringify(ledger)); } catch(e) {}
 
-    // Firebase (yavaş, asenkron — UI'yi bloklama)
     if(uid && window.FB_MODE) {
       window.fbSaveRZWB(uid, field.id, ledger)
         .then(() => {
@@ -519,10 +401,20 @@ window.calcSoilRZWB = async (field, force = false) => {
     }
   }
 
-  // ── 7. Bugünkü değeri al ──────────────────────────────────────
   let todayRec = ledger.find(r => r.date === today);
 
-  // Ledger'da bugün yoksa (hava verisi henüz gelmedi) — prev kullan
+  // Eski ledger kayıtlarında pct_s/pct_d yoksa Dr/TAW üzerinden hesapla
+  if(todayRec) {
+    if(todayRec.pct_s === undefined) {
+      const taw_s = params.taw_s;
+      const taw_d = params.taw_d;
+      todayRec.pct_s = Math.round((1 - todayRec.Dr_s / Math.max(1, taw_s)) * 100);
+      todayRec.pct_d = Math.round((1 - todayRec.Dr_d / Math.max(1, taw_d)) * 100);
+      todayRec.moist_s = Math.max(0, Math.round(fcs - todayRec.Dr_s));
+      todayRec.moist_d = Math.max(0, Math.round(fcd - todayRec.Dr_d));
+    }
+  }
+
   if(!todayRec && prev.Dr_s !== undefined) {
     const pct_s   = Math.round((1 - prev.Dr_s / Math.max(1, taw_s)) * 100);
     const pct_d   = Math.round((1 - prev.Dr_d / Math.max(1, taw_d)) * 100);
@@ -536,7 +428,6 @@ window.calcSoilRZWB = async (field, force = false) => {
     };
   }
 
-  // Hiçbir şekilde bugünkü değer üretilemedi — güvenli fallback
   if(!todayRec) {
     const mid_s   = Math.round(taw_s * 0.45);
     const mid_d   = Math.round(taw_d * 0.50);
@@ -551,7 +442,6 @@ window.calcSoilRZWB = async (field, force = false) => {
     };
   }
 
-  // ── 8. Çıktı nesnesi ──────────────────────────────────────────
   const pct_s_out   = Math.max(0, Math.min(100, todayRec.pct_s ?? 0));
   const pct_d_out   = Math.max(0, Math.min(100, todayRec.pct_d ?? 0));
   const moist_s_out = Math.max(0, todayRec.moist_s ?? 0);
@@ -584,8 +474,7 @@ window.calcSoilRZWB = async (field, force = false) => {
     params,
     satCalibrated,
     isBootstrap,
-    // geriye dönük uyumluluk
-    pct:   pct_s_out,
+    pct:   pct_s_out,   // geriye dönük uyumluluk
     moist: moist_s_out,
     fc:    fcs,
   };
@@ -594,7 +483,6 @@ window.calcSoilRZWB = async (field, force = false) => {
   return result;
 };
 
-// Eski calcSoil çağrılarını RZWB'ye yönlendir (geriye dönük uyumluluk)
 window.calcSoil = (field) => window.calcSoilRZWB(field);
 
 window.computeAllSoils = async (force = false) => {
@@ -602,8 +490,6 @@ window.computeAllSoils = async (force = false) => {
   if (!force && window.SOIL_CACHE.data && (now - window.SOIL_CACHE.lastUpdated < 300000)) {
     return window.SOIL_CACHE.data;
   }
-  // force=true ise RZWB in-memory önbelleğini de temizle
-  // (yeni sulama kaydı, tarla değişikliği vb. sonrası güncel hesap için)
   if(force) window.RZWB_CACHE = {};
   const soilData = await Promise.all(DB.fields.map(async f => {
     invSoil(f.id);
@@ -620,32 +506,23 @@ window.computeAllSoils = async (force = false) => {
 window.calcGDD = (field, untilDate = tstr()) => {
   const a = window.agrd(field.crop);
   if(!field.plantDate) return null;
-  
-  // Çok yıllık bitkilerde dikim yaşını dikkate al
-  const plantDateEffective = field.plantDate;
-  
-  // Önce 6 aylık geçmiş, sonra mevcut önbellek
   const wxDays = window.getBestWXDays(field);
-  
   let acc = 0;
-  wxDays.filter(d => d.date >= plantDateEffective && d.date <= untilDate).forEach(d => {
+  wxDays.filter(d => d.date >= field.plantDate && d.date <= untilDate).forEach(d => {
     const tavg = (d.tmax + d.tmin) / 2;
-    const tavgClamped = Math.min(tavg, a.tm); // Kritik sıcaklık üstünü kapat
+    const tavgClamped = Math.min(tavg, a.tm);
     acc += Math.max(0, tavgClamped - a.tb);
   });
   return Math.round(acc);
 };
 
-// Tarla kapasitesi hesabı - katmana göre
 window.calcFieldCapacity = (soilType, cl, sa, si, layer='surface') => {
-  // Geriye dönük uyumluluk — yeni kod getRZWBParams kullanır
   const p = window.getRZWBParams({ soilType, soilComposition: cl!=null?{clay:cl,sand:sa,silt:si}:null });
   return layer === 'deep' ? p.fcd : p.fcs;
 };
 
 window.invSoil = (fid) => { Object.keys(SC).filter(k=>k.startsWith(fid+'_')).forEach(k=>delete SC[k]); };
 window.invSoilAll = () => { Object.keys(SC).forEach(k=>delete SC[k]); };
-
 
 window.scl = (pct) => {
   if(pct>78) return {l:'Islak',  tag:'tb', color:'var(--blue)',   bg:'var(--bbg)'};
@@ -655,26 +532,15 @@ window.scl = (pct) => {
   return            {l:'Kurak',  tag:'tr', color:'var(--red)',    bg:'var(--rbg)'};
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════════════════
-// SULAMA GEREKSİNİMİ — FAO-56 Dr/RAW/Ks tabanlı sorgulama
-// ═══════════════════════════════════════════════════════════════════
-// RZWB çıktısındaki Dr (tükeniş) ve RAW (kolayca alınabilir su)
-// değerlerini kullanarak: sulama gerekli mi, kaç mm, ne kadar acil,
-// kaç güne kadar kritik soruları somut cevap üretir.
+// ═══ SULAMA GEREKSİNİMİ ═══
 window.calcIrrigationNeed = (field, s) => {
   const p = s.params || window.getRZWBParams(field);
   const { fcs, taw_s, raw_s, mad } = p;
-
   const Dr_s       = s.surface.Dr ?? Math.max(0, fcs - s.surface.moist);
   const Ks         = s.surface.Ks ?? 1;
   const triggerPct = Math.round((1 - mad) * 100);
-
-  // Hedef: %90 FC (taşma/yüzey kaybını önle)
   const targetMoist = fcs * 0.90;
   const deficitMm   = Math.round(Math.max(0, targetMoist - s.surface.moist));
-
-  // 7 günlük hava tahmini
   const wx      = WXC[field.id]?.days || simWX(field.lat, field.lon);
   const today   = tstr();
   const futWx   = wx.filter(d => d.date > today).slice(0, 7);
@@ -683,8 +549,6 @@ window.calcIrrigationNeed = (field, s) => {
   const netBalance = futR - futET;
   const effRain    = Math.min(deficitMm, futR * 0.7);
   const recommendedMm = Math.round(Math.max(0, deficitMm - effRain));
-
-  // Kritik seviyeye (WP+10mm) kalan gün
   const lastLog     = s.log?.[s.log.length - 1];
   const dailyUse    = lastLog
     ? Math.max(0.5, (lastLog.ETc_s ?? lastLog.et_surf ?? s.et * 0.35))
@@ -692,22 +556,17 @@ window.calcIrrigationNeed = (field, s) => {
   const criticalMoist     = (p.wps ?? 15) + 10;
   const daysUntilCritical = s.surface.moist > criticalMoist
     ? Math.round((s.surface.moist - criticalMoist) / dailyUse) : 0;
-
-  // Stres seviyesi (FAO-56 Ks)
   const stressLabel = Ks < 0.5 ? 'Ağır stres' : Ks < 0.8 ? 'Orta stres'
     : Ks < 1 ? 'Hafif stres' : 'Stres yok';
-
-  const belowRaw   = Dr_s > raw_s;   // Dr > RAW → sulama eşiği aşıldı
+  const belowRaw   = Dr_s > raw_s;
   const critical   = s.surface.pct < 20;
   const stressed   = Ks < 0.8;
-
   let urgency, label;
   if (critical)                        { urgency = 'kritik'; label = 'ACİL — kök bölgesi kritik, hemen sulayın'; }
   else if (stressed)                   { urgency = 'stres';  label = `Bitki su stresi çekiyor (Ks=${Ks.toFixed(2)}) — sulama gerekli`; }
   else if (belowRaw && netBalance < 0) { urgency = 'öneri';  label = 'RAW eşiği aşıldı, yağış beklenmez — sulama planlanmalı'; }
   else if (belowRaw)                   { urgency = 'izle';   label = 'RAW eşiği aşıldı, yağış bekleniyor — izleyin'; }
   else                                 { urgency = 'yok';    label = 'Yeterli nem — sulamaya şu an gerek yok'; }
-
   return {
     needsIrrigation: belowRaw || critical || stressed,
     urgency, label, Ks, stressLabel,
@@ -724,14 +583,6 @@ window.calcPheno = (field) => {
   const a = window.agrd(field.crop);
   const gdd = window.calcGDD(field);
   if(gdd===null) return null;
-  
-  // Çok yıllık bitki: dikim yaşını dikkate al
-  let plantDaysOffset = 0;
-  if(field.plantingAge && field.plantingAge > 0) {
-    // Dikim yaşı yıl cinsinden; GDD birikimi zaten yaşa göre normalize edilmiş
-    plantDaysOffset = Math.round(field.plantingAge * 365);
-  }
-  
   const days = field.plantDate ? Math.round((Date.now()-new Date(field.plantDate+'T00:00:00'))/(864e5)) : 0;
   let si = a.st.length-1;
   for(let i=0; i<a.gd.length; i++){ if(gdd < a.gd[i]){si=i; break;} }
@@ -752,8 +603,6 @@ window.calcHarvest = (field) => {
   }
   const gddTarget = a.gd[a.gd.length-1];
   const remain = Math.max(0, gddTarget - (gdd||0));
-  
-  // 6 aylık geçmiş ve anlık veriyi birleştir
   const wxAll = window.getBestWXDays(field);
   const fut = wxAll.filter(d=>d.date>tstr()).slice(0,14);
   const avgDGDD = fut.length>0
@@ -832,8 +681,6 @@ window.fetchWX = async (field) => {
     renderWX(field);
     if(qs('#page-dash.on')) renderDash();
     if(qs('#page-field.on') && CUR?.id===id) renderFKPIs(field);
-    
-    // Hava geçmişini arka planda güncelle
     setTimeout(() => fetchWXHistory(field), 2000);
   }catch(e){
     setBadge('wxsrc','om','err','Open-Meteo: '+e.message);
@@ -914,7 +761,6 @@ window.fetchSat = async (field) => {
   sb('agro','load','Open-Meteo Agro…'); sb('nasa','load','NASA POWER…'); sb('s2','load','Sentinel-2…');
   const R={};
 
-  // 1. Open-Meteo Agro — genişletilmiş katman verileri
   try{
     const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=soil_temperature_0cm,soil_temperature_6cm,soil_moisture_0_to_1cm,soil_moisture_1_to_3cm,soil_moisture_3_to_9cm,soil_moisture_9_to_27cm,vapor_pressure_deficit,relative_humidity_2m&daily=et0_fao_evapotranspiration,shortwave_radiation_sum&past_days=7&forecast_days=3&timezone=Europe%2FIstanbul`;
     const r=await fetch(url);
@@ -923,9 +769,9 @@ window.fetchSat = async (field) => {
       const today=tstr(); const ti=d.daily?.time?.indexOf(today)??-1; const hi=new Date().getHours(); const hb=(ti>=0?ti:0)*24;
       R.soilT0=d.hourly?.soil_temperature_0cm?.[hb+hi]?.toFixed(1);
       R.soilT6=d.hourly?.soil_temperature_6cm?.[hb+hi]?.toFixed(1);
-      R.soilM1=d.hourly?.soil_moisture_0_to_1cm?.[hb+hi];       // 0-1cm
-      R.soilM3=d.hourly?.soil_moisture_3_to_9cm?.[hb+hi];       // 3-9cm (yüzey)
-      R.soilMDeep=d.hourly?.soil_moisture_9_to_27cm?.[hb+hi];   // 9-27cm (derin)
+      R.soilM1=d.hourly?.soil_moisture_0_to_1cm?.[hb+hi];
+      R.soilM3=d.hourly?.soil_moisture_3_to_9cm?.[hb+hi];
+      R.soilMDeep=d.hourly?.soil_moisture_9_to_27cm?.[hb+hi];
       R.vpd=d.hourly?.vapor_pressure_deficit?.[hb+hi]?.toFixed(2);
       R.humidity = d.hourly?.relative_humidity_2m?.[hb+hi]?.toFixed(0);
       R.et0=ti>=0?d.daily?.et0_fao_evapotranspiration?.[ti]?.toFixed(1):null;
@@ -936,7 +782,6 @@ window.fetchSat = async (field) => {
     }else sb('agro','err','Agro: '+r.status);
   }catch(e){ sb('agro','err','Agro: '+e.message); }
 
-  // 2. NASA POWER
   try{
     const ed=tstr().replace(/-/g,''); const sdt=new Date(); sdt.setDate(sdt.getDate()-30);
     const sd=sdt.toISOString().slice(0,10).replace(/-/g,'');
@@ -954,7 +799,6 @@ window.fetchSat = async (field) => {
     }else sb('nasa','err','NASA: '+r.status);
   }catch(e){ sb('nasa','err','NASA: '+e.message); }
 
-  // 3. Sentinel-2 STAC
   try{
     const bbox=[lon-0.01,lat-0.01,lon+0.01,lat+0.01];
     const edt=new Date(); const sdt2=new Date(); sdt2.setDate(edt.getDate()-45);
@@ -1003,7 +847,6 @@ window.renderSat = (field, R) => {
   const wel=qs('#sat-ndwi');
   if(wel) wel.innerHTML=`<div style="text-align:center;padding:8px 0;"><div style="font-size:28px;font-weight:800;color:var(--blue);">${R.ndwi}</div><span class="tag tb" style="margin-top:4px;display:inline-flex;">${nwl}</span></div>${bar((parseFloat(R.ndwi)+0.5),1.3,'var(--blue)')}<div style="font-size:10px;color:var(--text3);margin-top:4px;">Bitki su stresi göstergesi</div>`;
 
-  // Çift katman toprak nemi gösterimi
   const lv=parseFloat(R.lst)||20;
   const lel=qs('#sat-lst');
   if(lel){
@@ -1068,7 +911,7 @@ window.satCtxStr = (field) => {
   return `NDVI:${R.ndvi}(${ndviCls(R.ndvi).l}) EVI:${R.evi} NDWI:${R.ndwi} LST:${R.lst}°C ET₀:${R.et0||'—'}mm Solar:${R.solar||'—'}MJ/m² YüzeyNem(3-9cm):${surfPct} DerinNem(9-27cm):${deepPct} VPD:${R.vpd||'—'}kPa NASA30gYağış:${R.nasaRain30||'—'}mm S2geçiş:${R.s2count||0}(son:${R.s2date||'—'}) Kaynak:${R.isEst?'ModelTahmini':'GerçekUydu'}`;
 }
 
-// ─── FAO-56 RZWB TOPRAK NEM RENDER ───────────────────────────────
+// ─── RENDER SOIL (düzeltilmiş) ───────────────────────────────────
 window.renderSoil = async (field) => {
   const s   = await calcSoil(field);
   const sc_surf = scl(s.surface.pct);
@@ -1079,7 +922,6 @@ window.renderSoil = async (field) => {
     .sort((a,b)=>b.date.localeCompare(a.date))[0];
   const dsi = lastIrr ? Math.round((Date.now()-new Date(lastIrr.date))/(864e5)) : null;
 
-  // ── 1. Nem Durumu ─────────────────────────────────────────────
   const sg = qs('#sg');
   if(sg) sg.innerHTML = `
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
@@ -1119,7 +961,6 @@ window.renderSoil = async (field) => {
       : '<span class="tag ta" style="font-size:10px;">⚠️ Model tahmini</span>'}
   </div>`;
 
-  // ── 2. Sulama Gereksinimi Kartı ───────────────────────────────
   const COLORS = {
     kritik: { c:'var(--red)',    bg:'var(--rbg)', icon:'🚨' },
     stres:  { c:'var(--red)',    bg:'var(--rbg)', icon:'⚠️' },
@@ -1164,7 +1005,6 @@ window.renderSoil = async (field) => {
     </div>
   </div>`;
 
-  // ── 3. FAO-56 Günlük Ledger Tablosu (son 7 gün) ──────────────
   const st = qs('#st');
   if(st) {
     const logs = (s.log || []).slice(-7);
@@ -1203,7 +1043,7 @@ window.renderSoil = async (field) => {
   }
 };
 
-// ─── HARİTA — POLİGON DESTEĞİ ───────────────────────────────────
+// ─── HARİTA ──────────────────────────────────────────────────────
 window.initMap = (lat, lon, field) => {
   if(lmap){ lmap.remove(); lmap=null; }
   const el=qs('#lmap'); if(!el) return;
@@ -1217,8 +1057,6 @@ window.initMap = (lat, lon, field) => {
   DB.fields.forEach(f=>{
     const isActive = f.id === field?.id;
     const color = f.color || '#40916c';
-    
-    // Poligon varsa çiz, yoksa nokta
     if(f.polygon && f.polygon.length >= 3) {
       const poly = L.polygon(f.polygon, {
         color: color,
@@ -1226,14 +1064,13 @@ window.initMap = (lat, lon, field) => {
         fillOpacity: isActive ? 0.35 : 0.18,
         weight: isActive ? 3 : 1.5
       });
-      poly.bindPopup(`<b>${f.name}</b><br/>${f.crop||'—'} · ${f.area} ${f.areaUnit||'dönüm'}<br/>Alan: ${f.area} ${f.areaUnit||'dönüm'}`);
+      poly.bindPopup(`<b>${f.name}</b><br/>${f.crop||'—'} · ${f.area} ${f.areaUnit||'dönüm'}`);
       poly.addTo(lmap);
       if(isActive) {
         setTimeout(()=>poly.openPopup(), 300);
         lmap.fitBounds(poly.getBounds(), {padding:[20,20]});
       }
     } else {
-      // Nokta marker
       const c=L.circleMarker([f.lat,f.lon],{
         radius: isActive ? 11 : 7,
         color, fillColor: color,
@@ -1437,7 +1274,6 @@ window.buildAutoRecs = async (field) => {
   const dSince=type=>{ const e=evs.filter(x=>x.type===type&&!x.planned).sort((a,b)=>b.date.localeCompare(a.date))[0]; return e?Math.round((Date.now()-new Date(e.date))/(864e5)):999; };
   const a=agrd(field.crop);
 
-  // FAO-56 RZWB tabanlı sulama kararı
   const irr = window.calcIrrigationNeed(field, s);
   if(irr.urgency === 'kritik') {
     recs.push({i:'🚨',bg:'var(--rbg)',c:'var(--red)',t:'ACİL Sulama — Kök Bölgesi Kritik',
@@ -1473,7 +1309,6 @@ window.renderRecTab = async (field) => {
   if(phen){
     let html='';
     if(ph){
-      // Çok yıllık bitki bilgisi
       const ageInfo = ph.plantingAge > 0 ? `<span class="tag tp2">🌳 ${ph.plantingAge} yaşında dikim</span>` : '';
       html+=`<div style="margin-bottom:14px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:4px;">
@@ -1550,16 +1385,13 @@ window.renderRecTab = async (field) => {
     : '<div style="color:var(--text3);font-size:13px;">🤖 AI Analiz butonu ile tüm veriler harmanlanarak bütünsel uzman yorumu oluşturulur.</div>';
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// GELİŞMİŞ AI SİSTEMİ — Konuşma Hafızası + Bütünsel Bağlam
-// ═══════════════════════════════════════════════════════════════════
+// ═══ GELİŞMİŞ AI SİSTEMİ ═══
 window.getAIMemory = (fieldId) => {
   const key = 'tt_aimem_' + fieldId;
   try {
     const stored = localStorage.getItem(key);
     if(stored) {
       const parsed = JSON.parse(stored);
-      // Son 30 günden eski mesajları filtrele
       const cutoff = new Date(); cutoff.setDate(cutoff.getDate()-30);
       const cutoffStr = cutoff.toISOString().slice(0,10);
       return parsed.filter(m => m.date >= cutoffStr);
@@ -1571,7 +1403,6 @@ window.getAIMemory = (fieldId) => {
 window.saveAIMemory = (fieldId, messages) => {
   const key = 'tt_aimem_' + fieldId;
   try {
-    // Maksimum 50 mesaj tut
     const trimmed = messages.slice(-50);
     localStorage.setItem(key, JSON.stringify(trimmed));
   } catch(e) {}
@@ -1724,7 +1555,6 @@ KURALLAR:
     qs('#ai-chat')?.appendChild(el);
     qs('#ai-chat').scrollTop=qs('#ai-chat').scrollHeight;
 
-    // Hafızaya kaydet
     const today = tstr();
     const mem = window.getAIMemory(CUR.id);
     mem.push({role:'user', content:'[BÜTÜNSEL ANALİZ İSTEĞİ]', date:today});
@@ -1744,23 +1574,19 @@ window.sendChat = async () => {
   const inp=qs('#ai-inp'); const msg=inp.value.trim(); if(!msg) return;
   inp.value=''; addB('user',msg); addB('load','');
   
-  // Hem anlık hem kalıcı hafıza
   aiHist.push({role:'user',content:msg});
   if(aiHist.length>20) aiHist=aiHist.slice(-20);
   
   const fieldCtx = CUR ? await window.buildFieldContext(CUR) : null;
   const memory = CUR ? window.getAIMemory(CUR.id) : [];
   
-  // Konuşma geçmişini oluştur
   const contents = [];
   
-  // Sistem bağlamını ilk mesaj olarak ekle
   if(fieldCtx) {
     contents.push({role:'user', parts:[{text:`[TARLA BAĞLAMI — GÜNCEL VERİLER]\n${fieldCtx}\n\nBu bağlamı dikkate alarak aşağıdaki soruları yanıtla. Kısa, pratik, Türkçe.`}]});
     contents.push({role:'model', parts:[{text:`Anladım. ${CUR?.name} tarlası için ${CUR?.crop||'ürün'} verilerini dikkate alıyorum. Sorunuzu alıyorum.`}]});
   }
   
-  // Önceki kalıcı hafızadan son 5 mesajı ekle
   if(memory.length > 0) {
     const recentMem = memory.slice(-6);
     recentMem.forEach(m => {
@@ -1768,7 +1594,6 @@ window.sendChat = async () => {
     });
   }
   
-  // Anlık konuşma geçmişi
   aiHist.slice(-10,-1).forEach(m => {
     contents.push({role:m.role==='assistant'?'model':'user', parts:[{text:m.content}]});
   });
@@ -1786,7 +1611,6 @@ window.sendChat = async () => {
     rmLoad(); addB('bot',text);
     aiHist.push({role:'assistant',content:text});
     
-    // Kalıcı hafızaya kaydet
     if(CUR) {
       const mem = window.getAIMemory(CUR.id);
       mem.push({role:'user', content:msg, date:tstr()});
@@ -1953,8 +1777,6 @@ window.fillCrops = () => {
   if(['meyve','narenciye','zeytin'].includes(cat)) lbl.textContent='Ağaç / Bitki Adedi';
   else if(['tahil','baklagil','endustri','yembitki'].includes(cat)) lbl.textContent='Tohum Miktarı (kg/da)';
   else lbl.textContent='Miktar';
-  
-  // Çok yıllık bitki kategorileri için yaş alanını göster
   const ageSection = qs('#f-age-section');
   if(ageSection) {
     const isPerennial = ['meyve','narenciye','zeytin'].includes(cat);
@@ -1991,7 +1813,6 @@ window.openFM = (editId) => {
     qs('#f-plant').value = f.plantDate || '';
     qs('#f-harvest').value = f.harvestDate || '';
     qs('#f-notes').value = f.notes || '';
-    // Yeni alanlar
     if(qs('#f-irrigation')) qs('#f-irrigation').value = f.irrigation || '';
     if(qs('#f-fencing')) qs('#f-fencing').value = f.fencing || '';
     if(qs('#f-water-source')) qs('#f-water-source').value = f.waterSource || '';
@@ -2035,7 +1856,6 @@ window.saveField = async () => {
     try { await window.autoFillSoilFromCoords(); } catch(e) {}
   }
   
-  // Poligon parse et
   let polygon = ex?.polygon || null;
   const polyInput = qs('#f-polygon')?.value?.trim();
   if(polyInput) {
@@ -2052,7 +1872,6 @@ window.saveField = async () => {
     soilType:qs('#f-soil').value, plantDate:qs('#f-plant').value, harvestDate:qs('#f-harvest').value,
     color:qs('#f-color').value||'#40916c', notes:qs('#f-notes').value,
     status: qs('#f-status').value,
-    // Yeni alanlar
     irrigation: qs('#f-irrigation')?.value || '',
     fencing: qs('#f-fencing')?.value || '',
     waterSource: qs('#f-water-source')?.value || '',
@@ -2116,7 +1935,6 @@ window.parseGeoJSON = (d) => {
       R.lat=ring.reduce((s,p)=>s+p[1],0)/ring.length;
       R.lon=ring.reduce((s,p)=>s+p[0],0)/ring.length;
       R.area=calcPolyArea(ring); R.areaUnit='m²';
-      // Poligon noktaları [lat, lon] formatına çevir
       R.polygon=ring.map(p=>[p[1],p[0]]);
     }
     else if(geom.type==='MultiPolygon'){
@@ -2413,7 +2231,6 @@ window.renderRep = async () => {
   const filter = window.REP_FILTER;
   const label = window.getRepLabel();
   
-  // Filtre UI
   const filterUI = `
   <div class="card" style="margin-bottom:14px;">
     <div class="ct">🔍 Dönem Filtresi <span class="tag tg">${label}</span></div>
@@ -2429,7 +2246,6 @@ window.renderRep = async () => {
     </div>
   </div>`;
   
-  // Filtrelenmiş olaylar
   const allFilteredEvs = [];
   DB.fields.forEach(f => {
     window.filterEvents(f.events, filter).forEach(e => allFilteredEvs.push({...e, fn:f.name, fc:f.color, fid:f.id}));
@@ -2446,7 +2262,6 @@ window.renderRep = async () => {
     byCat[e.type]=(byCat[e.type]||0)+t;
   });
 
-  // Tarla bazlı
   const fieldData = await Promise.all(DB.fields.map(async f => {
     const filtEvs = window.filterEvents(f.events, filter);
     const fc = filtEvs.reduce((c,e)=>c+(e.total||(e.cost*(e.qty||1))),0);
@@ -2458,7 +2273,6 @@ window.renderRep = async () => {
     return {f, fc, rev, profit, s, ph, he, evCount:filtEvs.length};
   }));
   
-  // Aylık trend (seçilen yıl için)
   const monthlyData = {};
   const MO=['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
   for(let m=1;m<=12;m++) monthlyData[m]={cost:0,rev:0,evs:0};
@@ -2475,7 +2289,6 @@ window.renderRep = async () => {
     }
   });
   
-  // Tekrar eden kayıtlar (aynı tip, benzer tarihler)
   const recurringMap = {};
   DB.fields.forEach(f => {
     (f.events||[]).forEach(e => {
@@ -2489,7 +2302,6 @@ window.renderRep = async () => {
     .sort((a,b)=>b[1].length-a[1].length)
     .slice(0,5);
   
-  // Aylık bar chart HTML
   const maxMonthCost = Math.max(...Object.values(monthlyData).map(m=>m.cost), 1);
   const monthBars = MO.map((name,i)=>{
     const m = monthlyData[i+1];
@@ -2506,7 +2318,6 @@ window.renderRep = async () => {
   }).join('');
 
   rc.innerHTML = filterUI + `
-  <!-- KPI'lar -->
   <div class="krow" style="margin-bottom:14px;">
     <div class="kpi" style="border-left:3px solid var(--red);"><div class="kpi-l">💸 Toplam Maliyet</div><div class="kpi-v">${Math.round(totalCost).toLocaleString('tr-TR')}</div><div class="kpi-s">₺ · ${getRepLabel()}</div></div>
     <div class="kpi" style="border-left:3px solid var(--green2);"><div class="kpi-l">💰 Toplam Gelir</div><div class="kpi-v">${Math.round(totalRevenue).toLocaleString('tr-TR')}</div><div class="kpi-s">₺</div></div>
@@ -2514,13 +2325,11 @@ window.renderRep = async () => {
     <div class="kpi"><div class="kpi-l">📋 Toplam Kayıt</div><div class="kpi-v">${allFilteredEvs.length}</div><div class="kpi-s">işlem</div></div>
   </div>
   
-  <!-- Aylık Trend -->
   <div class="card">
     <div class="ct">📊 Aylık Maliyet & Gelir Trendi (${filter.year}) <span style="font-size:10px;color:var(--text3);margin-left:6px;">🟥 Maliyet 🟩 Gelir — rakam = işlem sayısı</span></div>
     <div style="display:flex;gap:2px;height:100px;align-items:flex-end;">${monthBars}</div>
   </div>
   
-  <!-- Tarla + Kategori Breakdown -->
   <div class="g2">
     <div class="card">
       <div class="ct">🌾 Tarla Bazlı Maliyet & Karlılık</div>
@@ -2555,7 +2364,6 @@ window.renderRep = async () => {
     </div>
   </div>
   
-  <!-- Tekrar Eden Kayıtlar -->
   ${recurring.length?`<div class="card">
     <div class="ct">🔄 Tekrar Eden Kayıt Türleri (En Sık)</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;">
@@ -2575,7 +2383,6 @@ window.renderRep = async () => {
     </div>
   </div>`:''}
   
-  <!-- Özet Tablo -->
   <div class="card">
     <div class="ct">📋 Tarla Özet Tablosu — ${label}</div>
     <div style="overflow-x:auto;"><table class="tbl">
@@ -2656,8 +2463,6 @@ window.showField = async (id) => {
   renderFieldPage(CUR);
   if(!WXC[CUR.id]) fetchWX(CUR);
   if(!SATC[CUR.id]||(Date.now()-SATC[CUR.id].at>3600000)) setTimeout(()=>fetchSat(CUR), 500);
-  // fetchWXHistory: bootstrap durumunda calcSoilRZWB içinde otomatik çağrılır.
-  // Sadece WX_HISTORY önbelleği boşsa (sayfa yeni açıldıysa) önceden çek.
   if(!WX_HISTORY[CUR.id]?.days?.length) {
     setTimeout(() => fetchWXHistory(CUR).catch(()=>{}), 1200);
   }
@@ -2790,9 +2595,6 @@ setInterval(async () => {
   }
 }, 300000);
 
-// Periyodik RZWB ledger ilerletme ve WX önbellek yenileme
-// Bootstrap gereken tarlalar (ledger boş) için fetchWXHistory tetiklenir.
-// Mevcut tarlaların ledgeri calcSoilRZWB çağrısında otomatik ilerler.
 setInterval(() => {
   DB.fields.forEach(f => {
     const hasLedger = !!localStorage.getItem('tt_rzwb_' + f.id);
@@ -2801,10 +2603,6 @@ setInterval(() => {
     }
   });
 }, 3600000);
-
-// Alias
-window.importFieldFile = window.importFF;
-window.deleteCurrentPh = window.delCurPh;
 
 // ─── TOPRAK TİPİ TAHMİNİ (SoilGrids) ─────────────────────────
 window.fetchSoilTypeFromCoords = async (lat, lon) => {
@@ -2884,3 +2682,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.addEventListener('keydown',e=>{ if(e.key==='Escape') closePhViewer(); });
   if(!window.FB_USER&&DB.fields.length) fetchAllSatellites().catch(e=>console.warn('Başlangıç uydu hatası:', e));
 });
+
+// Alias
+window.importFieldFile = window.importFF;
+window.deleteCurrentPh = window.delCurPh;
+window.agrd = (crop) => { return CROP_AGR[crop] || CROP_AGR.default; };
