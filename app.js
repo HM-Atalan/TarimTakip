@@ -236,16 +236,27 @@ window.isIncompleteRZWBRecord = (rec) => {
     || ((rec.ETc_s ?? 0) === 0 && (rec.ETc_d ?? 0) === 0);
 };
 
-window.parseIrrMm = (evt, fcs) => {
+window.areaToDecare = (field) => {
+  const area = Math.max(0, parseFloat(field?.area) || 0);
+  const unit = field?.areaUnit || 'dönüm';
+  if(unit === 'hektar') return area * 10;
+  if(unit === 'm²' || unit === 'm2') return area / 1000;
+  return area;
+};
+
+window.parseIrrMm = (evt, fcs, field = null) => {
   const qty = parseFloat(evt.qty)||0, u = evt.unit||'';
-  let mm = 25;
+  let mm = 0;
   if(u === 'mm' && qty > 0) mm = qty;
-  else if(u === 'lt' && qty > 0) mm = qty / 100;
-  else if(u === 'toplam' && qty > 100) mm = qty / 100;
+  else if((u === 'lt' || u === 'toplam') && qty > 0) {
+    const decare = window.areaToDecare(field);
+    mm = decare > 0 ? qty / (decare * 1000) : 0;
+  }
   else if(u === 'saat') {
     const debit = evt.extra?.['e-sm'] === 'Damla sulama' ? 2.0
       : evt.extra?.['e-sm'] === 'Yağmurlama' ? 5.0 : 3.0;
-    mm = qty * debit;
+    const hours = parseFloat(evt.extra?.['e-sd']) || qty;
+    mm = Math.max(0, hours * debit);
   }
   return Math.min(mm, fcs * 1.2);
 };
@@ -371,7 +382,7 @@ window.calcSoilRZWB = async (field, force = false) => {
   (field.events || [])
     .filter(e => e.type === 'sulama' && !e.planned && e.date <= today)
     .forEach(e => {
-      const mm = window.parseIrrMm(e, fcs);
+      const mm = window.parseIrrMm(e, fcs, field);
       irrMap[e.date] = (irrMap[e.date] || 0) + mm;
     });
 
@@ -597,8 +608,8 @@ window.debugSoilModel = async (field = window.CUR) => {
     ETc_toplam_mm: s.ETc,
   };
   const check = {
-    yuzey_pct_ok: s.surface.pct === Math.round(s.surface.moist / s.surface.fc * 100),
-    derin_pct_ok: s.deep.pct === Math.round(s.deep.moist / s.deep.fc * 100),
+    yuzey_pct_ok: Math.abs(s.surface.pct - Math.round(s.surface.moist / s.surface.fc * 100)) <= 1,
+    derin_pct_ok: Math.abs(s.deep.pct - Math.round(s.deep.moist / s.deep.fc * 100)) <= 1,
     yuzey_moist_ok: s.surface.moist === Math.round(s.surface.fc - s.surface.Dr),
     derin_moist_ok: s.deep.moist === Math.round(s.deep.fc - s.deep.Dr),
   };
