@@ -171,6 +171,12 @@ const MAD_TABLE = {
 };
 
 window.getRZWBParams = (field) => {
+  // Eğer field (yani gönderilen CUR) yoksa hatayı engelle ve fonksiyondan çık
+  if (!field) {
+    console.warn("Hesaplama yapılacak tarla (field) seçili değil veya bulunamadı.");
+    return null; 
+  }
+  // Eğer field (yani gönderilen CUR) yoksa hatayı engelle ve fonksiyondan çık
   const soil = RZWB_SOIL[field.soilType] || RZWB_SOIL.tinli;
   let fcs = soil.fcs, wps = soil.wps, fcd = soil.fcd*2, wpd = soil.wpd*2;
   if(field.soilComposition) {
