@@ -514,6 +514,60 @@ window.calcSoilRZWB = async (field, force = false) => {
 
 window.calcSoil = (field) => window.calcSoilRZWB(field);
 
+window.debugSoilModel = async (field = window.CUR) => {
+  if(!field) {
+    console.warn('Önce bir tarla seçin, sonra await debugSoilModel() çalıştırın.');
+    return null;
+  }
+  const s = await window.calcSoilRZWB(field, true);
+  const main = {
+    tarla: field.name,
+    yuzey_pct: s.surface.pct,
+    yuzey_moist_mm: s.surface.moist,
+    yuzey_fc_mm: s.surface.fc,
+    yuzey_Dr_mm: s.surface.Dr,
+    yuzey_TAW_mm: s.surface.taw,
+    yuzey_RAW_mm: s.surface.raw,
+    yuzey_Ks: s.surface.Ks,
+    derin_pct: s.deep.pct,
+    derin_moist_mm: s.deep.moist,
+    derin_fc_mm: s.deep.fc,
+    derin_Dr_mm: s.deep.Dr,
+    derin_TAW_mm: s.deep.taw,
+    derin_RAW_mm: s.deep.raw,
+    derin_Ks: s.deep.Ks,
+    Kc: s.kc,
+    ETc_toplam_mm: s.ETc,
+  };
+  const check = {
+    yuzey_pct_ok: s.surface.pct === Math.round(s.surface.moist / s.surface.fc * 100),
+    derin_pct_ok: s.deep.pct === Math.round(s.deep.moist / s.deep.fc * 100),
+    yuzey_moist_ok: s.surface.moist === Math.round(s.surface.fc - s.surface.Dr),
+    derin_moist_ok: s.deep.moist === Math.round(s.deep.fc - s.deep.Dr),
+  };
+  const log = (s.log || []).map(r => ({
+    tarih: r.date,
+    Pe_mm: r.Pe,
+    sulama_mm: r.irr,
+    ETc_yuzey_mm: r.ETc_s,
+    ETc_derin_mm: r.ETc_d,
+    sizma_mm: r.perc,
+    Dr_yuzey_mm: r.Dr_s,
+    Dr_derin_mm: r.Dr_d,
+    nem_yuzey_pct: r.pct_s,
+    nem_derin_pct: r.pct_d,
+    nem_yuzey_mm: r.moist_s,
+    nem_derin_mm: r.moist_d,
+    Kc: r.kc,
+    Ks_yuzey: r.Ks_s,
+    Ks_derin: r.Ks_d,
+  }));
+  console.table(main);
+  console.table(check);
+  console.table(log);
+  return { main, check, log, raw: s };
+};
+
 window.computeAllSoils = async (force = false) => {
   const now = Date.now();
   if (!force && window.SOIL_CACHE.data && (now - window.SOIL_CACHE.lastUpdated < 300000)) {
