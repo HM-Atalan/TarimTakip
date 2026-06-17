@@ -6,6 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <title>Tarla Takip</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%232d6a4f'/%3E%3Cpath d='M12 46h40M16 42c6-18 18-28 34-25-2 17-14 27-34 25z' fill='%23d8f3dc'/%3E%3Cpath d='M18 42c8-8 16-14 28-21' stroke='%232d6a4f' stroke-width='4' fill='none'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
@@ -36,13 +37,13 @@
           Google ile Giriş
         </button>
         <div class="auth-sep">veya e-posta ile</div>
-        <div class="fg"><label>E-posta</label><input type="email" id="login-email" placeholder="ornek@email.com"/></div>
+        <div class="fg"><label>E-posta</label><input type="email" id="login-email" placeholder="ornek@email.com" autocomplete="username"/></div>
         <div class="fg"><label>Şifre</label><input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password"/></div>
         <div class="auth-err" id="login-err"></div>
         <button type="submit" class="btn btnp" style="width:100%;justify-content:center;margin-top:4px;">Giriş Yap</button>
       </form>
       <form class="auth-pane" id="ap-register" onsubmit="event.preventDefault();window.signEmail('register')">
-        <div class="fg"><label>E-posta</label><input type="email" id="reg-email" placeholder="ornek@email.com"/></div>
+        <div class="fg"><label>E-posta</label><input type="email" id="reg-email" placeholder="ornek@email.com" autocomplete="username"/></div>
         <div class="fg"><label>Şifre (min 6 karakter)</label><input type="password" id="reg-pass" placeholder="••••••••" autocomplete="new-password"/></div>
         <div class="auth-err" id="reg-err"></div>
         <button type="submit" class="btn btnp" style="width:100%;justify-content:center;margin-top:4px;">Hesap Oluştur</button>

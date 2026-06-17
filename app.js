@@ -148,8 +148,10 @@ window.loadWXHistoryLocal = (fieldId) => {
 window.getBestWXDays = (field) => {
   const hist = WX_HISTORY[field.id]?.days || [];
   const curr = WXC[field.id]?.days || [];
-  if(!hist.length && !curr.length) return simWX(field.lat, field.lon);
+  const fallback = simWX(field.lat, field.lon);
+  if(!hist.length && !curr.length) return fallback;
   const combined = {};
+  fallback.forEach(d => { combined[d.date] = d; });
   hist.forEach(d => { combined[d.date] = d; });
   curr.forEach(d => { combined[d.date] = { ...combined[d.date], ...d }; });
   return Object.values(combined).sort((a, b) => a.date.localeCompare(b.date));
@@ -219,6 +221,12 @@ window.normalizeRZWBRecord = (rec, params) => {
     moist_s: surf.moist,
     moist_d: deep.moist,
   };
+};
+
+window.isIncompleteRZWBRecord = (rec) => {
+  if(!rec) return true;
+  return ['Pe', 'ETc_s', 'ETc_d', 'Ks_s', 'Ks_d'].some(k => rec[k] === undefined || rec[k] === null)
+    || ((rec.ETc_s ?? 0) === 0 && (rec.ETc_d ?? 0) === 0 && (rec.et0 ?? 0) === 0);
 };
 
 window.parseIrrMm = (evt, fcs) => {
@@ -429,6 +437,39 @@ window.calcSoilRZWB = async (field, force = false) => {
           window.RZWB_CACHE[field.id] = { records: ledger, loadedAt: Date.now() };
         })
         .catch(e => console.warn('RZWB Firebase yazma:', e.message));
+    }
+  }
+
+  let repaired = false;
+  const wxByDate = Object.fromEntries(wxAll.map(d => [d.date, d]));
+  ledger = ledger
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((rec, idx, arr) => {
+      const dayWx = wxByDate[rec.date];
+      const prevRec = arr[idx - 1];
+      if(!dayWx || !window.isIncompleteRZWBRecord(rec)) return rec;
+      const step = window.rzwbStep(
+        { Dr_s: prevRec?.Dr_s ?? rec.Dr_s, Dr_d: prevRec?.Dr_d ?? rec.Dr_d },
+        dayWx,
+        irrMap[rec.date] || 0,
+        params,
+        field
+      );
+      repaired = true;
+      return prevRec ? { ...rec, ...step } : {
+        ...rec,
+        ...step,
+        Dr_s: rec.Dr_s,
+        Dr_d: rec.Dr_d,
+      };
+    });
+
+  if(repaired) {
+    try { localStorage.setItem(fbKey, JSON.stringify(ledger)); } catch(e) {}
+    if(uid && window.FB_MODE) {
+      window.fbSaveRZWB(uid, field.id, ledger)
+        .then(() => { window.RZWB_CACHE[field.id] = { records: ledger, loadedAt: Date.now() }; })
+        .catch(e => console.warn('RZWB Firebase onarım yazma:', e.message));
     }
   }
 
