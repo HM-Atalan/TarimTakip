@@ -230,10 +230,72 @@ window.normalizeRZWBRecord = (rec, params) => {
   };
 };
 
-window.isIncompleteRZWBRecord = (rec) => {
+window.isIncompleteRZWBRecord = (rec, expectedIrr) => {
   if(!rec) return true;
-  return ['Pe', 'ETc_s', 'ETc_d', 'Ks_s', 'Ks_d'].some(k => rec[k] === undefined || rec[k] === null)
+  const fieldsMissing = ['Pe', 'ETc_s', 'ETc_d', 'Ks_s', 'Ks_d'].some(k => rec[k] === undefined || rec[k] === null)
     || ((rec.ETc_s ?? 0) === 0 && (rec.ETc_d ?? 0) === 0);
+  if(fieldsMissing) return true;
+  // Ek güvenlik: ledger'daki sulama miktarı, güncel olay kayıtlarındaki
+  // (irrMap) miktardan farklıysa — invalidateRZWBFrom çağrılmamış olabilir
+  // (ör. eski veri, manuel localStorage müdahalesi) — yine de düzelt.
+  if(expectedIrr !== undefined) {
+    const recIrr = +(rec.irr ?? 0).toFixed(1);
+    const expIrr = +(expectedIrr ?? 0).toFixed(1);
+    if(Math.abs(recIrr - expIrr) > 0.1) return true;
+  }
+  return false;
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// LEDGER INVALIDATION — Sulama/olay kaydı eklenince/silinince çağrılır
+// ═══════════════════════════════════════════════════════════════════
+// Sorun: Ledger'da bir tarih zaten varsa, o tarihe ait yeni/değişen bir
+// sulama kaydı eklense bile simülasyon o günü "zaten var" diye atlıyordu
+// (calcSoilRZWB'deki existingDates.has(d.date) kontrolü). Bu yüzden
+// kullanıcı geçmişe dönük sulama girince hesaba hiç yansımıyordu.
+//
+// Çözüm: Bu fonksiyon, verilen tarihten itibaren (o tarih DAHİL) ledger
+// kayıtlarını kalıcı depodan (localStorage + Firebase) SİLER. Bir
+// sonraki calcSoilRZWB çağrısında bu tarihten itibaren ledger boş
+// bulunacağı için simülasyon o noktadan yeniden, GÜNCEL sulama/olay
+// verileriyle çalışır — yani sulama etkisi artık nem modeline yansır.
+window.invalidateRZWBFrom = async (fieldId, fromDate) => {
+  if(!fieldId || !fromDate) return;
+  const fbKey = 'tt_rzwb_' + fieldId;
+
+  // localStorage'dan o tarihten itibaren olan kayıtları çıkar
+  let ledger = [];
+  try {
+    const raw = localStorage.getItem(fbKey);
+    if(raw) ledger = JSON.parse(raw);
+  } catch(e) {}
+
+  const before = ledger.length;
+  ledger = ledger.filter(r => r.date < fromDate);
+  const removed = before - ledger.length;
+
+  if(removed > 0) {
+    console.log(`🔄 RZWB invalidate: ${fieldId} → ${fromDate} tarihinden itibaren ${removed} kayıt silindi, yeniden hesaplanacak`);
+  }
+
+  try { localStorage.setItem(fbKey, JSON.stringify(ledger)); } catch(e) {}
+
+  // In-memory cache'i de temizle (kritik — yoksa eski veri RAM'den okunur)
+  delete window.RZWB_CACHE[fieldId];
+
+  // Firebase'e de yaz (varsa)
+  const uid = window.FB_USER?.uid;
+  if(uid && window.FB_MODE) {
+    try {
+      await window.fbSaveRZWB(uid, fieldId, ledger);
+      window.RZWB_CACHE[fieldId] = { records: ledger, loadedAt: Date.now() };
+    } catch(e) {
+      console.warn('RZWB invalidate Firebase yazma hatası:', e.message);
+    }
+  }
+
+  // SC (UI hesap önbelleği) için de o tarladaki tüm önbelleği temizle
+  if(typeof window.invSoil === 'function') window.invSoil(fieldId);
 };
 
 window.areaToDecare = (field) => {
@@ -245,20 +307,90 @@ window.areaToDecare = (field) => {
 };
 
 window.parseIrrMm = (evt, fcs, field = null) => {
-  const qty = parseFloat(evt.qty)||0, u = evt.unit||'';
+  const qty = parseFloat(evt.qty) || 0;
+  const u   = (evt.unit || '').toLowerCase().trim();
+  const sm  = evt.extra?.['e-sm'] || '';   // sulama yöntemi
+  const sd  = parseFloat(evt.extra?.['e-sd']) || 0; // süre
+
+  if(qty <= 0) return 0;
+
+  const decare  = window.areaToDecare(field);   // dönüm
+  const m2Total = decare * 1000;                 // m²
+
   let mm = 0;
-  if(u === 'mm' && qty > 0) mm = qty;
-  else if((u === 'lt' || u === 'toplam') && qty > 0) {
-    const decare = window.areaToDecare(field);
-    mm = decare > 0 ? qty / (decare * 1000) : 0;
+
+  if(u === 'mm') {
+    // En net birim — doğrudan mm/m²
+    mm = qty;
+
+  } else if(u === 'lt') {
+    // "lt" girişi pratikte çiftçiler tarafından DÖNÜM BAŞINA debi olarak
+    // kullanılır (ör. damla sulamada "dönüme 3000 lt verdim").
+    // 1 lt/m² = 1mm olduğundan: lt/dönüm → mm = lt / 1000
+    // Çok büyük girilirse (>50000) muhtemelen tüm tarlanın TOPLAMIdır,
+    // o zaman gerçek alana bölünür.
+    if(qty > 50000 && m2Total > 0) {
+      mm = qty / m2Total; // toplam lt / toplam m²
+    } else {
+      mm = qty / 1000; // lt/dönüm → mm
+    }
+
+  } else if(u === 'ton') {
+    // Çiftçi pratiğinde "X ton" çoğunlukla DÖNÜM BAŞINA verilen su
+    // miktarını ifade eder (ör. salma sulamada "dönüme 40-80 ton su
+    // verdim" çok yaygın bir anlatım biçimidir).
+    // 1 ton/dönüm = 1000 lt / 1000 m² = 1 mm  →  ton/dönüm = mm (1:1)
+    //
+    // Eğer tarla büyük (>50 dönüm) ve girilen ton da büyükse (>200 ton)
+    // bu muhtemelen TÜM TARLANIN toplam tükettiği sudur, o zaman alana
+    // bölünür. Aksi halde (küçük/orta tarla, makul ton değeri) doğrudan
+    // dönüm başına yorumlanır — bu hem matematiksel hem agronomik olarak
+    // gerçekçi salma/karık sulama miktarları (40-120mm) üretir.
+    if(decare > 50 && qty > 200) {
+      mm = m2Total > 0 ? (qty * 1000) / m2Total : qty;
+    } else {
+      mm = qty; // ton/dönüm → mm (1:1) — salma sulamada tipik 40-120 aralığı
+    }
+
+  } else if(u === 'kg') {
+    // kg ≈ lt (su yoğunluğu ≈1). Aynı mantık: dönüm başına yorumla.
+    if(qty > 50000 && m2Total > 0) {
+      mm = qty / m2Total;
+    } else {
+      mm = qty / 1000; // kg/dönüm → mm
+    }
+
+  } else if(u === 'saat') {
+    // Süre × sistem debisi (mm/saat)
+    const debit = sm.includes('Damla')    ? 2.0
+      : sm.includes('Yağmurlama')         ? 5.0
+      : sm.includes('Salma') || sm.includes('Karık') ? 8.0
+      : sm.includes('Mikro')              ? 1.5 : 3.0;
+    const hours = sd > 0 ? sd : qty;
+    mm = hours * debit;
+
+  } else if(u === 'toplam') {
+    // "Toplam" genelde toplam litre veya toplam mm
+    // qty < 500 → muhtemelen mm veya lt/m²
+    // qty >= 500 → muhtemelen toplam litre
+    if(qty < 500) {
+      mm = qty; // mm olarak yorumla
+    } else {
+      mm = m2Total > 0 ? qty / m2Total : qty / 1000;
+    }
+
+  } else if(u === 'dönüm') {
+    // lt/dönüm: her dönüme bu kadar litre verildi
+    mm = qty / 1000; // lt/dönüm → mm (1000 lt/dönüm = 1 mm)
+
+  } else {
+    // Birim yok veya tanımsız
+    if(qty > 0 && qty <= 300) mm = qty; // mm varsay
+    else mm = 25; // varsayılan
   }
-  else if(u === 'saat') {
-    const debit = evt.extra?.['e-sm'] === 'Damla sulama' ? 2.0
-      : evt.extra?.['e-sm'] === 'Yağmurlama' ? 5.0 : 3.0;
-    const hours = parseFloat(evt.extra?.['e-sd']) || qty;
-    mm = Math.max(0, hours * debit);
-  }
-  return Math.min(mm, fcs * 1.2);
+
+  // Fiziksel sınırlar
+  return Math.max(0, Math.min(mm, fcs * 1.5));
 };
 
 window.fbSaveRZWB = async (uid, fieldId, records) => {
@@ -282,10 +414,63 @@ window.fbLoadRZWB = async (uid, fieldId) => {
 
 window.RZWB_CACHE = {};
 
+// Ürüne göre kök derinlik dağılımı [yüzey_0-10cm, derin_10-30cm]
+// Sığ köklü (marul, ıspanak) → yüzeye ağırlıklı su tüketimi
+// Derin köklü (zeytin, narenciye, tahıl) → derine ağırlıklı su tüketimi
+const ROOT_SPLIT = {
+  'Buğday':[0.30,0.70],'Arpa':[0.30,0.70],'Mısır':[0.25,0.75],
+  'Çavdar':[0.30,0.70],'Yulaf':[0.30,0.70],'Pirinç':[0.35,0.65],'Çeltik':[0.35,0.65],
+  'Tritikale':[0.30,0.70],
+  'Domates':[0.35,0.65],'Biber (dolmalık)':[0.40,0.60],'Biber (sivri)':[0.40,0.60],
+  'Biber (kapya)':[0.40,0.60],'Patlıcan':[0.38,0.62],'Salatalık':[0.45,0.55],
+  'Patates':[0.35,0.65],'Soğan (kuru)':[0.50,0.50],'Soğan (taze)':[0.60,0.40],
+  'Sarımsak':[0.55,0.45],'Havuç':[0.35,0.65],'Pancar':[0.35,0.65],
+  'Ispanak':[0.65,0.35],'Marul':[0.70,0.30],'Roka':[0.70,0.30],'Kıvırcık':[0.70,0.30],
+  'Maydanoz':[0.65,0.35],'Dereotu':[0.65,0.35],'Nane':[0.55,0.45],'Tere':[0.70,0.30],
+  'Brokoli':[0.45,0.55],'Karnabahar':[0.45,0.55],'Lahana':[0.45,0.55],
+  'Kabak (yaz)':[0.40,0.60],'Kabak (kış)':[0.38,0.62],'Balkabağı':[0.35,0.65],
+  'Zucchini':[0.40,0.60],'Acur':[0.42,0.58],'Hıyar (bostanlık)':[0.42,0.58],
+  'Bamya':[0.35,0.65],'Pırasa':[0.50,0.50],'Enginar':[0.30,0.70],'Kereviz':[0.45,0.55],
+  'Kuşkonmaz':[0.25,0.75],'Turp':[0.60,0.40],'Semizotu':[0.65,0.35],
+  'Barbunya (taze)':[0.40,0.60],'Fasulye (taze)':[0.40,0.60],'Bezelye (taze)':[0.40,0.60],
+  'Elma':[0.25,0.75],'Armut':[0.25,0.75],'Şeftali':[0.28,0.72],
+  'Kayısı':[0.25,0.75],'Kiraz':[0.25,0.75],'Vişne':[0.25,0.75],
+  'Erik':[0.28,0.72],'Üzüm':[0.25,0.75],'İncir':[0.22,0.78],'Dut':[0.25,0.75],
+  'Nar':[0.25,0.75],'Kivi':[0.28,0.72],'Çilek':[0.55,0.45],'Ayva':[0.25,0.75],
+  'Ahududu':[0.40,0.60],'Böğürtlen':[0.40,0.60],'Yaban Mersini':[0.45,0.55],
+  'Portakal':[0.22,0.78],'Mandalina':[0.22,0.78],'Limon':[0.22,0.78],
+  'Greyfurt':[0.20,0.80],'Bergamot':[0.20,0.80],'Pomelo':[0.20,0.80],'Turunç':[0.20,0.80],
+  'Zeytin (Sofralık)':[0.18,0.82],'Zeytin (Yağlık — Ayvalık)':[0.18,0.82],
+  'Zeytin (Yağlık — Gemlik)':[0.18,0.82],
+  'Pamuk':[0.28,0.72],'Ayçiçeği':[0.25,0.75],'Şeker Pancarı':[0.25,0.75],
+  'Kolza':[0.28,0.72],'Tütün':[0.32,0.68],'Keten':[0.30,0.70],'Aspir':[0.28,0.72],'Susam':[0.30,0.70],
+  'Nohut':[0.35,0.65],'Kırmızı Mercimek':[0.40,0.60],'Yeşil Mercimek':[0.40,0.60],
+  'Fasulye (kuru)':[0.38,0.62],'Bezelye (kuru)':[0.40,0.60],'Bakla':[0.35,0.65],
+  'Soya':[0.30,0.70],'Börülce':[0.35,0.65],'Barbunya (kuru)':[0.38,0.62],
+  'Yonca':[0.25,0.75],'Korunga':[0.28,0.72],'Fiğ':[0.32,0.68],
+  'Çayır Otu':[0.40,0.60],'Mısır Silajı':[0.25,0.75],'Sudan Otu':[0.30,0.70],
+  'Karpuz':[0.30,0.70],'Kavun':[0.32,0.68],
+  'Sera Domates':[0.38,0.62],'Sera Biber (dolmalık)':[0.42,0.58],
+  'Sera Salatalık':[0.45,0.55],'Sera Çilek':[0.58,0.42],
+  'Sera Marul':[0.72,0.28],'Sera Roka':[0.72,0.28],'Sera Maydanoz':[0.68,0.32],
+};
+window.ROOT_SPLIT = ROOT_SPLIT;
+
+// Toprak dokusuna göre perkolasyon hızı (yüzey doyunca derine geçiş oranı)
+// Kumlu → hızlı drenaj (gözenekli), Killi → yavaş drenaj (sıkı), Tınlı → orta
+const PERC_COEFF = {
+  kumlu:0.85, killiTin:0.55, tinli:0.60, killi:0.30, humuslu:0.50, kalkerli:0.45
+};
+window.PERC_COEFF = PERC_COEFF;
+
 window.rzwbStep = (prev, dayWx, irrMm, params, field) => {
-  const { fcs, wps, fcd, wpd, taw_s, taw_d, raw_s, raw_d } = params;
+  const { fcs, fcd, taw_s, taw_d, raw_s, raw_d } = params;
   const a = window.agrd(field.crop);
 
+  // ── Kök dağılımı: ürüne özgü (zeytin derine ağır, marul yüzeye ağır) ──
+  const [rootS, rootD] = ROOT_SPLIT[field.crop] || [0.35, 0.65];
+
+  // ── Kc: fenolojik döneme göre (cropData.js kc dizisinden) ────
   let kc = 0.7;
   if(field.status !== 'fallow' && field.plantDate && field.plantDate <= dayWx.date) {
     const gdd = window.calcGDD(field, dayWx.date);
@@ -301,6 +486,7 @@ window.rzwbStep = (prev, dayWx, irrMm, params, field) => {
     }
   }
 
+  // ── Ks: FAO-56 su stres katsayısı ────────────────────────────
   const ks_s = prev.Dr_s <= raw_s ? 1.0
     : Math.max(0, (taw_s - prev.Dr_s) / Math.max(1, taw_s - raw_s));
   const ks_d = prev.Dr_d <= raw_d ? 1.0
@@ -309,20 +495,24 @@ window.rzwbStep = (prev, dayWx, irrMm, params, field) => {
   const et0 = dayWx.et0 > 0 ? dayWx.et0
     : a.et * (dayWx.tmax > 38 ? 1.45 : dayWx.tmax > 33 ? 1.2 : 1.0);
 
+  // ── ETc: kök dağılımına göre katman paylaşımı ───────────────
   const isFallow = field.status === 'fallow';
-  const ETc_s = isFallow
-    ? et0 * 0.20
-    : et0 * kc * 0.35 * ks_s;
-  const ETc_d = isFallow
-    ? et0 * 0.03
-    : et0 * kc * 0.65 * ks_d;
+  const ETc_s = isFallow ? et0 * 0.20 : et0 * kc * rootS * ks_s;
+  const ETc_d = isFallow ? et0 * 0.03 : et0 * kc * rootD * ks_d;
 
   const rain = dayWx.rain || 0;
   const eff  = rain > 30 ? 0.70 : rain > 15 ? 0.82 : rain > 5 ? 0.92 : 1.0;
   const Pe   = +(rain * eff).toFixed(1);
 
+  const Dr_s_before = +prev.Dr_s.toFixed(1);
+  const Dr_d_before = +prev.Dr_d.toFixed(1);
+
   const rawDr_s = prev.Dr_s - Pe - irrMm + ETc_s;
-  const perc = rawDr_s < 0 ? Math.min(-rawDr_s, taw_d) : 0;
+
+  // ── Perkolasyon: toprak dokusuna göre hız (kumlu hızlı, killi yavaş) ──
+  const percCoeff = PERC_COEFF[field.soilType] || 0.60;
+  const perc = rawDr_s < 0 ? Math.min(-rawDr_s * percCoeff, taw_d) : 0;
+
   const Dr_s = Math.max(0, Math.min(taw_s, rawDr_s));
   const Dr_d = Math.max(0, Math.min(taw_d, prev.Dr_d - perc + ETc_d));
 
@@ -339,6 +529,9 @@ window.rzwbStep = (prev, dayWx, irrMm, params, field) => {
     perc: +perc.toFixed(1), netIn: +(Pe + irrMm).toFixed(1),
     pct_s: surfState.pct, pct_d: deepState.pct,
     moist_s: surfState.moist, moist_d: deepState.moist,
+    // ── Debug: her günün izlenebilirliği için ──
+    Dr_s_before, Dr_d_before,
+    rootS, rootD, percCoeff,
   };
 };
 
@@ -461,7 +654,9 @@ window.calcSoilRZWB = async (field, force = false) => {
   let repaired = false;
   const wxByDate = Object.fromEntries(wxAll.map(d => [d.date, d]));
   ledger = ledger.sort((a, b) => a.date.localeCompare(b.date));
-  const repairFrom = ledger.findIndex(rec => wxByDate[rec.date] && window.isIncompleteRZWBRecord(rec));
+  const repairFrom = ledger.findIndex(rec =>
+    wxByDate[rec.date] && window.isIncompleteRZWBRecord(rec, irrMap[rec.date] || 0)
+  );
   if(repairFrom >= 0) {
     const repairedLedger = ledger.slice(0, repairFrom);
     let repairPrev = repairFrom > 0
@@ -981,7 +1176,94 @@ window.fetchSat = async (field) => {
   SATC[id]={data:R, at:Date.now()};
   invSoil(id);
   renderSat(field, R);
+
+  // Bootstrap sonrası periyodik yumuşak kalibrasyon (drift önleme)
+  window.softCalibrateRZWB(field).catch(e => console.warn('Yumuşak kalibrasyon hatası:', e.message));
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// YUMUŞAK UYDU KALİBRASYONU — drift önleme
+// ═══════════════════════════════════════════════════════════════════
+// Bootstrap sadece tarla ilk oluşturulduğunda model Dr'sini uyduya tam
+// kilitler. Sonraki günlerde ledger kendi başına ilerler; haftalar
+// içinde model tahmini ile gerçek uydu nemi arasında sapma (drift)
+// birikebilir. Bu fonksiyon her uydu güncellemesinde BUGÜNKÜ ledger
+// kaydı ile uydu nemini karşılaştırır:
+//   • Fark %20'den KÜÇÜKSE: dokunmaz (model zaten tutarlı)
+//   • Fark %20'den BÜYÜKSE: tam overwrite YAPMAZ — Dr değerini uydu
+//     yönünde %30 oranında yumuşatarak (exponential smoothing) çeker.
+//     Böylece tek bir hatalı uydu okuması modeli bozmaz, ama gerçek
+//     bir sapma varsa birkaç güncellemede kademeli düzelir.
+window.softCalibrateRZWB = async (field) => {
+  if(!field) return;
+  const agroMid  = SATC[field.id]?.data?.soilM3;
+  const agroDeep = SATC[field.id]?.data?.soilMDeep;
+  if(!(agroMid > 0.01)) return; // taze uydu verisi yoksa atla
+
+  const params = window.getRZWBParams(field);
+  if(!params) return;
+  const { fcs, fcd, taw_s, taw_d } = params;
+
+  const today = tstr();
+  const fbKey = 'tt_rzwb_' + field.id;
+  let ledger = [];
+  try {
+    const raw = localStorage.getItem(fbKey);
+    if(raw) ledger = JSON.parse(raw);
+  } catch(e) {}
+  if(!ledger.length) return; // ledger yoksa (henüz bootstrap olmamış) atla
+
+  const todayIdx = ledger.findIndex(r => r.date === today);
+  if(todayIdx < 0) return; // bugün için kayıt yoksa atla
+
+  const rec = ledger[todayIdx];
+
+  // Uydu volumetrik nemini mm'ye çevir (bootstrap ile aynı formül)
+  const sat_moist_s = Math.min(fcs, agroMid * fcs * 1.15);
+  const sat_moist_d = Math.min(fcd, (agroDeep || agroMid * 0.88) * fcd);
+  const satDr_s = Math.max(0, Math.min(taw_s, fcs - sat_moist_s));
+  const satDr_d = Math.max(0, Math.min(taw_d, fcd - sat_moist_d));
+
+  // Model ile uydu arasındaki yüzde fark (FC üzerinden normalize)
+  const modelPct_s = Math.round((1 - rec.Dr_s/Math.max(1,taw_s))*100);
+  const satPct_s    = Math.round((1 - satDr_s/Math.max(1,taw_s))*100);
+  const diffPct_s   = Math.abs(modelPct_s - satPct_s);
+
+  const modelPct_d = Math.round((1 - rec.Dr_d/Math.max(1,taw_d))*100);
+  const satPct_d    = Math.round((1 - satDr_d/Math.max(1,taw_d))*100);
+  const diffPct_d   = Math.abs(modelPct_d - satPct_d);
+
+  let changed = false;
+  const SMOOTH = 0.30; // %30 uydu yönünde çek
+
+  if(diffPct_s > 20) {
+    const newDr_s = rec.Dr_s + (satDr_s - rec.Dr_s) * SMOOTH;
+    console.log(`🛰️ Yumuşak kalibrasyon (yüzey): model=%${modelPct_s} uydu=%${satPct_s} fark=%${diffPct_s} → düzeltiliyor`);
+    rec.Dr_s = +newDr_s.toFixed(1);
+    changed = true;
+  }
+  if(diffPct_d > 20) {
+    const newDr_d = rec.Dr_d + (satDr_d - rec.Dr_d) * SMOOTH;
+    console.log(`🛰️ Yumuşak kalibrasyon (derin): model=%${modelPct_d} uydu=%${satPct_d} fark=%${diffPct_d} → düzeltiliyor`);
+    rec.Dr_d = +newDr_d.toFixed(1);
+    changed = true;
+  }
+
+  if(changed) {
+    const normalized = window.normalizeRZWBRecord(rec, params);
+    ledger[todayIdx] = normalized;
+    try { localStorage.setItem(fbKey, JSON.stringify(ledger)); } catch(e) {}
+    delete window.RZWB_CACHE[field.id];
+    const uid = window.FB_USER?.uid;
+    if(uid && window.FB_MODE) {
+      try {
+        await window.fbSaveRZWB(uid, field.id, ledger);
+        window.RZWB_CACHE[field.id] = { records: ledger, loadedAt: Date.now() };
+      } catch(e) {}
+    }
+    if(typeof window.invSoil === 'function') window.invSoil(field.id);
+  }
+};
 
 window.renderSat = (field, R) => {
   if(!R) return;
@@ -1271,7 +1553,7 @@ window.updEF = () => {
   const type=qs('#e-type').value, df=qs('#e-dynfields');
   const ql=qs('#e-qlbl'), cl=qs('#e-clbl'), us=qs('#e-unit');
   if(type==='sulama'){
-    df.innerHTML=`<div class="fr"><div class="fg"><label>Sulama Yöntemi</label><select id="e-sm"><option>Damla sulama</option><option>Yağmurlama</option><option>Salma sulama</option><option>Karık sulama</option><option>Yüzey sulama</option><option>Mikro yağmurlama</option><option>El ile sulama</option></select></div><div class="fg"><label>Süre (saat)</label><input type="number" id="e-sd" placeholder="2" min="0" step="0.5"/></div></div>`;
+    df.innerHTML=`<div class="fr"><div class="fg"><label>Sulama Yöntemi</label><select id="e-sm"><option>Damla sulama</option><option>Yağmurlama</option><option>Salma sulama</option><option>Karık sulama</option><option>Yüzey sulama</option><option>Mikro yağmurlama</option><option>El ile sulama</option></select></div><div class="fg"><label>Süre (saat)</label><input type="number" id="e-sd" placeholder="2" min="0" step="0.5"/></div></div><div class="hint" style="margin:-4px 0 8px;">💧 En doğru sonuç için <b>mm</b> birimini kullanın. ton/kg/litre girerseniz <b>dönüm başına</b> miktar olarak yorumlanır (ör. salma sulamada dönüme 40-80 ton tipiktir).</div>`;
     if(ql)ql.textContent='Su Miktarı (mm)'; if(us)us.value='mm'; if(cl)cl.textContent='Birim Fiyat (₺/m³)';
   }else if(type==='gübre'){
     const fg={
@@ -1353,13 +1635,30 @@ window.saveEvent = async () => {
     revenue = harvestQty * price;
     profit = revenue - (cost * (qty||1));
   }
-  const ev={id:eid||gid(),date:dt,type:qs('#e-type').value,notes:qs('#e-notes').value,cost,qty,unit:qs('#e-unit').value,planned:qs('#e-status').value==='planned',extra,total:+(cost*(qty||1)).toFixed(2), revenue, profit};
+  const evType = qs('#e-type').value;
+
+  // Düzenleniyorsa eski tarihi de yakala — RZWB'yi en eski tarihten itibaren geçersiz kıl
+  const oldEv = eid ? (CUR.events||[]).find(e=>e.id===eid) : null;
+  const oldDate = oldEv?.date || null;
+
+  const ev={id:eid||gid(),date:dt,type:evType,notes:qs('#e-notes').value,cost,qty,unit:qs('#e-unit').value,planned:qs('#e-status').value==='planned',extra,total:+(cost*(qty||1)).toFixed(2), revenue, profit};
   if(eid){ const idx=(CUR.events||[]).findIndex(e=>e.id===eid); if(idx>=0) CUR.events[idx]=ev; else (CUR.events=CUR.events||[]).push(ev); }
   else (CUR.events=CUR.events||[]).push(ev);
   CUR.events.sort((a,b)=>b.date.localeCompare(a.date));
   invSoil(CUR.id);
   const fi=DB.fields.findIndex(f=>f.id===CUR.id); if(fi>=0) DB.fields[fi]=CUR;
   await saveFieldToDB(CUR);
+
+  // ── RZWB Ledger Invalidation ──────────────────────────────────
+  // Sulama kaydı eklendi/değiştirildiyse, o tarihten (ve düzenlemede
+  // varsa daha eski olan tarihten) itibaren tüm ledger kayıtları
+  // silinir ki bir sonraki hesaplamada GÜNCEL sulama verisiyle
+  // yeniden simüle edilsin. Sadece sulama değil — gübre/ekim/hasat
+  // gibi olaylar da fenoloji (Kc) üzerinden nem hesabını etkiler,
+  // bu yüzden tüm olay türlerinde invalidation tetiklenir.
+  const invalidateFrom = (oldDate && oldDate < dt) ? oldDate : dt;
+  await window.invalidateRZWBFrom(CUR.id, invalidateFrom);
+
   closeM('event'); await renderFieldPage(CUR); await renderSB(); await renderDash();
   toast(eid?'Güncellendi':'Kaydedildi');
   await window.computeAllSoils(true);
@@ -1367,10 +1666,23 @@ window.saveEvent = async () => {
 
 window.delEv = async (id) => {
   if(!CUR||!confirm('Bu kaydı silmek istediğinizden emin misiniz?')) return;
+
+  // Silinen olayın tarihini ÖNCE yakala (filtrelemeden önce!)
+  const delEvent = (CUR.events||[]).find(e=>e.id===id);
+  const delDate  = delEvent?.date || null;
+
   CUR.events=(CUR.events||[]).filter(e=>e.id!==id);
   invSoil(CUR.id);
   const fi=DB.fields.findIndex(f=>f.id===CUR.id); if(fi>=0) DB.fields[fi]=CUR;
   await saveFieldToDB(CUR);
+
+  // ── RZWB Ledger Invalidation ──────────────────────────────────
+  // Silinen kayıt sulama/gübre vb. ise, o tarihten itibaren ledger
+  // yeniden hesaplanmalı (artık silinen sulama olmadan).
+  if(delDate) {
+    await window.invalidateRZWBFrom(CUR.id, delDate);
+  }
+
   renderEvTab(CUR); await renderDash(); toast('Silindi');
   await window.computeAllSoils(true);
 }
