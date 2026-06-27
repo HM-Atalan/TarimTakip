@@ -1563,7 +1563,7 @@ window.updEF = () => {
       '── NPK KOMPOZİT ──':['NPK 20-20-0','NPK 15-15-15','NPK 8-16-16','NPK 10-20-20','NPK 12-12-17','NPK 20-10-10','NPK 5-10-25','NPK 3-9-27+4MgO','NPK 15-5-30','NPK 13-13-21','NPK 20-0-0','NPK 11-52-0 (MAP)'],
       '── Ca & Mg ──':['Kalsiyum Nitrat (%15.5 N + %26 CaO)','Magnezyum Sülfat — Kiserit (%27 MgO)','Kalsiyum Klorür','Dolomit (CaMg)','Kireç — Kalsit'],
       '── MİKRO ELEMENT ──':['Çinko Sülfat ZnSO₄','Demir Sülfat FeSO₄','Mangan Sülfat','Bor — Sodyum Tetraborat','Bakır Sülfat','Molibden (Na Molibdat)','Şelatlı Demir EDTA-Fe','Şelatlı Çinko EDTA-Zn','Şelatlı Mangan EDTA-Mn','Şelatlı Bakır EDTA-Cu','Multimikro Karışım'],
-      '── ORGANİK & BİOSTİMÜLANT ──':['Humik Asit (%85)','Humik+Fulvik Asit','Fulvik Asit Konsantre','Deniz Yosunu Ekstre (Ascophyllum)','Aminoasit Kompleks','Organik gübre (kompost)','Çiftlik gübresi','Leonardit','Vermikompost','Biyogübre Rhizobium','Mikoriza İnokulant (VAM)'],
+      '── ORGANİK & BİOSTİMÜLANT ──':['Humik Asit (%85)','Humik+Fulvik Asit','Fulvik Asit Konsantre','Deniz Yosunu Ekstre (Ascophyllum)','Aminoasit Kompleks','Organik gübre (kompost)','Organomineral Gübre (Sıvı)','Çiftlik gübresi','Leonardit','Vermikompost','Biyogübre Rhizobium','Mikoriza İnokulant (VAM)'],
       '── YAPRAK GÜBRE ──':['Yaprak gübresi NPK sıvı','Yaprak Ca+B','Yaprak Zn+Mn','Yaprak Fe+Mg','Yaprak Multimikro+İz Element'],
       '── ÖZEL ──':['Kükürt (%99 S granül)','Sodyum Molibdat','Silisyum Dioksit','Zeatin (Sitokinin)','Hümüs Toprağı']
     };
