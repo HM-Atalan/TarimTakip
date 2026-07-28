@@ -1276,9 +1276,228 @@ window.calcSoilRZWB = async (field, force = false) => {
 
   ledger = ledger.map(r => window.normalizeRZWBRecord(r, params));
 
-  // ── Bugünün kaydını al, yoksa oluştur ──
-  let todayRec = ledger.find(r => r.date === today);
+// ── Bugünün kaydını al, yoksa oluştur ──
+let todayRec = ledger.find(
+  r => r.date === today
+);
 
+// ─────────────────────────────────────
+// BUGÜNÜN KAYDI VARSA
+// Dr üzerinden nem yüzdesini yeniden hesapla
+// ─────────────────────────────────────
+
+if (todayRec) {
+
+  todayRec =
+    window.normalizeRZWBRecord(
+      todayRec,
+      params
+    );
+}
+
+// ─────────────────────────────────────
+// BUGÜNÜN KAYDI YOKSA
+// Son bilinen Dr değerinden bugünün
+// geçici durumunu oluştur
+// ─────────────────────────────────────
+
+if (
+  !todayRec &&
+  prev.Dr_s !== undefined &&
+  prev.Dr_d !== undefined
+) {
+
+  const surfState =
+    window.calcMoistureState(
+      fcs,
+      taw_s,
+      prev.Dr_s
+    );
+
+  const deepState =
+    window.calcMoistureState(
+      fcd,
+      taw_d,
+      prev.Dr_d
+    );
+
+  todayRec = {
+
+    Dr_s:
+      surfState.Dr,
+
+    Dr_d:
+      deepState.Dr,
+
+    pct_s:
+      surfState.pct,
+
+    pct_d:
+      deepState.pct,
+
+    moist_s:
+      surfState.moist,
+
+    moist_d:
+      deepState.moist,
+
+    kc:
+      0.7,
+
+    Ks_s:
+      1,
+
+    Ks_d:
+      1,
+
+    ETc_s:
+      0,
+
+    ETc_d:
+      0,
+
+    et0:
+      0,
+
+    rain:
+      0,
+
+    irr:
+      0,
+
+    perc:
+      0,
+
+    deepPerc:
+      0,
+
+    netIn:
+      0,
+
+    date:
+      today
+  };
+}
+
+// ─────────────────────────────────────
+// HİÇ LEDGER YOKSA
+// Varsayılan başlangıç durumu
+// ─────────────────────────────────────
+
+if (!todayRec) {
+
+  const mid_s =
+    taw_s * 0.45;
+
+  const mid_d =
+    taw_d * 0.50;
+
+  const surfState =
+    window.calcMoistureState(
+      fcs,
+      taw_s,
+      mid_s
+    );
+
+  const deepState =
+    window.calcMoistureState(
+      fcd,
+      taw_d,
+      mid_d
+    );
+
+  todayRec = {
+
+    Dr_s:
+      surfState.Dr,
+
+    Dr_d:
+      deepState.Dr,
+
+    pct_s:
+      surfState.pct,
+
+    pct_d:
+      deepState.pct,
+
+    moist_s:
+      surfState.moist,
+
+    moist_d:
+      deepState.moist,
+
+    kc:
+      0.7,
+
+    Ks_s:
+      1,
+
+    Ks_d:
+      1,
+
+    ETc_s:
+      0,
+
+    ETc_d:
+      0,
+
+    et0:
+      0,
+
+    rain:
+      0,
+
+    irr:
+      0,
+
+    perc:
+      0,
+
+    deepPerc:
+      0,
+
+    netIn:
+      0,
+
+    date:
+      today
+  };
+}
+
+// ─────────────────────────────────────
+// ÇIKIŞ DEĞERLERİ
+// ─────────────────────────────────────
+
+const pct_s_out =
+  Math.max(
+    0,
+    Math.min(
+      100,
+      todayRec.pct_s ?? 0
+    )
+  );
+
+const pct_d_out =
+  Math.max(
+    0,
+    Math.min(
+      100,
+      todayRec.pct_d ?? 0
+    )
+  );
+
+const moist_s_out =
+  Math.max(
+    0,
+    todayRec.moist_s ?? 0
+  );
+
+const moist_d_out =
+  Math.max(
+    0,
+    todayRec.moist_d ?? 0
+  );
+  
   // ★ DÜZELTME 1: todayRec varsa pct_s/pct_d'yi Dr ve TAW üzerinden yeniden hesapla
   if(todayRec) {
     todayRec = window.normalizeRZWBRecord(todayRec, params);
