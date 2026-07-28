@@ -2057,7 +2057,6 @@ window.fetchSat = async (field) => {
   // Bootstrap sonrası periyodik yumuşak kalibrasyon (drift önleme)
   window.softCalibrateRZWB(field).catch(e => console.warn('Yumuşak kalibrasyon hatası:', e.message));
 }
-return;
 // ═══════════════════════════════════════════════════════════════════
 // YUMUŞAK UYDU KALİBRASYONU — drift önleme
 // ═══════════════════════════════════════════════════════════════════
