@@ -179,39 +179,198 @@ const MAD_TABLE = {
   tahil:0.55, zeytin:0.65,
 };
 
+// ═══ RZWB PARAMETRELERİ ═══
+
 window.getRZWBParams = (field) => {
-  // Eğer field (yani gönderilen CUR) yoksa hatayı engelle ve fonksiyondan çık
+
   if (!field) {
-    console.warn("Hesaplama yapılacak tarla (field) seçili değil veya bulunamadı.");
-    return null; 
+    console.warn(
+      "Hesaplama yapılacak tarla seçili değil veya bulunamadı."
+    );
+    return null;
   }
-  // Eğer field (yani gönderilen CUR) yoksa hatayı engelle ve fonksiyondan çık
-  const soil = RZWB_SOIL[field.soilType] || RZWB_SOIL.tinli;
-  let fcs = soil.fcs, wps = soil.wps, fcd = soil.fcd*2, wpd = soil.wpd*2;
-  if(field.soilComposition) {
-    const { clay: cl, sand: sa, silt: si } = field.soilComposition;
-    const fc_calc  = (0.299 - 0.251*sa/100 + 0.195*cl/100) * 100;
-    const wp_calc  = (0.026 + 0.5*cl/100 - 0.013*sa/100) * 100;
-    if(fc_calc>20 && fc_calc<180){ fcs=Math.round(fc_calc); fcd=Math.round(fc_calc*1.1)*2; }
-    if(wp_calc>5  && wp_calc<80) { wps=Math.round(wp_calc); wpd=Math.round(wp_calc*1.1)*2; }
+
+  const soil =
+    RZWB_SOIL[field.soilType] ||
+    RZWB_SOIL.tinli;
+
+  let fcs = Number(soil.fcs);
+  let wps = Number(soil.wps);
+  let fcd = Number(soil.fcd);
+  let wpd = Number(soil.wpd);
+
+  // ─────────────────────────────────────
+  // TOPRAK KOMPOZİSYONU VARSA
+  // ─────────────────────────────────────
+
+  if (field.soilComposition) {
+
+    const {
+      clay: cl = 0,
+      sand: sa = 0,
+      silt: si = 0
+    } = field.soilComposition;
+
+    const fc_calc =
+      (
+        0.299 -
+        0.251 * sa / 100 +
+        0.195 * cl / 100
+      ) * 100;
+
+    const wp_calc =
+      (
+        0.026 +
+        0.5 * cl / 100 -
+        0.013 * sa / 100
+      ) * 100;
+
+    // Üst katman
+    if (
+      Number.isFinite(fc_calc) &&
+      fc_calc > 20 &&
+      fc_calc < 180
+    ) {
+      fcs = Math.round(fc_calc);
+    }
+
+    if (
+      Number.isFinite(wp_calc) &&
+      wp_calc > 5 &&
+      wp_calc < 80
+    ) {
+      wps = Math.round(wp_calc);
+    }
+
+    // Alt katman:
+    // Önceki sistemdeki 1.1 oranını koruyoruz.
+    // Ancak *2 burada yapılmıyor.
+    if (
+      Number.isFinite(fc_calc) &&
+      fc_calc > 20 &&
+      fc_calc < 180
+    ) {
+      fcd =
+        Math.round(fc_calc * 1.1);
+    }
+
+    if (
+      Number.isFinite(wp_calc) &&
+      wp_calc > 5 &&
+      wp_calc < 80
+    ) {
+      wpd =
+        Math.round(wp_calc * 1.1);
+    }
   }
-  const mad  = MAD_TABLE[field.category] ?? 0.50;
-  const taw_s = Math.max(1, fcs - wps);
-  const taw_d = Math.max(1, fcd - wpd);
-  const raw_s = taw_s * mad;
-  const raw_d = taw_d * mad;
-  return { fcs, wps, fcd, wpd, taw_s, taw_d, raw_s, raw_d, mad };
+
+  // ─────────────────────────────────────
+  // TAW
+  // ─────────────────────────────────────
+
+  const taw_s =
+    Math.max(
+      1,
+      fcs - wps
+    );
+
+  const taw_d =
+    Math.max(
+      1,
+      (fcd - wpd) * 2
+    );
+
+  // ─────────────────────────────────────
+  // MAD
+  // ─────────────────────────────────────
+
+  const mad =
+    MAD_TABLE[field.category] ?? 0.50;
+
+  const raw_s =
+    taw_s * mad;
+
+  const raw_d =
+    taw_d * mad;
+
+  return {
+    fcs,
+    wps,
+
+    fcd,
+    wpd,
+
+    taw_s,
+    taw_d,
+
+    raw_s,
+    raw_d,
+
+    mad
+  };
 };
 
+// ═══ RZWB NEM DURUMU ═══
+// Dr = toprak su açığı (mm)
+// TAW = toplam kullanılabilir su (mm)
+//
+// pct:
+//   100 = TAW tamamen dolu
+//     0 = TAW tamamen tükenmiş
+//
+// moist:
+//   Modeldeki FC/TAW ölçeğine göre normalize edilmiş mevcut su durumu.
+//   Bu değer doğrudan hacimsel su yüzdesi değildir.
+
 window.calcMoistureState = (fc, taw, Dr) => {
-  const fcSafe = Math.max(1, Number(fc) || 1);
-  const tawSafe = Math.max(1, Number(taw) || 1);
-  const drSafe = Math.max(0, Math.min(tawSafe, Number(Dr) || 0));
-  const moist = Math.max(0, Math.min(fcSafe, fcSafe - drSafe));
+
+  const fcSafe = Math.max(
+    1,
+    Number(fc) || 1
+  );
+
+  const tawSafe = Math.max(
+    1,
+    Number(taw) || 1
+  );
+
+  const drSafe = Math.max(
+    0,
+    Math.min(
+      tawSafe,
+      Number(Dr) || 0
+    )
+  );
+
+  // TAW'nin ne kadarı halen toprakta?
+  const availableFraction =
+    1 - (drSafe / tawSafe);
+
+  // Kullanılabilir su doluluk yüzdesi
+  const pct = Math.max(
+    0,
+    Math.min(
+      100,
+      Math.round(
+        availableFraction * 100
+      )
+    )
+  );
+
+  // Mevcut model ölçeğinde nem değeri
+  const moist =
+    Math.max(
+      0,
+      Math.min(
+        fcSafe,
+        fcSafe * availableFraction
+      )
+    );
+
   return {
     Dr: +drSafe.toFixed(1),
-    moist: Math.round(moist),
-    pct: Math.max(0, Math.min(100, Math.round((moist / fcSafe) * 100))),
+    pct,
+    moist: +moist.toFixed(1)
   };
 };
 
@@ -463,75 +622,478 @@ const PERC_COEFF = {
 };
 window.PERC_COEFF = PERC_COEFF;
 
-window.rzwbStep = (prev, dayWx, irrMm, params, field) => {
-  const { fcs, fcd, taw_s, taw_d, raw_s, raw_d } = params;
-  const a = window.agrd(field.crop);
+// ═══ RZWB GÜNLÜK SU DENGESİ ═══
+//
+// Üst katman:
+//   Yağış + sulama
+//   - ETc_s
+//   - gravity drainage
+//
+// Alt katman:
+//   + gravity drainage
+//   - ETc_d
+//   - deep percolation
+//
+// Dr = su açığı
+// Dr azalırsa toprak nemlenir.
+// Dr artarsa toprak kurur.
 
-  // ── Kök dağılımı: ürüne özgü (zeytin derine ağır, marul yüzeye ağır) ──
-  const [rootS, rootD] = ROOT_SPLIT[field.crop] || [0.35, 0.65];
+window.rzwbStep = (
+  prev,
+  dayWx,
+  irrMm,
+  params,
+  field
+) => {
 
-  // ── Kc: fenolojik döneme göre (cropData.js kc dizisinden) ────
+  const {
+    fcs,
+    fcd,
+    taw_s,
+    taw_d,
+    raw_s,
+    raw_d
+  } = params;
+
+  const a =
+    window.agrd(field.crop);
+
+  // ═══════════════════════════════════════
+  // KÖK DAĞILIMI
+  // ═══════════════════════════════════════
+
+  const [rootS, rootD] =
+    ROOT_SPLIT[field.crop] ||
+    [0.35, 0.65];
+
+  // ═══════════════════════════════════════
+  // Kc
+  // ═══════════════════════════════════════
+
   let kc = 0.7;
-  if(field.status !== 'fallow' && field.plantDate && field.plantDate <= dayWx.date) {
-    const gdd = window.calcGDD(field, dayWx.date);
-    if(gdd !== null) {
-      const gddTarget = a.gd[a.gd.length-1];
-      const ratio = Math.min(1, gdd / gddTarget);
-      if(a.kc?.length === 4) {
-        if(ratio < 0.1)      kc = a.kc[0];
-        else if(ratio < 0.5) kc = a.kc[0] + (a.kc[1]-a.kc[0])*(ratio/0.5);
-        else if(ratio < 0.8) kc = a.kc[1] + (a.kc[2]-a.kc[1])*((ratio-0.5)/0.3);
-        else                 kc = a.kc[2] + (a.kc[3]-a.kc[2])*Math.min(1,(ratio-0.8)/0.2);
+
+  if (
+    field.status !== 'fallow' &&
+    field.plantDate &&
+    field.plantDate <= dayWx.date
+  ) {
+
+    const gdd =
+      window.calcGDD(
+        field,
+        dayWx.date
+      );
+
+    if (gdd !== null) {
+
+      const gddTarget =
+        a.gd[a.gd.length - 1];
+
+      const ratio =
+        Math.min(
+          1,
+          gdd / gddTarget
+        );
+
+      if (a.kc?.length === 4) {
+
+        if (ratio < 0.1) {
+
+          kc = a.kc[0];
+
+        } else if (ratio < 0.5) {
+
+          kc =
+            a.kc[0] +
+            (a.kc[1] - a.kc[0]) *
+            (ratio / 0.5);
+
+        } else if (ratio < 0.8) {
+
+          kc =
+            a.kc[1] +
+            (a.kc[2] - a.kc[1]) *
+            ((ratio - 0.5) / 0.3);
+
+        } else {
+
+          kc =
+            a.kc[2] +
+            (a.kc[3] - a.kc[2]) *
+            Math.min(
+              1,
+              (ratio - 0.8) / 0.2
+            );
+        }
       }
     }
   }
 
-  // ── Ks: FAO-56 su stres katsayısı ────────────────────────────
-  const ks_s = prev.Dr_s <= raw_s ? 1.0
-    : Math.max(0, (taw_s - prev.Dr_s) / Math.max(1, taw_s - raw_s));
-  const ks_d = prev.Dr_d <= raw_d ? 1.0
-    : Math.max(0, (taw_d - prev.Dr_d) / Math.max(1, taw_d - raw_d));
+  // ═══════════════════════════════════════
+  // ÖNCEKİ SU AÇIĞI
+  // ═══════════════════════════════════════
 
-  const et0 = dayWx.et0 > 0 ? dayWx.et0
-    : a.et * (dayWx.tmax > 38 ? 1.45 : dayWx.tmax > 33 ? 1.2 : 1.0);
+  const prevDrS =
+    Math.max(
+      0,
+      Math.min(
+        taw_s,
+        Number(prev.Dr_s) || 0
+      )
+    );
 
-  // ── ETc: kök dağılımına göre katman paylaşımı ───────────────
-  const isFallow = field.status === 'fallow';
-  const ETc_s = isFallow ? et0 * 0.20 : et0 * kc * rootS * ks_s;
-  const ETc_d = isFallow ? et0 * 0.03 : et0 * kc * rootD * ks_d;
+  const prevDrD =
+    Math.max(
+      0,
+      Math.min(
+        taw_d,
+        Number(prev.Dr_d) || 0
+      )
+    );
 
-  const rain = dayWx.rain || 0;
-  const eff  = rain > 30 ? 0.70 : rain > 15 ? 0.82 : rain > 5 ? 0.92 : 1.0;
-  const Pe   = +(rain * eff).toFixed(1);
+  // ═══════════════════════════════════════
+  // Ks
+  // ═══════════════════════════════════════
 
-  const Dr_s_before = +prev.Dr_s.toFixed(1);
-  const Dr_d_before = +prev.Dr_d.toFixed(1);
+  const ks_s =
+    prevDrS <= raw_s
+      ? 1.0
+      : Math.max(
+          0,
+          (taw_s - prevDrS) /
+          Math.max(
+            1,
+            taw_s - raw_s
+          )
+        );
 
-  const rawDr_s = prev.Dr_s - Pe - irrMm + ETc_s;
+  const ks_d =
+    prevDrD <= raw_d
+      ? 1.0
+      : Math.max(
+          0,
+          (taw_d - prevDrD) /
+          Math.max(
+            1,
+            taw_d - raw_d
+          )
+        );
 
-  // ── Perkolasyon: toprak dokusuna göre hız (kumlu hızlı, killi yavaş) ──
-  const percCoeff = PERC_COEFF[field.soilType] || 0.60;
-  const perc = rawDr_s < 0 ? Math.min(-rawDr_s * percCoeff, taw_d) : 0;
+  // ═══════════════════════════════════════
+  // ET0
+  // ═══════════════════════════════════════
 
-  const Dr_s = Math.max(0, Math.min(taw_s, rawDr_s));
-  const Dr_d = Math.max(0, Math.min(taw_d, prev.Dr_d - perc + ETc_d));
+  const et0 =
+    dayWx.et0 > 0
+      ? dayWx.et0
+      : a.et *
+        (
+          dayWx.tmax > 38
+            ? 1.45
+            : dayWx.tmax > 33
+              ? 1.2
+              : 1.0
+        );
 
-  const surfState = window.calcMoistureState(fcs, taw_s, Dr_s);
-  const deepState = window.calcMoistureState(fcd, taw_d, Dr_d);
+  // ═══════════════════════════════════════
+  // ETc
+  // ═══════════════════════════════════════
+
+  const isFallow =
+    field.status === 'fallow';
+
+  const ETc_s =
+    isFallow
+      ? et0 * 0.20
+      : et0 * kc * rootS * ks_s;
+
+  const ETc_d =
+    isFallow
+      ? et0 * 0.03
+      : et0 * kc * rootD * ks_d;
+
+  // ═══════════════════════════════════════
+  // YAĞIŞ
+  // ═══════════════════════════════════════
+
+  const rain =
+    Math.max(
+      0,
+      Number(dayWx.rain) || 0
+    );
+
+  const eff =
+    rain > 30
+      ? 0.70
+      : rain > 15
+        ? 0.82
+        : rain > 5
+          ? 0.92
+          : 1.0;
+
+  const Pe =
+    +(rain * eff).toFixed(1);
+
+  // ═══════════════════════════════════════
+  // ÜST KATMAN SU GİRİŞİ
+  // ═══════════════════════════════════════
+
+  const netInput =
+    Pe + Math.max(
+      0,
+      Number(irrMm) || 0
+    );
+
+  // ═══════════════════════════════════════
+  // ÜST KATMANDA SULAMA/YAĞIŞ SONRASI
+  // ═══════════════════════════════════════
+
+  const waterExcessS =
+    Math.max(
+      0,
+      netInput -
+      prevDrS
+    );
+
+  // ═══════════════════════════════════════
+  // GRAVİTASYONEL DRENAJ
+  //
+  // Önceki modelde sadece:
+  //
+  // rawDr_s < 0
+  //
+  // olduğunda çalışıyordu.
+  //
+  // Yeni modelde üst katmandaki
+  // doluluk oranına bağlı çalışıyor.
+  // ═══════════════════════════════════════
+
+  const saturationS =
+    Math.max(
+      0,
+      Math.min(
+        1,
+        1 - prevDrS / taw_s
+      )
+    );
+
+  const percCoeff =
+    PERC_COEFF[field.soilType] ??
+    0.60;
+
+  // Üst katman %80'in altında ise
+  // serbest yerçekimi drenajı yok.
+  //
+  // %80 → %100 arasında giderek artar.
+  const drainageFactor =
+    saturationS <= 0.80
+      ? 0
+      : Math.pow(
+          (saturationS - 0.80) / 0.20,
+          2
+        );
+
+  // Fazla su + mevcut yüksek doygunluk
+  const gravityPotential =
+    waterExcessS +
+    (
+      Math.max(
+        0,
+        taw_s - prevDrS
+      ) *
+      0.10 *
+      drainageFactor
+    );
+
+  const gravityDrainage =
+    Math.min(
+      taw_d,
+      Math.max(
+        0,
+        gravityPotential *
+        percCoeff
+      )
+    );
+
+  // ═══════════════════════════════════════
+  // ÜST KATMAN YENİ Dr
+  // ═══════════════════════════════════════
+
+  const rawDr_s =
+    prevDrS -
+    netInput +
+    ETc_s +
+    gravityDrainage;
+
+  const Dr_s =
+    Math.max(
+      0,
+      Math.min(
+        taw_s,
+        rawDr_s
+      )
+    );
+
+  // ═══════════════════════════════════════
+  // ALT KATMAN
+  // ═══════════════════════════════════════
+
+  // Alt katmandaki aşırı doygunluk
+  // derin drenaja dönüşür.
+  const deepSaturation =
+    Math.max(
+      0,
+      Math.min(
+        1,
+        1 - prevDrD / taw_d
+      )
+    );
+
+  const deepDrainageFactor =
+    deepSaturation <= 0.90
+      ? 0
+      : Math.pow(
+          (deepSaturation - 0.90) / 0.10,
+          2
+        );
+
+  const deepPercCoeff =
+    percCoeff * 0.35;
+
+  const deepDrainage =
+    Math.min(
+      taw_d,
+      Math.max(
+        0,
+        (
+          Math.max(
+            0,
+            taw_d - prevDrD
+          ) *
+          0.10 *
+          deepDrainageFactor
+        ) *
+        deepPercCoeff
+      )
+    );
+
+  // ═══════════════════════════════════════
+  // ALT KATMAN YENİ Dr
+  // ═══════════════════════════════════════
+
+  const rawDr_d =
+    prevDrD -
+    gravityDrainage +
+    ETc_d +
+    deepDrainage;
+
+  const Dr_d =
+    Math.max(
+      0,
+      Math.min(
+        taw_d,
+        rawDr_d
+      )
+    );
+
+  // ═══════════════════════════════════════
+  // NEM DURUMLARI
+  // ═══════════════════════════════════════
+
+  const surfState =
+    window.calcMoistureState(
+      fcs,
+      taw_s,
+      Dr_s
+    );
+
+  const deepState =
+    window.calcMoistureState(
+      fcd,
+      taw_d,
+      Dr_d
+    );
+
+  // ═══════════════════════════════════════
+  // SONUÇ
+  // ═══════════════════════════════════════
 
   return {
-    Dr_s: surfState.Dr, Dr_d: deepState.Dr,
-    kc:   +kc.toFixed(3),
-    Ks_s: +ks_s.toFixed(3), Ks_d: +ks_d.toFixed(3),
-    ETc_s: +ETc_s.toFixed(1), ETc_d: +ETc_d.toFixed(1),
-    et0: +et0.toFixed(1), rain: +rain.toFixed(1),
-    Pe, irr: +irrMm.toFixed(1),
-    perc: +perc.toFixed(1), netIn: +(Pe + irrMm).toFixed(1),
-    pct_s: surfState.pct, pct_d: deepState.pct,
-    moist_s: surfState.moist, moist_d: deepState.moist,
-    // ── Debug: her günün izlenebilirliği için ──
-    Dr_s_before, Dr_d_before,
-    rootS, rootD, percCoeff,
+
+    Dr_s:
+      surfState.Dr,
+
+    Dr_d:
+      deepState.Dr,
+
+    kc:
+      +kc.toFixed(3),
+
+    Ks_s:
+      +ks_s.toFixed(3),
+
+    Ks_d:
+      +ks_d.toFixed(3),
+
+    ETc_s:
+      +ETc_s.toFixed(1),
+
+    ETc_d:
+      +ETc_d.toFixed(1),
+
+    et0:
+      +et0.toFixed(1),
+
+    rain:
+      +rain.toFixed(1),
+
+    Pe,
+
+    irr:
+      +Number(irrMm || 0).toFixed(1),
+
+    perc:
+      +gravityDrainage.toFixed(1),
+
+    deepPerc:
+      +deepDrainage.toFixed(1),
+
+    netIn:
+      +netInput.toFixed(1),
+
+    pct_s:
+      surfState.pct,
+
+    pct_d:
+      deepState.pct,
+
+    moist_s:
+      surfState.moist,
+
+    moist_d:
+      deepState.moist,
+
+    // DEBUG
+    Dr_s_before:
+      +prevDrS.toFixed(1),
+
+    Dr_d_before:
+      +prevDrD.toFixed(1),
+
+    rootS,
+
+    rootD,
+
+    percCoeff,
+
+    saturationS:
+      +saturationS.toFixed(3),
+
+    gravityDrainage:
+      +gravityDrainage.toFixed(1),
+
+    deepDrainage:
+      +deepDrainage.toFixed(1)
   };
 };
 
@@ -580,6 +1142,23 @@ window.calcSoilRZWB = async (field, force = false) => {
     });
 
   const lastRec  = ledger.length ? ledger[ledger.length - 1] : null;
+  console.log(
+  '🧪 RZWB CALL',
+  {
+    fieldId: field.id,
+    fieldName: field.name,
+    soilType: field.soilType,
+    category: field.category,
+    today,
+    lastRec: lastRec
+      ? {
+          date: lastRec.date,
+          Dr_s: lastRec.Dr_s,
+          Dr_d: lastRec.Dr_d
+        }
+      : null
+  }
+);
   const isBootstrap = !lastRec;
 
   let simStart, initDr_s, initDr_d, satCalibrated = false;
@@ -705,9 +1284,52 @@ window.calcSoilRZWB = async (field, force = false) => {
     todayRec = window.normalizeRZWBRecord(todayRec, params);
   }
 
-  if(!todayRec && prev.Dr_s !== undefined) {
-    const surfState = window.calcMoistureState(fcs, taw_s, prev.Dr_s);
-    const deepState = window.calcMoistureState(fcd, taw_d, prev.Dr_d);
+if (!todayRec && prev.Dr_s !== undefined) {
+
+  const surfState =
+    window.calcMoistureState(
+      fcs,
+      taw_s,
+      prev.Dr_s
+    );
+
+  const deepState =
+    window.calcMoistureState(
+      fcd,
+      taw_d,
+      prev.Dr_d
+    );
+
+  todayRec = {
+    Dr_s: surfState.Dr,
+    Dr_d: deepState.Dr,
+
+    pct_s: surfState.pct,
+    pct_d: deepState.pct,
+
+    moist_s: surfState.moist,
+    moist_d: deepState.moist,
+
+    kc: 0.7,
+
+    Ks_s: 1,
+    Ks_d: 1,
+
+    ETc_s: 0,
+    ETc_d: 0,
+
+    et0: 0,
+    rain: 0,
+    irr: 0,
+
+    perc: 0,
+    deepPerc: 0,
+
+    netIn: 0,
+
+    date: today
+  };
+}
     todayRec = {
       Dr_s: surfState.Dr, Dr_d: deepState.Dr,
       pct_s: surfState.pct, pct_d: deepState.pct,
@@ -718,10 +1340,25 @@ window.calcSoilRZWB = async (field, force = false) => {
   }
 
   if(!todayRec) {
-    const mid_s   = Math.round(taw_s * 0.45);
-    const mid_d   = Math.round(taw_d * 0.50);
-    const surfState = window.calcMoistureState(fcs, taw_s, mid_s);
-    const deepState = window.calcMoistureState(fcd, taw_d, mid_d);
+const mid_s =
+  taw_s * 0.45;
+
+const mid_d =
+  taw_d * 0.50;
+
+const surfState =
+  window.calcMoistureState(
+    fcs,
+    taw_s,
+    mid_s
+  );
+
+const deepState =
+  window.calcMoistureState(
+    fcd,
+    taw_d,
+    mid_d
+  );
     todayRec = {
       Dr_s: surfState.Dr, Dr_d: deepState.Dr,
       pct_s: surfState.pct, pct_d: deepState.pct,
@@ -1207,6 +1844,13 @@ window.fetchSat = async (field) => {
 
  // const today = tstr();
  // const fbKey = 'tt_rzwb_' + field.id;
+const RZWB_MODEL_VERSION = 2;
+
+const fbKey =
+  'tt_rzwb_v' +
+  RZWB_MODEL_VERSION +
+  '_' +
+  field.id;
  // let ledger = [];
  // try {
  //   const raw = localStorage.getItem(fbKey);
