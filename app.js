@@ -1178,7 +1178,7 @@ window.fetchSat = async (field) => {
   renderSat(field, R);
 
   // Bootstrap sonrası periyodik yumuşak kalibrasyon (drift önleme)
-//  window.softCalibrateRZWB(field).catch(e => console.warn('Yumuşak kalibrasyon hatası:', e.message));
+  window.softCalibrateRZWB(field).catch(e => console.warn('Yumuşak kalibrasyon hatası:', e.message));
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1194,77 +1194,77 @@ window.fetchSat = async (field) => {
 //     yönünde %30 oranında yumuşatarak (exponential smoothing) çeker.
 //     Böylece tek bir hatalı uydu okuması modeli bozmaz, ama gerçek
 //     bir sapma varsa birkaç güncellemede kademeli düzelir.
-//window.softCalibrateRZWB = async (field) => {
-//  return;
-//  if(!field) return;
-//  const agroMid  = SATC[field.id]?.data?.soilM3;
-//  const agroDeep = SATC[field.id]?.data?.soilMDeep;
-//  if(!(agroMid > 0.01)) return; // taze uydu verisi yoksa atla
+window.softCalibrateRZWB = async (field) => {
+  return;
+  if(!field) return;
+  const agroMid  = SATC[field.id]?.data?.soilM3;
+  const agroDeep = SATC[field.id]?.data?.soilMDeep;
+  if(!(agroMid > 0.01)) return; // taze uydu verisi yoksa atla
 
-//  const params = window.getRZWBParams(field);
-//  if(!params) return;
-//  const { fcs, fcd, taw_s, taw_d } = params;
+  const params = window.getRZWBParams(field);
+  if(!params) return;
+  const { fcs, fcd, taw_s, taw_d } = params;
 
- // const today = tstr();
- // const fbKey = 'tt_rzwb_' + field.id;
- // let ledger = [];
- // try {
- //   const raw = localStorage.getItem(fbKey);
- //   if(raw) ledger = JSON.parse(raw);
- // } catch(e) {}
- // if(!ledger.length) return; // ledger yoksa (henüz bootstrap olmamış) atla
+  const today = tstr();
+  const fbKey = 'tt_rzwb_' + field.id;
+  let ledger = [];
+  try {
+    const raw = localStorage.getItem(fbKey);
+    if(raw) ledger = JSON.parse(raw);
+  } catch(e) {}
+  if(!ledger.length) return; // ledger yoksa (henüz bootstrap olmamış) atla
 
-//  const todayIdx = ledger.findIndex(r => r.date === today);
-//  if(todayIdx < 0) return; // bugün için kayıt yoksa atla
+  const todayIdx = ledger.findIndex(r => r.date === today);
+  if(todayIdx < 0) return; // bugün için kayıt yoksa atla
 
-//  const rec = ledger[todayIdx];
+  const rec = ledger[todayIdx];
 
   // Uydu volumetrik nemini mm'ye çevir (bootstrap ile aynı formül)
-//  const sat_moist_s = Math.min(fcs, agroMid * fcs * 1.15);
-//  const sat_moist_d = Math.min(fcd, (agroDeep || agroMid * 0.88) * fcd);
-//  const satDr_s = Math.max(0, Math.min(taw_s, fcs - sat_moist_s));
-//  const satDr_d = Math.max(0, Math.min(taw_d, fcd - sat_moist_d));
+  const sat_moist_s = Math.min(fcs, agroMid * fcs * 1.15);
+  const sat_moist_d = Math.min(fcd, (agroDeep || agroMid * 0.88) * fcd);
+  const satDr_s = Math.max(0, Math.min(taw_s, fcs - sat_moist_s));
+  const satDr_d = Math.max(0, Math.min(taw_d, fcd - sat_moist_d));
 
   // Model ile uydu arasındaki yüzde fark (FC üzerinden normalize)
-//  const modelPct_s = Math.round((1 - rec.Dr_s/Math.max(1,taw_s))*100);
-//  const satPct_s    = Math.round((1 - satDr_s/Math.max(1,taw_s))*100);
-//  const diffPct_s   = Math.abs(modelPct_s - satPct_s);
+  const modelPct_s = Math.round((1 - rec.Dr_s/Math.max(1,taw_s))*100);
+  const satPct_s    = Math.round((1 - satDr_s/Math.max(1,taw_s))*100);
+  const diffPct_s   = Math.abs(modelPct_s - satPct_s);
 
-//  const modelPct_d = Math.round((1 - rec.Dr_d/Math.max(1,taw_d))*100);
-//  const satPct_d    = Math.round((1 - satDr_d/Math.max(1,taw_d))*100);
-//  const diffPct_d   = Math.abs(modelPct_d - satPct_d);
+  const modelPct_d = Math.round((1 - rec.Dr_d/Math.max(1,taw_d))*100);
+  const satPct_d    = Math.round((1 - satDr_d/Math.max(1,taw_d))*100);
+  const diffPct_d   = Math.abs(modelPct_d - satPct_d);
 
-//  let changed = false;
-//  const SMOOTH = 0.30; // %30 uydu yönünde çek
+  let changed = false;
+  const SMOOTH = 0.30; // %30 uydu yönünde çek
 
-//  if(diffPct_s > 20) {
-//    const newDr_s = rec.Dr_s + (satDr_s - rec.Dr_s) * SMOOTH;
-//    console.log(`🛰️ Yumuşak kalibrasyon (yüzey): model=%${modelPct_s} uydu=%${satPct_s} fark=%${diffPct_s} → düzeltiliyor`);
-//    rec.Dr_s = +newDr_s.toFixed(1);
-//    changed = true;
-//  }
-//  if(diffPct_d > 20) {
-//    const newDr_d = rec.Dr_d + (satDr_d - rec.Dr_d) * SMOOTH;
-//    console.log(`🛰️ Yumuşak kalibrasyon (derin): model=%${modelPct_d} uydu=%${satPct_d} fark=%${diffPct_d} → düzeltiliyor`);
-//    rec.Dr_d = +newDr_d.toFixed(1);
-//    changed = true;
-//  }
+  if(diffPct_s > 20) {
+    const newDr_s = rec.Dr_s + (satDr_s - rec.Dr_s) * SMOOTH;
+    console.log(`🛰️ Yumuşak kalibrasyon (yüzey): model=%${modelPct_s} uydu=%${satPct_s} fark=%${diffPct_s} → düzeltiliyor`);
+    rec.Dr_s = +newDr_s.toFixed(1);
+    changed = true;
+  }
+  if(diffPct_d > 20) {
+    const newDr_d = rec.Dr_d + (satDr_d - rec.Dr_d) * SMOOTH;
+    console.log(`🛰️ Yumuşak kalibrasyon (derin): model=%${modelPct_d} uydu=%${satPct_d} fark=%${diffPct_d} → düzeltiliyor`);
+    rec.Dr_d = +newDr_d.toFixed(1);
+    changed = true;
+  }
 
-//  if(changed) {
-//    const normalized = window.normalizeRZWBRecord(rec, params);
-//    ledger[todayIdx] = normalized;
-//    try { localStorage.setItem(fbKey, JSON.stringify(ledger)); } catch(e) {}
-//    delete window.RZWB_CACHE[field.id];
-//    const uid = window.FB_USER?.uid;
-//    if(uid && window.FB_MODE) {
-//      try {
-//        await window.fbSaveRZWB(uid, field.id, ledger);
-//        window.RZWB_CACHE[field.id] = { records: ledger, loadedAt: Date.now() };
-//      } catch(e) {}
-//    }
-//    if(typeof window.invSoil === 'function') window.invSoil(field.id);
-//  }
-//};
+  if(changed) {
+    const normalized = window.normalizeRZWBRecord(rec, params);
+    ledger[todayIdx] = normalized;
+    try { localStorage.setItem(fbKey, JSON.stringify(ledger)); } catch(e) {}
+    delete window.RZWB_CACHE[field.id];
+    const uid = window.FB_USER?.uid;
+    if(uid && window.FB_MODE) {
+      try {
+        await window.fbSaveRZWB(uid, field.id, ledger);
+        window.RZWB_CACHE[field.id] = { records: ledger, loadedAt: Date.now() };
+      } catch(e) {}
+    }
+    if(typeof window.invSoil === 'function') window.invSoil(field.id);
+  }
+};
 
 window.renderSat = (field, R) => {
   if(!R) return;
