@@ -1647,7 +1647,7 @@ const deepState =
 
     fc:
       fcs
-  };
+  }
 
   return result;
 };
