@@ -1195,7 +1195,7 @@ window.fetchSat = async (field) => {
 //     Böylece tek bir hatalı uydu okuması modeli bozmaz, ama gerçek
 //     bir sapma varsa birkaç güncellemede kademeli düzelir.
 window.softCalibrateRZWB = async (field) => {
-  return;
+//  return;
   if(!field) return;
   const agroMid  = SATC[field.id]?.data?.soilM3;
   const agroDeep = SATC[field.id]?.data?.soilMDeep;
@@ -1234,21 +1234,21 @@ window.softCalibrateRZWB = async (field) => {
   const satPct_d    = Math.round((1 - satDr_d/Math.max(1,taw_d))*100);
   const diffPct_d   = Math.abs(modelPct_d - satPct_d);
 
-  let changed = false;
-  const SMOOTH = 0.30; // %30 uydu yönünde çek
+ // let changed = false;
+ // const SMOOTH = 0.30; // %30 uydu yönünde çek
 
-  if(diffPct_s > 20) {
-    const newDr_s = rec.Dr_s + (satDr_s - rec.Dr_s) * SMOOTH;
-    console.log(`🛰️ Yumuşak kalibrasyon (yüzey): model=%${modelPct_s} uydu=%${satPct_s} fark=%${diffPct_s} → düzeltiliyor`);
-    rec.Dr_s = +newDr_s.toFixed(1);
-    changed = true;
-  }
-  if(diffPct_d > 20) {
-    const newDr_d = rec.Dr_d + (satDr_d - rec.Dr_d) * SMOOTH;
-    console.log(`🛰️ Yumuşak kalibrasyon (derin): model=%${modelPct_d} uydu=%${satPct_d} fark=%${diffPct_d} → düzeltiliyor`);
-    rec.Dr_d = +newDr_d.toFixed(1);
-    changed = true;
-  }
+//  if(diffPct_s > 20) {
+//    const newDr_s = rec.Dr_s + (satDr_s - rec.Dr_s) * SMOOTH;
+//    console.log(`🛰️ Yumuşak kalibrasyon (yüzey): model=%${modelPct_s} uydu=%${satPct_s} fark=%${diffPct_s} → düzeltiliyor`);
+//    rec.Dr_s = +newDr_s.toFixed(1);
+//    changed = true;
+//  }
+//  if(diffPct_d > 20) {
+//    const newDr_d = rec.Dr_d + (satDr_d - rec.Dr_d) * SMOOTH;
+//    console.log(`🛰️ Yumuşak kalibrasyon (derin): model=%${modelPct_d} uydu=%${satPct_d} fark=%${diffPct_d} → düzeltiliyor`);
+//    rec.Dr_d = +newDr_d.toFixed(1);
+//    changed = true;
+//  }
 
   if(changed) {
     const normalized = window.normalizeRZWBRecord(rec, params);
