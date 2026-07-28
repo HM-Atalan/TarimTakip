@@ -1594,39 +1594,60 @@ const deepState =
 
   const result = {
     surface: {
-      pct:   pct_s_out,
+      pct: pct_s_out,
       moist: moist_s_out,
-      fc:    fcs,
-      Dr:    todayRec.Dr_s,
-      taw:   taw_s,
-      raw:   params.raw_s,
-      Ks:    todayRec.Ks_s ?? 1,
+      fc: fcs,
+      Dr: todayRec.Dr_s,
+      taw: taw_s,
+      raw: params.raw_s,
+      Ks: todayRec.Ks_s ?? 1,
     },
-    deep: {
-      pct:   pct_d_out,
-      moist: moist_d_out,
-      fc:    fcd,
-      Dr:    todayRec.Dr_d,
-      taw:   taw_d,
-      raw:   params.raw_d,
-      Ks:    todayRec.Ks_d ?? 1,
-    },
-    et:           agrd(field.crop).et,
-    kc:           todayRec.kc ?? 0.7,
-    Ks:           Math.min(todayRec.Ks_s ?? 1, todayRec.Ks_d ?? 1),
-    ETc:          +((todayRec.ETc_s ?? 0) + (todayRec.ETc_d ?? 0)).toFixed(1),
-    log:          ledger.slice(-7),
-    params,
-    satCalibrated,
-    isBootstrap,
-    pct:   pct_s_out,   // geriye dönük uyumluluk
-    moist: moist_s_out,
-    fc:    fcs,
-  };
 
-  // ★ DÜZELTME 2: Cache'e yazmıyoruz – her çağrıda taze hesapla
-  // (İsteğe bağlı olarak kısa süreli cache eklenebilir, ama şimdilik kaldırıldı)
-  // SC[cacheKey] = result;  // bu satır artık yok
+    deep: {
+      pct: pct_d_out,
+      moist: moist_d_out,
+      fc: fcd,
+      Dr: todayRec.Dr_d,
+      taw: taw_d,
+      raw: params.raw_d,
+      Ks: todayRec.Ks_d ?? 1,
+    },
+
+    et: agrd(field.crop).et,
+
+    kc:
+      todayRec.kc ?? 0.7,
+
+    Ks:
+      Math.min(
+        todayRec.Ks_s ?? 1,
+        todayRec.Ks_d ?? 1
+      ),
+
+    ETc:
+      +(
+        (todayRec.ETc_s ?? 0) +
+        (todayRec.ETc_d ?? 0)
+      ).toFixed(1),
+
+    log:
+      ledger.slice(-7),
+
+    params,
+
+    satCalibrated,
+
+    isBootstrap,
+
+    pct:
+      pct_s_out,
+
+    moist:
+      moist_s_out,
+
+    fc:
+      fcs
+  };
 
   return result;
 };
