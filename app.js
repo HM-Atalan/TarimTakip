@@ -179,198 +179,39 @@ const MAD_TABLE = {
   tahil:0.55, zeytin:0.65,
 };
 
-// ═══ RZWB PARAMETRELERİ ═══
-
 window.getRZWBParams = (field) => {
-
+  // Eğer field (yani gönderilen CUR) yoksa hatayı engelle ve fonksiyondan çık
   if (!field) {
-    console.warn(
-      "Hesaplama yapılacak tarla seçili değil veya bulunamadı."
-    );
-    return null;
+    console.warn("Hesaplama yapılacak tarla (field) seçili değil veya bulunamadı.");
+    return null; 
   }
-
-  const soil =
-    RZWB_SOIL[field.soilType] ||
-    RZWB_SOIL.tinli;
-
-  let fcs = Number(soil.fcs);
-  let wps = Number(soil.wps);
-  let fcd = Number(soil.fcd);
-  let wpd = Number(soil.wpd);
-
-  // ─────────────────────────────────────
-  // TOPRAK KOMPOZİSYONU VARSA
-  // ─────────────────────────────────────
-
-  if (field.soilComposition) {
-
-    const {
-      clay: cl = 0,
-      sand: sa = 0,
-      silt: si = 0
-    } = field.soilComposition;
-
-    const fc_calc =
-      (
-        0.299 -
-        0.251 * sa / 100 +
-        0.195 * cl / 100
-      ) * 100;
-
-    const wp_calc =
-      (
-        0.026 +
-        0.5 * cl / 100 -
-        0.013 * sa / 100
-      ) * 100;
-
-    // Üst katman
-    if (
-      Number.isFinite(fc_calc) &&
-      fc_calc > 20 &&
-      fc_calc < 180
-    ) {
-      fcs = Math.round(fc_calc);
-    }
-
-    if (
-      Number.isFinite(wp_calc) &&
-      wp_calc > 5 &&
-      wp_calc < 80
-    ) {
-      wps = Math.round(wp_calc);
-    }
-
-    // Alt katman:
-    // Önceki sistemdeki 1.1 oranını koruyoruz.
-    // Ancak *2 burada yapılmıyor.
-    if (
-      Number.isFinite(fc_calc) &&
-      fc_calc > 20 &&
-      fc_calc < 180
-    ) {
-      fcd =
-        Math.round(fc_calc * 1.1);
-    }
-
-    if (
-      Number.isFinite(wp_calc) &&
-      wp_calc > 5 &&
-      wp_calc < 80
-    ) {
-      wpd =
-        Math.round(wp_calc * 1.1);
-    }
+  // Eğer field (yani gönderilen CUR) yoksa hatayı engelle ve fonksiyondan çık
+  const soil = RZWB_SOIL[field.soilType] || RZWB_SOIL.tinli;
+  let fcs = soil.fcs, wps = soil.wps, fcd = soil.fcd*2, wpd = soil.wpd*2;
+  if(field.soilComposition) {
+    const { clay: cl, sand: sa, silt: si } = field.soilComposition;
+    const fc_calc  = (0.299 - 0.251*sa/100 + 0.195*cl/100) * 100;
+    const wp_calc  = (0.026 + 0.5*cl/100 - 0.013*sa/100) * 100;
+    if(fc_calc>20 && fc_calc<180){ fcs=Math.round(fc_calc); fcd=Math.round(fc_calc*1.1)*2; }
+    if(wp_calc>5  && wp_calc<80) { wps=Math.round(wp_calc); wpd=Math.round(wp_calc*1.1)*2; }
   }
-
-  // ─────────────────────────────────────
-  // TAW
-  // ─────────────────────────────────────
-
-  const taw_s =
-    Math.max(
-      1,
-      fcs - wps
-    );
-
-  const taw_d =
-    Math.max(
-      1,
-      (fcd - wpd) * 2
-    );
-
-  // ─────────────────────────────────────
-  // MAD
-  // ─────────────────────────────────────
-
-  const mad =
-    MAD_TABLE[field.category] ?? 0.50;
-
-  const raw_s =
-    taw_s * mad;
-
-  const raw_d =
-    taw_d * mad;
-
-  return {
-    fcs,
-    wps,
-
-    fcd,
-    wpd,
-
-    taw_s,
-    taw_d,
-
-    raw_s,
-    raw_d,
-
-    mad
-  };
+  const mad  = MAD_TABLE[field.category] ?? 0.50;
+  const taw_s = Math.max(1, fcs - wps);
+  const taw_d = Math.max(1, fcd - wpd);
+  const raw_s = taw_s * mad;
+  const raw_d = taw_d * mad;
+  return { fcs, wps, fcd, wpd, taw_s, taw_d, raw_s, raw_d, mad };
 };
 
-// ═══ RZWB NEM DURUMU ═══
-// Dr = toprak su açığı (mm)
-// TAW = toplam kullanılabilir su (mm)
-//
-// pct:
-//   100 = TAW tamamen dolu
-//     0 = TAW tamamen tükenmiş
-//
-// moist:
-//   Modeldeki FC/TAW ölçeğine göre normalize edilmiş mevcut su durumu.
-//   Bu değer doğrudan hacimsel su yüzdesi değildir.
-
 window.calcMoistureState = (fc, taw, Dr) => {
-
-  const fcSafe = Math.max(
-    1,
-    Number(fc) || 1
-  );
-
-  const tawSafe = Math.max(
-    1,
-    Number(taw) || 1
-  );
-
-  const drSafe = Math.max(
-    0,
-    Math.min(
-      tawSafe,
-      Number(Dr) || 0
-    )
-  );
-
-  // TAW'nin ne kadarı halen toprakta?
-  const availableFraction =
-    1 - (drSafe / tawSafe);
-
-  // Kullanılabilir su doluluk yüzdesi
-  const pct = Math.max(
-    0,
-    Math.min(
-      100,
-      Math.round(
-        availableFraction * 100
-      )
-    )
-  );
-
-  // Mevcut model ölçeğinde nem değeri
-  const moist =
-    Math.max(
-      0,
-      Math.min(
-        fcSafe,
-        fcSafe * availableFraction
-      )
-    );
-
+  const fcSafe = Math.max(1, Number(fc) || 1);
+  const tawSafe = Math.max(1, Number(taw) || 1);
+  const drSafe = Math.max(0, Math.min(tawSafe, Number(Dr) || 0));
+  const moist = Math.max(0, Math.min(fcSafe, fcSafe - drSafe));
   return {
     Dr: +drSafe.toFixed(1),
-    pct,
-    moist: +moist.toFixed(1)
+    moist: Math.round(moist),
+    pct: Math.max(0, Math.min(100, Math.round((moist / fcSafe) * 100))),
   };
 };
 
@@ -622,478 +463,75 @@ const PERC_COEFF = {
 };
 window.PERC_COEFF = PERC_COEFF;
 
-// ═══ RZWB GÜNLÜK SU DENGESİ ═══
-//
-// Üst katman:
-//   Yağış + sulama
-//   - ETc_s
-//   - gravity drainage
-//
-// Alt katman:
-//   + gravity drainage
-//   - ETc_d
-//   - deep percolation
-//
-// Dr = su açığı
-// Dr azalırsa toprak nemlenir.
-// Dr artarsa toprak kurur.
+window.rzwbStep = (prev, dayWx, irrMm, params, field) => {
+  const { fcs, fcd, taw_s, taw_d, raw_s, raw_d } = params;
+  const a = window.agrd(field.crop);
 
-window.rzwbStep = (
-  prev,
-  dayWx,
-  irrMm,
-  params,
-  field
-) => {
+  // ── Kök dağılımı: ürüne özgü (zeytin derine ağır, marul yüzeye ağır) ──
+  const [rootS, rootD] = ROOT_SPLIT[field.crop] || [0.35, 0.65];
 
-  const {
-    fcs,
-    fcd,
-    taw_s,
-    taw_d,
-    raw_s,
-    raw_d
-  } = params;
-
-  const a =
-    window.agrd(field.crop);
-
-  // ═══════════════════════════════════════
-  // KÖK DAĞILIMI
-  // ═══════════════════════════════════════
-
-  const [rootS, rootD] =
-    ROOT_SPLIT[field.crop] ||
-    [0.35, 0.65];
-
-  // ═══════════════════════════════════════
-  // Kc
-  // ═══════════════════════════════════════
-
+  // ── Kc: fenolojik döneme göre (cropData.js kc dizisinden) ────
   let kc = 0.7;
-
-  if (
-    field.status !== 'fallow' &&
-    field.plantDate &&
-    field.plantDate <= dayWx.date
-  ) {
-
-    const gdd =
-      window.calcGDD(
-        field,
-        dayWx.date
-      );
-
-    if (gdd !== null) {
-
-      const gddTarget =
-        a.gd[a.gd.length - 1];
-
-      const ratio =
-        Math.min(
-          1,
-          gdd / gddTarget
-        );
-
-      if (a.kc?.length === 4) {
-
-        if (ratio < 0.1) {
-
-          kc = a.kc[0];
-
-        } else if (ratio < 0.5) {
-
-          kc =
-            a.kc[0] +
-            (a.kc[1] - a.kc[0]) *
-            (ratio / 0.5);
-
-        } else if (ratio < 0.8) {
-
-          kc =
-            a.kc[1] +
-            (a.kc[2] - a.kc[1]) *
-            ((ratio - 0.5) / 0.3);
-
-        } else {
-
-          kc =
-            a.kc[2] +
-            (a.kc[3] - a.kc[2]) *
-            Math.min(
-              1,
-              (ratio - 0.8) / 0.2
-            );
-        }
+  if(field.status !== 'fallow' && field.plantDate && field.plantDate <= dayWx.date) {
+    const gdd = window.calcGDD(field, dayWx.date);
+    if(gdd !== null) {
+      const gddTarget = a.gd[a.gd.length-1];
+      const ratio = Math.min(1, gdd / gddTarget);
+      if(a.kc?.length === 4) {
+        if(ratio < 0.1)      kc = a.kc[0];
+        else if(ratio < 0.5) kc = a.kc[0] + (a.kc[1]-a.kc[0])*(ratio/0.5);
+        else if(ratio < 0.8) kc = a.kc[1] + (a.kc[2]-a.kc[1])*((ratio-0.5)/0.3);
+        else                 kc = a.kc[2] + (a.kc[3]-a.kc[2])*Math.min(1,(ratio-0.8)/0.2);
       }
     }
   }
 
-  // ═══════════════════════════════════════
-  // ÖNCEKİ SU AÇIĞI
-  // ═══════════════════════════════════════
+  // ── Ks: FAO-56 su stres katsayısı ────────────────────────────
+  const ks_s = prev.Dr_s <= raw_s ? 1.0
+    : Math.max(0, (taw_s - prev.Dr_s) / Math.max(1, taw_s - raw_s));
+  const ks_d = prev.Dr_d <= raw_d ? 1.0
+    : Math.max(0, (taw_d - prev.Dr_d) / Math.max(1, taw_d - raw_d));
 
-  const prevDrS =
-    Math.max(
-      0,
-      Math.min(
-        taw_s,
-        Number(prev.Dr_s) || 0
-      )
-    );
+  const et0 = dayWx.et0 > 0 ? dayWx.et0
+    : a.et * (dayWx.tmax > 38 ? 1.45 : dayWx.tmax > 33 ? 1.2 : 1.0);
 
-  const prevDrD =
-    Math.max(
-      0,
-      Math.min(
-        taw_d,
-        Number(prev.Dr_d) || 0
-      )
-    );
+  // ── ETc: kök dağılımına göre katman paylaşımı ───────────────
+  const isFallow = field.status === 'fallow';
+  const ETc_s = isFallow ? et0 * 0.20 : et0 * kc * rootS * ks_s;
+  const ETc_d = isFallow ? et0 * 0.03 : et0 * kc * rootD * ks_d;
 
-  // ═══════════════════════════════════════
-  // Ks
-  // ═══════════════════════════════════════
+  const rain = dayWx.rain || 0;
+  const eff  = rain > 30 ? 0.70 : rain > 15 ? 0.82 : rain > 5 ? 0.92 : 1.0;
+  const Pe   = +(rain * eff).toFixed(1);
 
-  const ks_s =
-    prevDrS <= raw_s
-      ? 1.0
-      : Math.max(
-          0,
-          (taw_s - prevDrS) /
-          Math.max(
-            1,
-            taw_s - raw_s
-          )
-        );
+  const Dr_s_before = +prev.Dr_s.toFixed(1);
+  const Dr_d_before = +prev.Dr_d.toFixed(1);
 
-  const ks_d =
-    prevDrD <= raw_d
-      ? 1.0
-      : Math.max(
-          0,
-          (taw_d - prevDrD) /
-          Math.max(
-            1,
-            taw_d - raw_d
-          )
-        );
+  const rawDr_s = prev.Dr_s - Pe - irrMm + ETc_s;
 
-  // ═══════════════════════════════════════
-  // ET0
-  // ═══════════════════════════════════════
+  // ── Perkolasyon: toprak dokusuna göre hız (kumlu hızlı, killi yavaş) ──
+  const percCoeff = PERC_COEFF[field.soilType] || 0.60;
+  const perc = rawDr_s < 0 ? Math.min(-rawDr_s * percCoeff, taw_d) : 0;
 
-  const et0 =
-    dayWx.et0 > 0
-      ? dayWx.et0
-      : a.et *
-        (
-          dayWx.tmax > 38
-            ? 1.45
-            : dayWx.tmax > 33
-              ? 1.2
-              : 1.0
-        );
+  const Dr_s = Math.max(0, Math.min(taw_s, rawDr_s));
+  const Dr_d = Math.max(0, Math.min(taw_d, prev.Dr_d - perc + ETc_d));
 
-  // ═══════════════════════════════════════
-  // ETc
-  // ═══════════════════════════════════════
-
-  const isFallow =
-    field.status === 'fallow';
-
-  const ETc_s =
-    isFallow
-      ? et0 * 0.20
-      : et0 * kc * rootS * ks_s;
-
-  const ETc_d =
-    isFallow
-      ? et0 * 0.03
-      : et0 * kc * rootD * ks_d;
-
-  // ═══════════════════════════════════════
-  // YAĞIŞ
-  // ═══════════════════════════════════════
-
-  const rain =
-    Math.max(
-      0,
-      Number(dayWx.rain) || 0
-    );
-
-  const eff =
-    rain > 30
-      ? 0.70
-      : rain > 15
-        ? 0.82
-        : rain > 5
-          ? 0.92
-          : 1.0;
-
-  const Pe =
-    +(rain * eff).toFixed(1);
-
-  // ═══════════════════════════════════════
-  // ÜST KATMAN SU GİRİŞİ
-  // ═══════════════════════════════════════
-
-  const netInput =
-    Pe + Math.max(
-      0,
-      Number(irrMm) || 0
-    );
-
-  // ═══════════════════════════════════════
-  // ÜST KATMANDA SULAMA/YAĞIŞ SONRASI
-  // ═══════════════════════════════════════
-
-  const waterExcessS =
-    Math.max(
-      0,
-      netInput -
-      prevDrS
-    );
-
-  // ═══════════════════════════════════════
-  // GRAVİTASYONEL DRENAJ
-  //
-  // Önceki modelde sadece:
-  //
-  // rawDr_s < 0
-  //
-  // olduğunda çalışıyordu.
-  //
-  // Yeni modelde üst katmandaki
-  // doluluk oranına bağlı çalışıyor.
-  // ═══════════════════════════════════════
-
-  const saturationS =
-    Math.max(
-      0,
-      Math.min(
-        1,
-        1 - prevDrS / taw_s
-      )
-    );
-
-  const percCoeff =
-    PERC_COEFF[field.soilType] ??
-    0.60;
-
-  // Üst katman %80'in altında ise
-  // serbest yerçekimi drenajı yok.
-  //
-  // %80 → %100 arasında giderek artar.
-  const drainageFactor =
-    saturationS <= 0.80
-      ? 0
-      : Math.pow(
-          (saturationS - 0.80) / 0.20,
-          2
-        );
-
-  // Fazla su + mevcut yüksek doygunluk
-  const gravityPotential =
-    waterExcessS +
-    (
-      Math.max(
-        0,
-        taw_s - prevDrS
-      ) *
-      0.10 *
-      drainageFactor
-    );
-
-  const gravityDrainage =
-    Math.min(
-      taw_d,
-      Math.max(
-        0,
-        gravityPotential *
-        percCoeff
-      )
-    );
-
-  // ═══════════════════════════════════════
-  // ÜST KATMAN YENİ Dr
-  // ═══════════════════════════════════════
-
-  const rawDr_s =
-    prevDrS -
-    netInput +
-    ETc_s +
-    gravityDrainage;
-
-  const Dr_s =
-    Math.max(
-      0,
-      Math.min(
-        taw_s,
-        rawDr_s
-      )
-    );
-
-  // ═══════════════════════════════════════
-  // ALT KATMAN
-  // ═══════════════════════════════════════
-
-  // Alt katmandaki aşırı doygunluk
-  // derin drenaja dönüşür.
-  const deepSaturation =
-    Math.max(
-      0,
-      Math.min(
-        1,
-        1 - prevDrD / taw_d
-      )
-    );
-
-  const deepDrainageFactor =
-    deepSaturation <= 0.90
-      ? 0
-      : Math.pow(
-          (deepSaturation - 0.90) / 0.10,
-          2
-        );
-
-  const deepPercCoeff =
-    percCoeff * 0.35;
-
-  const deepDrainage =
-    Math.min(
-      taw_d,
-      Math.max(
-        0,
-        (
-          Math.max(
-            0,
-            taw_d - prevDrD
-          ) *
-          0.10 *
-          deepDrainageFactor
-        ) *
-        deepPercCoeff
-      )
-    );
-
-  // ═══════════════════════════════════════
-  // ALT KATMAN YENİ Dr
-  // ═══════════════════════════════════════
-
-  const rawDr_d =
-    prevDrD -
-    gravityDrainage +
-    ETc_d +
-    deepDrainage;
-
-  const Dr_d =
-    Math.max(
-      0,
-      Math.min(
-        taw_d,
-        rawDr_d
-      )
-    );
-
-  // ═══════════════════════════════════════
-  // NEM DURUMLARI
-  // ═══════════════════════════════════════
-
-  const surfState =
-    window.calcMoistureState(
-      fcs,
-      taw_s,
-      Dr_s
-    );
-
-  const deepState =
-    window.calcMoistureState(
-      fcd,
-      taw_d,
-      Dr_d
-    );
-
-  // ═══════════════════════════════════════
-  // SONUÇ
-  // ═══════════════════════════════════════
+  const surfState = window.calcMoistureState(fcs, taw_s, Dr_s);
+  const deepState = window.calcMoistureState(fcd, taw_d, Dr_d);
 
   return {
-
-    Dr_s:
-      surfState.Dr,
-
-    Dr_d:
-      deepState.Dr,
-
-    kc:
-      +kc.toFixed(3),
-
-    Ks_s:
-      +ks_s.toFixed(3),
-
-    Ks_d:
-      +ks_d.toFixed(3),
-
-    ETc_s:
-      +ETc_s.toFixed(1),
-
-    ETc_d:
-      +ETc_d.toFixed(1),
-
-    et0:
-      +et0.toFixed(1),
-
-    rain:
-      +rain.toFixed(1),
-
-    Pe,
-
-    irr:
-      +Number(irrMm || 0).toFixed(1),
-
-    perc:
-      +gravityDrainage.toFixed(1),
-
-    deepPerc:
-      +deepDrainage.toFixed(1),
-
-    netIn:
-      +netInput.toFixed(1),
-
-    pct_s:
-      surfState.pct,
-
-    pct_d:
-      deepState.pct,
-
-    moist_s:
-      surfState.moist,
-
-    moist_d:
-      deepState.moist,
-
-    // DEBUG
-    Dr_s_before:
-      +prevDrS.toFixed(1),
-
-    Dr_d_before:
-      +prevDrD.toFixed(1),
-
-    rootS,
-
-    rootD,
-
-    percCoeff,
-
-    saturationS:
-      +saturationS.toFixed(3),
-
-    gravityDrainage:
-      +gravityDrainage.toFixed(1),
-
-    deepDrainage:
-      +deepDrainage.toFixed(1)
+    Dr_s: surfState.Dr, Dr_d: deepState.Dr,
+    kc:   +kc.toFixed(3),
+    Ks_s: +ks_s.toFixed(3), Ks_d: +ks_d.toFixed(3),
+    ETc_s: +ETc_s.toFixed(1), ETc_d: +ETc_d.toFixed(1),
+    et0: +et0.toFixed(1), rain: +rain.toFixed(1),
+    Pe, irr: +irrMm.toFixed(1),
+    perc: +perc.toFixed(1), netIn: +(Pe + irrMm).toFixed(1),
+    pct_s: surfState.pct, pct_d: deepState.pct,
+    moist_s: surfState.moist, moist_d: deepState.moist,
+    // ── Debug: her günün izlenebilirliği için ──
+    Dr_s_before, Dr_d_before,
+    rootS, rootD, percCoeff,
   };
 };
 
@@ -1142,23 +580,6 @@ window.calcSoilRZWB = async (field, force = false) => {
     });
 
   const lastRec  = ledger.length ? ledger[ledger.length - 1] : null;
-  console.log(
-  '🧪 RZWB CALL',
-  {
-    fieldId: field.id,
-    fieldName: field.name,
-    soilType: field.soilType,
-    category: field.category,
-    today,
-    lastRec: lastRec
-      ? {
-          date: lastRec.date,
-          Dr_s: lastRec.Dr_s,
-          Dr_d: lastRec.Dr_d
-        }
-      : null
-  }
-);
   const isBootstrap = !lastRec;
 
   let simStart, initDr_s, initDr_d, satCalibrated = false;
@@ -1276,279 +697,17 @@ window.calcSoilRZWB = async (field, force = false) => {
 
   ledger = ledger.map(r => window.normalizeRZWBRecord(r, params));
 
-// ── Bugünün kaydını al, yoksa oluştur ──
-let todayRec = ledger.find(
-  r => r.date === today
-);
+  // ── Bugünün kaydını al, yoksa oluştur ──
+  let todayRec = ledger.find(r => r.date === today);
 
-// ─────────────────────────────────────
-// BUGÜNÜN KAYDI VARSA
-// Dr üzerinden nem yüzdesini yeniden hesapla
-// ─────────────────────────────────────
-
-if (todayRec) {
-
-  todayRec =
-    window.normalizeRZWBRecord(
-      todayRec,
-      params
-    );
-}
-
-// ─────────────────────────────────────
-// BUGÜNÜN KAYDI YOKSA
-// Son bilinen Dr değerinden bugünün
-// geçici durumunu oluştur
-// ─────────────────────────────────────
-
-if (
-  !todayRec &&
-  prev.Dr_s !== undefined &&
-  prev.Dr_d !== undefined
-) {
-
-  const surfState =
-    window.calcMoistureState(
-      fcs,
-      taw_s,
-      prev.Dr_s
-    );
-
-  const deepState =
-    window.calcMoistureState(
-      fcd,
-      taw_d,
-      prev.Dr_d
-    );
-
-  todayRec = {
-
-    Dr_s:
-      surfState.Dr,
-
-    Dr_d:
-      deepState.Dr,
-
-    pct_s:
-      surfState.pct,
-
-    pct_d:
-      deepState.pct,
-
-    moist_s:
-      surfState.moist,
-
-    moist_d:
-      deepState.moist,
-
-    kc:
-      0.7,
-
-    Ks_s:
-      1,
-
-    Ks_d:
-      1,
-
-    ETc_s:
-      0,
-
-    ETc_d:
-      0,
-
-    et0:
-      0,
-
-    rain:
-      0,
-
-    irr:
-      0,
-
-    perc:
-      0,
-
-    deepPerc:
-      0,
-
-    netIn:
-      0,
-
-    date:
-      today
-  };
-}
-
-// ─────────────────────────────────────
-// HİÇ LEDGER YOKSA
-// Varsayılan başlangıç durumu
-// ─────────────────────────────────────
-
-if (!todayRec) {
-
-  const mid_s =
-    taw_s * 0.45;
-
-  const mid_d =
-    taw_d * 0.50;
-
-  const surfState =
-    window.calcMoistureState(
-      fcs,
-      taw_s,
-      mid_s
-    );
-
-  const deepState =
-    window.calcMoistureState(
-      fcd,
-      taw_d,
-      mid_d
-    );
-
-  todayRec = {
-
-    Dr_s:
-      surfState.Dr,
-
-    Dr_d:
-      deepState.Dr,
-
-    pct_s:
-      surfState.pct,
-
-    pct_d:
-      deepState.pct,
-
-    moist_s:
-      surfState.moist,
-
-    moist_d:
-      deepState.moist,
-
-    kc:
-      0.7,
-
-    Ks_s:
-      1,
-
-    Ks_d:
-      1,
-
-    ETc_s:
-      0,
-
-    ETc_d:
-      0,
-
-    et0:
-      0,
-
-    rain:
-      0,
-
-    irr:
-      0,
-
-    perc:
-      0,
-
-    deepPerc:
-      0,
-
-    netIn:
-      0,
-
-    date:
-      today
-  };
-}
-
-// ─────────────────────────────────────
-// ÇIKIŞ DEĞERLERİ
-// ─────────────────────────────────────
-
-const pct_s_out =
-  Math.max(
-    0,
-    Math.min(
-      100,
-      todayRec.pct_s ?? 0
-    )
-  );
-
-const pct_d_out =
-  Math.max(
-    0,
-    Math.min(
-      100,
-      todayRec.pct_d ?? 0
-    )
-  );
-
-const moist_s_out =
-  Math.max(
-    0,
-    todayRec.moist_s ?? 0
-  );
-
-const moist_d_out =
-  Math.max(
-    0,
-    todayRec.moist_d ?? 0
-  );
-  
   // ★ DÜZELTME 1: todayRec varsa pct_s/pct_d'yi Dr ve TAW üzerinden yeniden hesapla
   if(todayRec) {
     todayRec = window.normalizeRZWBRecord(todayRec, params);
   }
 
-if (!todayRec && prev.Dr_s !== undefined) {
-
-  const surfState =
-    window.calcMoistureState(
-      fcs,
-      taw_s,
-      prev.Dr_s
-    );
-
-  const deepState =
-    window.calcMoistureState(
-      fcd,
-      taw_d,
-      prev.Dr_d
-    );
-
-  todayRec = {
-    Dr_s: surfState.Dr,
-    Dr_d: deepState.Dr,
-
-    pct_s: surfState.pct,
-    pct_d: deepState.pct,
-
-    moist_s: surfState.moist,
-    moist_d: deepState.moist,
-
-    kc: 0.7,
-
-    Ks_s: 1,
-    Ks_d: 1,
-
-    ETc_s: 0,
-    ETc_d: 0,
-
-    et0: 0,
-    rain: 0,
-    irr: 0,
-
-    perc: 0,
-    deepPerc: 0,
-
-    netIn: 0,
-
-    date: today
-  };
-}
+  if(!todayRec && prev.Dr_s !== undefined) {
+    const surfState = window.calcMoistureState(fcs, taw_s, prev.Dr_s);
+    const deepState = window.calcMoistureState(fcd, taw_d, prev.Dr_d);
     todayRec = {
       Dr_s: surfState.Dr, Dr_d: deepState.Dr,
       pct_s: surfState.pct, pct_d: deepState.pct,
@@ -1559,25 +718,10 @@ if (!todayRec && prev.Dr_s !== undefined) {
   }
 
   if(!todayRec) {
-const mid_s =
-  taw_s * 0.45;
-
-const mid_d =
-  taw_d * 0.50;
-
-const surfState =
-  window.calcMoistureState(
-    fcs,
-    taw_s,
-    mid_s
-  );
-
-const deepState =
-  window.calcMoistureState(
-    fcd,
-    taw_d,
-    mid_d
-  );
+    const mid_s   = Math.round(taw_s * 0.45);
+    const mid_d   = Math.round(taw_d * 0.50);
+    const surfState = window.calcMoistureState(fcs, taw_s, mid_s);
+    const deepState = window.calcMoistureState(fcd, taw_d, mid_d);
     todayRec = {
       Dr_s: surfState.Dr, Dr_d: deepState.Dr,
       pct_s: surfState.pct, pct_d: deepState.pct,
@@ -1594,60 +738,39 @@ const deepState =
 
   const result = {
     surface: {
-      pct: pct_s_out,
+      pct:   pct_s_out,
       moist: moist_s_out,
-      fc: fcs,
-      Dr: todayRec.Dr_s,
-      taw: taw_s,
-      raw: params.raw_s,
-      Ks: todayRec.Ks_s ?? 1,
+      fc:    fcs,
+      Dr:    todayRec.Dr_s,
+      taw:   taw_s,
+      raw:   params.raw_s,
+      Ks:    todayRec.Ks_s ?? 1,
     },
-
     deep: {
-      pct: pct_d_out,
+      pct:   pct_d_out,
       moist: moist_d_out,
-      fc: fcd,
-      Dr: todayRec.Dr_d,
-      taw: taw_d,
-      raw: params.raw_d,
-      Ks: todayRec.Ks_d ?? 1,
+      fc:    fcd,
+      Dr:    todayRec.Dr_d,
+      taw:   taw_d,
+      raw:   params.raw_d,
+      Ks:    todayRec.Ks_d ?? 1,
     },
-
-    et: agrd(field.crop).et,
-
-    kc:
-      todayRec.kc ?? 0.7,
-
-    Ks:
-      Math.min(
-        todayRec.Ks_s ?? 1,
-        todayRec.Ks_d ?? 1
-      ),
-
-    ETc:
-      +(
-        (todayRec.ETc_s ?? 0) +
-        (todayRec.ETc_d ?? 0)
-      ).toFixed(1),
-
-    log:
-      ledger.slice(-7),
-
+    et:           agrd(field.crop).et,
+    kc:           todayRec.kc ?? 0.7,
+    Ks:           Math.min(todayRec.Ks_s ?? 1, todayRec.Ks_d ?? 1),
+    ETc:          +((todayRec.ETc_s ?? 0) + (todayRec.ETc_d ?? 0)).toFixed(1),
+    log:          ledger.slice(-7),
     params,
-
     satCalibrated,
-
     isBootstrap,
+    pct:   pct_s_out,   // geriye dönük uyumluluk
+    moist: moist_s_out,
+    fc:    fcs,
+  };
 
-    pct:
-      pct_s_out,
-
-    moist:
-      moist_s_out,
-
-    fc:
-      fcs
-  }
+  // ★ DÜZELTME 2: Cache'e yazmıyoruz – her çağrıda taze hesapla
+  // (İsteğe bağlı olarak kısa süreli cache eklenebilir, ama şimdilik kaldırıldı)
+  // SC[cacheKey] = result;  // bu satır artık yok
 
   return result;
 };
@@ -2055,8 +1178,9 @@ window.fetchSat = async (field) => {
   renderSat(field, R);
 
   // Bootstrap sonrası periyodik yumuşak kalibrasyon (drift önleme)
-  window.softCalibrateRZWB(field).catch(e => console.warn('Yumuşak kalibrasyon hatası:', e.message));
+//  window.softCalibrateRZWB(field).catch(e => console.warn('Yumuşak kalibrasyon hatası:', e.message));
 }
+
 // ═══════════════════════════════════════════════════════════════════
 // YUMUŞAK UYDU KALİBRASYONU — drift önleme
 // ═══════════════════════════════════════════════════════════════════
@@ -2070,84 +1194,77 @@ window.fetchSat = async (field) => {
 //     yönünde %30 oranında yumuşatarak (exponential smoothing) çeker.
 //     Böylece tek bir hatalı uydu okuması modeli bozmaz, ama gerçek
 //     bir sapma varsa birkaç güncellemede kademeli düzelir.
-window.softCalibrateRZWB = async (field) => {
-  return;
-  if(!field) return;
-  const agroMid  = SATC[field.id]?.data?.soilM3;
-  const agroDeep = SATC[field.id]?.data?.soilMDeep;
-  if(!(agroMid > 0.01)) return; // taze uydu verisi yoksa atla
+//window.softCalibrateRZWB = async (field) => {
+//  return;
+//  if(!field) return;
+//  const agroMid  = SATC[field.id]?.data?.soilM3;
+//  const agroDeep = SATC[field.id]?.data?.soilMDeep;
+//  if(!(agroMid > 0.01)) return; // taze uydu verisi yoksa atla
 
-  const params = window.getRZWBParams(field);
-  if(!params) return;
-  const { fcs, fcd, taw_s, taw_d } = params;
+//  const params = window.getRZWBParams(field);
+//  if(!params) return;
+//  const { fcs, fcd, taw_s, taw_d } = params;
 
-  const today = tstr();
+ // const today = tstr();
  // const fbKey = 'tt_rzwb_' + field.id;
-const RZWB_MODEL_VERSION = 2;
+ // let ledger = [];
+ // try {
+ //   const raw = localStorage.getItem(fbKey);
+ //   if(raw) ledger = JSON.parse(raw);
+ // } catch(e) {}
+ // if(!ledger.length) return; // ledger yoksa (henüz bootstrap olmamış) atla
 
-const fbKey =
-  'tt_rzwb_v' +
-  RZWB_MODEL_VERSION +
-  '_' +
-  field.id;
-  let ledger = [];
-  try {
-    const raw = localStorage.getItem(fbKey);
-    if(raw) ledger = JSON.parse(raw);
-  } catch(e) {}
-  if(!ledger.length) return; // ledger yoksa (henüz bootstrap olmamış) atla
+//  const todayIdx = ledger.findIndex(r => r.date === today);
+//  if(todayIdx < 0) return; // bugün için kayıt yoksa atla
 
-  const todayIdx = ledger.findIndex(r => r.date === today);
-  if(todayIdx < 0) return; // bugün için kayıt yoksa atla
-
-  const rec = ledger[todayIdx];
+//  const rec = ledger[todayIdx];
 
   // Uydu volumetrik nemini mm'ye çevir (bootstrap ile aynı formül)
-  const sat_moist_s = Math.min(fcs, agroMid * fcs * 1.15);
-  const sat_moist_d = Math.min(fcd, (agroDeep || agroMid * 0.88) * fcd);
-  const satDr_s = Math.max(0, Math.min(taw_s, fcs - sat_moist_s));
-  const satDr_d = Math.max(0, Math.min(taw_d, fcd - sat_moist_d));
+//  const sat_moist_s = Math.min(fcs, agroMid * fcs * 1.15);
+//  const sat_moist_d = Math.min(fcd, (agroDeep || agroMid * 0.88) * fcd);
+//  const satDr_s = Math.max(0, Math.min(taw_s, fcs - sat_moist_s));
+//  const satDr_d = Math.max(0, Math.min(taw_d, fcd - sat_moist_d));
 
   // Model ile uydu arasındaki yüzde fark (FC üzerinden normalize)
-  const modelPct_s = Math.round((1 - rec.Dr_s/Math.max(1,taw_s))*100);
-  const satPct_s    = Math.round((1 - satDr_s/Math.max(1,taw_s))*100);
-  const diffPct_s   = Math.abs(modelPct_s - satPct_s);
+//  const modelPct_s = Math.round((1 - rec.Dr_s/Math.max(1,taw_s))*100);
+//  const satPct_s    = Math.round((1 - satDr_s/Math.max(1,taw_s))*100);
+//  const diffPct_s   = Math.abs(modelPct_s - satPct_s);
 
-  const modelPct_d = Math.round((1 - rec.Dr_d/Math.max(1,taw_d))*100);
-  const satPct_d    = Math.round((1 - satDr_d/Math.max(1,taw_d))*100);
-  const diffPct_d   = Math.abs(modelPct_d - satPct_d);
+//  const modelPct_d = Math.round((1 - rec.Dr_d/Math.max(1,taw_d))*100);
+//  const satPct_d    = Math.round((1 - satDr_d/Math.max(1,taw_d))*100);
+//  const diffPct_d   = Math.abs(modelPct_d - satPct_d);
 
-  let changed = false;
-  const SMOOTH = 0.30; // %30 uydu yönünde çek
+//  let changed = false;
+//  const SMOOTH = 0.30; // %30 uydu yönünde çek
 
-  if(diffPct_s > 20) {
-    const newDr_s = rec.Dr_s + (satDr_s - rec.Dr_s) * SMOOTH;
-    console.log(`🛰️ Yumuşak kalibrasyon (yüzey): model=%${modelPct_s} uydu=%${satPct_s} fark=%${diffPct_s} → düzeltiliyor`);
-    rec.Dr_s = +newDr_s.toFixed(1);
-    changed = true;
-  }
-  if(diffPct_d > 20) {
-    const newDr_d = rec.Dr_d + (satDr_d - rec.Dr_d) * SMOOTH;
-    console.log(`🛰️ Yumuşak kalibrasyon (derin): model=%${modelPct_d} uydu=%${satPct_d} fark=%${diffPct_d} → düzeltiliyor`);
-    rec.Dr_d = +newDr_d.toFixed(1);
-    changed = true;
-  }
+//  if(diffPct_s > 20) {
+//    const newDr_s = rec.Dr_s + (satDr_s - rec.Dr_s) * SMOOTH;
+//    console.log(`🛰️ Yumuşak kalibrasyon (yüzey): model=%${modelPct_s} uydu=%${satPct_s} fark=%${diffPct_s} → düzeltiliyor`);
+//    rec.Dr_s = +newDr_s.toFixed(1);
+//    changed = true;
+//  }
+//  if(diffPct_d > 20) {
+//    const newDr_d = rec.Dr_d + (satDr_d - rec.Dr_d) * SMOOTH;
+//    console.log(`🛰️ Yumuşak kalibrasyon (derin): model=%${modelPct_d} uydu=%${satPct_d} fark=%${diffPct_d} → düzeltiliyor`);
+//    rec.Dr_d = +newDr_d.toFixed(1);
+//    changed = true;
+//  }
 
-  if(changed) {
-    const normalized = window.normalizeRZWBRecord(rec, params);
-    ledger[todayIdx] = normalized;
-    try { localStorage.setItem(fbKey, JSON.stringify(ledger)); } catch(e) {}
-    delete window.RZWB_CACHE[field.id];
-    const uid = window.FB_USER?.uid;
-    if(uid && window.FB_MODE) {
-      try {
-        await window.fbSaveRZWB(uid, field.id, ledger);
-        window.RZWB_CACHE[field.id] = { records: ledger, loadedAt: Date.now() };
-      } catch(e) {}
-    }
-    if(typeof window.invSoil === 'function') window.invSoil(field.id);
-  }
-};
+//  if(changed) {
+//    const normalized = window.normalizeRZWBRecord(rec, params);
+//    ledger[todayIdx] = normalized;
+//    try { localStorage.setItem(fbKey, JSON.stringify(ledger)); } catch(e) {}
+//    delete window.RZWB_CACHE[field.id];
+//    const uid = window.FB_USER?.uid;
+//    if(uid && window.FB_MODE) {
+//      try {
+//        await window.fbSaveRZWB(uid, field.id, ledger);
+//        window.RZWB_CACHE[field.id] = { records: ledger, loadedAt: Date.now() };
+//      } catch(e) {}
+//    }
+//    if(typeof window.invSoil === 'function') window.invSoil(field.id);
+//  }
+//};
 
 window.renderSat = (field, R) => {
   if(!R) return;
