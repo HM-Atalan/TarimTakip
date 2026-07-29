@@ -151,9 +151,13 @@ window.normalizeRZWBRecord = (rec, params) => {
 // percDeep (kök-altı drenaj) alanı da artık zorunlu; eski kayıtlarda
 // bu alan yoksa "eksik" sayılıp otomatik onarım (repair) mekanizması
 // tarafından yeniden hesaplanacak.
+// 'surplus_s'/'surplus_d' kontrolü de eklendi: kademeli yerçekimi
+// drenajı (bkz. soilModel.js rzwbStep) öncesi, eski formülle hesaplanmış
+// kayıtları yakalayıp otomatik yeniden hesaplama tetikler — böylece
+// mevcut kullanıcıların ledger'ı yeni fizik mantığına sorunsuz geçer.
 window.isIncompleteRZWBRecord = (rec, expectedIrr) => {
   if(!rec) return true;
-  const fieldsMissing = ['Pe', 'ETc_s', 'ETc_d', 'Ks_s', 'Ks_d', 'percDeep']
+  const fieldsMissing = ['Pe', 'ETc_s', 'ETc_d', 'Ks_s', 'Ks_d', 'percDeep', 'surplus_s', 'surplus_d']
     .some(k => rec[k] === undefined || rec[k] === null)
     || ((rec.ETc_s ?? 0) === 0 && (rec.ETc_d ?? 0) === 0);
   if(fieldsMissing) return true;

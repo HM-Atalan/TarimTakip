@@ -52,6 +52,8 @@ window.buildFieldContext = async (field) => {
   const totalRevenue = (field.events||[]).reduce((s,e)=>s+(e.revenue||0),0);
   const historyLen = wxDays.filter(d=>d.date<=today).length;
   const drainLog = (s.log||[]).reduce((t,r)=>t+(r.percDeep||0),0);
+  const pendingSurplus_s = s.surface.surplus ?? 0;
+  const pendingSurplus_d = s.deep.surplus ?? 0;
 
   return `═══ TARLA BİLGİSİ ═══
 Tarla: ${field.name} | Ürün: ${field.crop||'?'} (${field.category||''}) | Alan: ${field.area} ${field.areaUnit||'dönüm'} | Toprak: ${field.soilType}
@@ -75,6 +77,7 @@ Derin (10-30cm): %${s.deep.pct} | Nem=${s.deep.moist}mm | Dr=${s.deep.Dr?.toFixe
 Parametreler: FC=${s.params?.fcs??'—'}/${s.params?.fcd??'—'}mm · TAW=${s.params?.taw_s?.toFixed(0)??'—'}/${s.params?.taw_d?.toFixed(0)??'—'}mm · RAW=${s.params?.raw_s?.toFixed(0)??'—'}/${s.params?.raw_d?.toFixed(0)??'—'}mm · MAD=%${s.params?Math.round(s.params.mad*100):'—'}
 Bugünkü Kc=${s.kc?.toFixed(3)??'—'} | ETc=${s.ETc??'—'}mm/g
 Son 7g kök-altı drenaj (kök bölgesinin altına sızan/kaybolan su): ${drainLog.toFixed(1)}mm
+${(pendingSurplus_s>0||pendingSurplus_d>0)?`Bekleyen fazla su (henüz süzülmemiş, gravite ile kademeli drene oluyor): Yüzey=${pendingSurplus_s.toFixed(1)}mm, Derin=${pendingSurplus_d.toFixed(1)}mm`:''}
 Sulama durumu: ${(()=>{const irr=window.calcIrrigationNeed(field,s);return `${irr.label} | Açık=${irr.deficitMm}mm | Öneri=${irr.recommendedMm}mm | Kritik'e ${irr.daysUntilCritical}g`;})()}
 7g net su dengesi: +${Math.round(futR)}mm yağış − ${Math.round(futET)}mm ET = ${Math.round(futR-futET)}mm
 Son sulama: ${lastIrr?lastIrr.date+' ('+Math.round((Date.now()-new Date(lastIrr.date))/(864e5))+' gün önce)':'kayıt yok'}

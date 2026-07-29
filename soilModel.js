@@ -81,32 +81,82 @@ window.rzwbStep = (prev, dayWx, irrMm, params, field) => {
   const Dr_d_before = +prev.Dr_d.toFixed(1);
 
   const percCoeff = PERC_COEFF[field.soilType] || 0.60;
+  const prevSurplus_s = prev.surplus_s || 0;
+  const prevSurplus_d = prev.surplus_d || 0;
 
-  // ── YÜZEY KATMANI (0-10cm) ──
-  const rawDr_s = prev.Dr_s - Pe - irrMm + ETc_s;
-  // Yüzey tarla kapasitesini aşan fazla su, katsayıya göre derine sızar
-  const percToDeep = rawDr_s < 0 ? Math.min(-rawDr_s * percCoeff, taw_d) : 0;
-  const Dr_s = Math.max(0, Math.min(taw_s, rawDr_s));
+  // ══════════════════════════════════════════════════════════════════
+  // YÜZEY KATMANI (0-10cm) — YERÇEKİMİ GÜDÜMLÜ KADEMELİ DRENAJ
+  // ──────────────────────────────────────────────────────────────────
+  // FAO-56'nın orijinal (kitap) varsayımı: tarla kapasitesini aşan fazla
+  // su AYNI GÜN tamamen süzülür. Gerçekte bu süzülme, toprağın doygun
+  // OLMAYAN hidrolik iletkenliğine bağlı bir HIZLA gerçekleşir — killi
+  // toprakta günler, kumlu toprakta saatler sürebilir. Bu yüzden fazla
+  // suyu tek seferde boşaltmak yerine:
+  //   1) Önceki günden kalan "bekleyen fazla su" (surplus_s) bugünün
+  //      bilançosuna dahil edilir (önce o gün ETc ile bir miktar tüketilir).
+  //   2) Kalan fazlanın sadece percCoeff kadarlık kısmı BUGÜN derine
+  //      aktarılır (doğrusal rezervuar boşalma modeli — hidrolojide
+  //      yaygın kullanılan bir yaklaşım).
+  //   3) Geri kalanı surplus_s olarak YARINA taşınır, ertesi gün tekrar
+  //      aynı oranla süzülmeye devam eder (asimptotik/üstel azalan bir
+  //      drenaj eğrisi oluşur — gerçek toprak davranışına çok yakın).
+  //   4) Kapasiteyi ÇOK aşan tek seferlik aşırı yağış/sulama durumunda,
+  //      taşan kısım makro-gözenek/hızlı akış olarak aynı gün derine
+  //      geçer (gerçekçi bir üst sınır — su hiçbir zaman "kaybolmaz").
+  // ══════════════════════════════════════════════════════════════════
+  const effPrevDr_s = prev.Dr_s - prevSurplus_s;
+  const rawDr_s = effPrevDr_s - Pe - irrMm + ETc_s;
 
-  // ── DERİN KATMAN (10-30cm) — yüzeyden gelen sızmayı alır ──
-  const rawDr_d = prev.Dr_d - percToDeep + ETc_d;
-  // Derin katman da kendi tarla kapasitesini aşarsa, fazlası kök
-  // bölgesinin altına drene olur (gerçek fiziksel kayıp / percDeep)
-  const percBelowRoot = rawDr_d < 0 ? +(-rawDr_d).toFixed(1) : 0;
-  const Dr_d = Math.max(0, Math.min(taw_d, rawDr_d));
+  let percToDeep = 0, Dr_s, surplus_s_out = 0;
+  if (rawDr_s < 0) {
+    const totalSurplus = -rawDr_s;
+    const capSurplus   = taw_s;                                   // bir katmanın makul üst tutma sınırı
+    const fastBypass   = Math.max(0, totalSurplus - capSurplus);  // aşırı fazlası → hızlı akış (aynı gün)
+    const slowPool     = Math.min(totalSurplus, capSurplus);
+    const slowDrain    = slowPool * percCoeff;                    // bugün gravite ile süzülen kısım
+    percToDeep     = fastBypass + slowDrain;
+    surplus_s_out  = Math.max(0, slowPool - slowDrain);           // yarına kalan bekleyen fazla su
+    Dr_s = 0;
+  } else {
+    Dr_s = Math.min(taw_s, rawDr_s);
+  }
+  percToDeep = Math.min(percToDeep, taw_d);
+
+  // ══════════════════════════════════════════════════════════════════
+  // DERİN KATMAN (10-30cm) — yüzeyden geleni alır, kendi FC'sini aştığında
+  // AYNI kademeli mantıkla kök bölgesi altına (kalıcı kayıp) drene olur.
+  // ══════════════════════════════════════════════════════════════════
+  const effPrevDr_d = prev.Dr_d - prevSurplus_d;
+  const rawDr_d = effPrevDr_d - percToDeep + ETc_d;
+
+  let percBelowRoot = 0, Dr_d, surplus_d_out = 0;
+  if (rawDr_d < 0) {
+    const totalSurplus = -rawDr_d;
+    const capSurplus   = taw_d;
+    const fastBypass   = Math.max(0, totalSurplus - capSurplus);
+    const slowPool     = Math.min(totalSurplus, capSurplus);
+    const slowDrain    = slowPool * percCoeff;
+    percBelowRoot  = +(fastBypass + slowDrain).toFixed(1);
+    surplus_d_out  = Math.max(0, slowPool - slowDrain);
+    Dr_d = 0;
+  } else {
+    Dr_d = Math.min(taw_d, rawDr_d);
+  }
 
   const surfState = window.calcMoistureState(fcs, taw_s, Dr_s);
   const deepState = window.calcMoistureState(fcd, taw_d, Dr_d);
 
   return {
     Dr_s: surfState.Dr, Dr_d: deepState.Dr,
+    surplus_s: +surplus_s_out.toFixed(2),   // yüzeyde bekleyen, henüz süzülmemiş fazla su (mm)
+    surplus_d: +surplus_d_out.toFixed(2),   // derinde bekleyen, henüz kök-altına süzülmemiş fazla su (mm)
     kc:   +kc.toFixed(3),
     Ks_s: +ks_s.toFixed(3), Ks_d: +ks_d.toFixed(3),
     ETc_s: +ETc_s.toFixed(1), ETc_d: +ETc_d.toFixed(1),
     et0: +et0.toFixed(1), rain: +rain.toFixed(1),
     Pe, irr: +irrMm.toFixed(1),
-    perc: +percToDeep.toFixed(1),     // yüzey → derin katman sızması
-    percDeep: percBelowRoot,          // derin katman → kök altı drenaj (kalıcı kayıp)
+    perc: +percToDeep.toFixed(1),     // yüzey → derin katman sızması (o gün gerçekleşen kısım)
+    percDeep: percBelowRoot,          // derin katman → kök altı drenaj (o gün gerçekleşen kalıcı kayıp)
     netIn: +(Pe + irrMm).toFixed(1),
     pct_s: surfState.pct, pct_d: deepState.pct,
     moist_s: surfState.moist, moist_d: deepState.moist,
@@ -216,14 +266,17 @@ window.calcSoilRZWB = async (field, force = false) => {
     !existingDates.has(d.date)
   );
 
-  let prev = { Dr_s: initDr_s, Dr_d: initDr_d };
+  // Bootstrap durumunda bekleyen fazla su bilgisi yok, 0 kabul edilir.
+  // Ledger devam ederken ise bir önceki günün kaydındaki surplus_s/surplus_d
+  // (varsa) taşınır — böylece kademeli drenaj gün sınırları arasında kesintisiz sürer.
+  let prev = { Dr_s: initDr_s, Dr_d: initDr_d, surplus_s: lastRec?.surplus_s || 0, surplus_d: lastRec?.surplus_d || 0 };
   const newRecords = [];
 
   for(const dayWx of simDays) {
     const irrMm = irrMap[dayWx.date] || 0;
     const step  = window.rzwbStep(prev, dayWx, irrMm, params, field);
     newRecords.push({ date: dayWx.date, ...step });
-    prev = { Dr_s: step.Dr_s, Dr_d: step.Dr_d };
+    prev = { Dr_s: step.Dr_s, Dr_d: step.Dr_d, surplus_s: step.surplus_s, surplus_d: step.surplus_d };
   }
 
   if(newRecords.length) {
@@ -251,15 +304,15 @@ window.calcSoilRZWB = async (field, force = false) => {
   if(repairFrom >= 0) {
     const repairedLedger = ledger.slice(0, repairFrom);
     let repairPrev = repairFrom > 0
-      ? { Dr_s: ledger[repairFrom - 1].Dr_s, Dr_d: ledger[repairFrom - 1].Dr_d }
-      : { Dr_s: ledger[repairFrom].Dr_s, Dr_d: ledger[repairFrom].Dr_d };
+      ? { Dr_s: ledger[repairFrom - 1].Dr_s, Dr_d: ledger[repairFrom - 1].Dr_d, surplus_s: ledger[repairFrom - 1].surplus_s || 0, surplus_d: ledger[repairFrom - 1].surplus_d || 0 }
+      : { Dr_s: ledger[repairFrom].Dr_s, Dr_d: ledger[repairFrom].Dr_d, surplus_s: ledger[repairFrom].surplus_s || 0, surplus_d: ledger[repairFrom].surplus_d || 0 };
 
     for(let i = repairFrom; i < ledger.length; i++) {
       const rec = ledger[i];
       const dayWx = wxByDate[rec.date];
       if(!dayWx) {
         repairedLedger.push(rec);
-        repairPrev = { Dr_s: rec.Dr_s, Dr_d: rec.Dr_d };
+        repairPrev = { Dr_s: rec.Dr_s, Dr_d: rec.Dr_d, surplus_s: rec.surplus_s || 0, surplus_d: rec.surplus_d || 0 };
         continue;
       }
       const step = window.rzwbStep(
@@ -270,7 +323,7 @@ window.calcSoilRZWB = async (field, force = false) => {
         field
       );
       repairedLedger.push({ ...rec, ...step });
-      repairPrev = { Dr_s: step.Dr_s, Dr_d: step.Dr_d };
+      repairPrev = { Dr_s: step.Dr_s, Dr_d: step.Dr_d, surplus_s: step.surplus_s, surplus_d: step.surplus_d };
     }
 
     ledger = repairedLedger;
@@ -302,6 +355,7 @@ window.calcSoilRZWB = async (field, force = false) => {
       moist_s: surfState.moist, moist_d: deepState.moist,
       kc: 0.7, Ks_s: 1, Ks_d: 1, ETc_s: 0, ETc_d: 0,
       et0: 0, rain: 0, irr: 0, perc: 0, percDeep: 0, netIn: 0, date: today,
+      surplus_s: prev.surplus_s || 0, surplus_d: prev.surplus_d || 0,
     };
   }
 
@@ -316,6 +370,7 @@ window.calcSoilRZWB = async (field, force = false) => {
       moist_s: surfState.moist, moist_d: deepState.moist,
       kc: 0.7, Ks_s: 1, Ks_d: 1, ETc_s: 0, ETc_d: 0,
       et0: 0, rain: 0, irr: 0, perc: 0, percDeep: 0, netIn: 0, date: today,
+      surplus_s: 0, surplus_d: 0,
     };
   }
 
@@ -333,6 +388,7 @@ window.calcSoilRZWB = async (field, force = false) => {
       taw:   taw_s,
       raw:   params.raw_s,
       Ks:    todayRec.Ks_s ?? 1,
+      surplus: todayRec.surplus_s ?? 0,   // FC üstü, henüz süzülmemiş bekleyen su (mm)
     },
     deep: {
       pct:   pct_d_out,
@@ -342,6 +398,7 @@ window.calcSoilRZWB = async (field, force = false) => {
       taw:   taw_d,
       raw:   params.raw_d,
       Ks:    todayRec.Ks_d ?? 1,
+      surplus: todayRec.surplus_d ?? 0,   // FC üstü, henüz kök-altına süzülmemiş bekleyen su (mm)
     },
     et:           window.agrd(field.crop).et,
     kc:           todayRec.kc ?? 0.7,
@@ -400,6 +457,8 @@ window.debugSoilModel = async (field = window.CUR) => {
     ETc_derin_mm: r.ETc_d,
     sizma_yuzeyden_derine_mm: r.perc,
     kok_alti_drenaj_mm: r.percDeep,
+    yuzey_bekleyen_fazla_su_mm: r.surplus_s ?? 0,
+    derin_bekleyen_fazla_su_mm: r.surplus_d ?? 0,
     Dr_yuzey_mm: r.Dr_s,
     Dr_derin_mm: r.Dr_d,
     nem_yuzey_pct: r.pct_s,

@@ -218,7 +218,7 @@ window.renderSoil = async (field) => {
       st.innerHTML = `<div style="overflow-x:auto;"><table class="tbl">
         <thead><tr>
           <th>Tarih</th><th>Pe</th><th>Sulama</th>
-          <th>ETc-Yüz</th><th>ETc-Der</th><th>Sızma</th><th>Kök Altı</th>
+          <th>ETc-Yüz</th><th>ETc-Der</th><th>Sızma</th><th>Bekleyen</th><th>Kök Altı</th>
           <th>Dr (mm)</th><th>Yüzey %</th><th>Derin %</th><th>Kc</th><th>Ks</th>
         </tr></thead>
         <tbody>${logs.map(r => {
@@ -226,6 +226,7 @@ window.renderSoil = async (field) => {
           const sc2 = scl(pct_s);
           const ksVal = r.Ks_s ?? 1;
           const percDeep = r.percDeep ?? 0;
+          const surplusS = r.surplus_s ?? 0;
           return `<tr>
             <td style="white-space:nowrap;">${fd(r.date)}</td>
             <td>${+(r.Pe ?? r.rain ?? 0).toFixed(1)}mm</td>
@@ -233,6 +234,7 @@ window.renderSoil = async (field) => {
             <td>${+(r.ETc_s ?? r.et_surf ?? 0).toFixed(1)}mm</td>
             <td>${+(r.ETc_d ?? r.et_deep ?? 0).toFixed(1)}mm</td>
             <td>${+(r.perc ?? r.percolation ?? 0).toFixed(1)}mm</td>
+            <td style="color:${surplusS>0?'var(--blue)':'inherit'};" title="Tarla kapasitesini aşan, henüz süzülmemiş ve yarına taşınan su (kademeli yerçekimi drenajı)">${surplusS>0?'🌊 '+surplusS.toFixed(1)+'mm':'—'}</td>
             <td style="color:${percDeep>0?'var(--amber)':'inherit'};" title="Kök bölgesi altına drene olan su (kalıcı kayıp)">${percDeep.toFixed(1)}mm</td>
             <td style="font-weight:600;">${+(r.Dr_s ?? 0).toFixed(1)}</td>
             <td><span class="tag ${sc2.tag}">${pct_s}%</span></td>
