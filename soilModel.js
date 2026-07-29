@@ -193,7 +193,18 @@ window.calcSoilRZWB = async (field, force = false) => {
     const nextDay = new Date(lastRec.date + 'T12:00:00');
     nextDay.setDate(nextDay.getDate() + 1);
     simStart = window.dateKey(nextDay);
-    console.log(`📖 Ledger devam: ${lastRec.date} → ${simStart} Dr_s=${initDr_s} Dr_d=${initDr_d}`);
+    // NOT: simStart her zaman "son kayıt + 1 gün" olarak hesaplanır. Eğer
+    // bu, bugünün tarihinden ilerideyse (simStart > today), aşağıdaki
+    // simDays filtresi (d.date >= simStart && d.date <= today) hiçbir
+    // günü seçemez — yani HİÇBİR gelecek tarih simüle EDİLMEZ. Bu durumda
+    // log mesajını "zaten güncel" olarak yazdırıyoruz ki yanıltıcı
+    // görünmesin (önceden simStart bugünden ileri olsa bile "→ simStart"
+    // yazdırılıyordu, sanki yarın hesaplanacakmış gibi okunuyordu).
+    if (simStart > today) {
+      console.log(`📖 Ledger güncel: ${field.name} — son kayıt zaten bugüne (${lastRec.date}) ait, yeni gün hesaplanmayacak. Dr_s=${initDr_s} Dr_d=${initDr_d}`);
+    } else {
+      console.log(`📖 Ledger devam: ${field.name} — ${lastRec.date} → ${simStart} arası hesaplanacak. Dr_s=${initDr_s} Dr_d=${initDr_d}`);
+    }
   }
 
   const wxAll = window.getBestWXDays(field);
