@@ -38,10 +38,31 @@ setInterval(() => {
   });
 }, 3600000);
 
+// ─── SEKME (TAB) TIKLAMA BAĞLANTISI ─────────────────────────────
+// DÜZELTME: index.html'deki .tab elemanlarının hiçbirinde onclick
+// özelliği yoktu; data-t attribute'u sadece goTab() içeriden
+// çağrıldığında hangi sekmenin aktif edileceğini bulmak için
+// kullanılıyordu. Bu yüzden "Harita" sekmesi (kod içeriden
+// otomatik açtığı için) çalışıyor gibi görünse de, kullanıcı
+// "Hava / Toprak / Uydu / Olaylar / Öneriler / Foto / AI"
+// sekmelerine TIKLADIĞINDA hiçbir şey tetiklenmiyordu — bu satır
+// o eksik bağlantıyı event delegation ile kalıcı olarak kurar.
+// Tab elemanları statik olduğu için (yeniden oluşturulmuyorlar),
+// tek seferlik bir delegasyon yeterli ve her zaman çalışır.
+function bindTabClicks() {
+  document.addEventListener('click', (e) => {
+    const tabEl = e.target.closest('.tab[data-t]');
+    if(!tabEl) return;
+    const t = tabEl.dataset.t;
+    if(t) window.goTab(t);
+  });
+}
+
 // ─── BAŞLATMA ──────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded',()=>{
   const th=localStorage.getItem('tt_theme'); if(th==='dark') document.documentElement.setAttribute('dark','');
   loadSettings();
+  bindTabClicks();
   setTimeout(()=>{ if(!window.FB_MODE) noFBNotice(); }, 1500);
   qs('#main')?.addEventListener('click',()=>{ if(window.innerWidth<=768) qs('#sb')?.classList.remove('open'); });
   document.addEventListener('keydown',e=>{ if(e.key==='Escape') closePhViewer(); });
