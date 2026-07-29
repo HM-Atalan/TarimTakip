@@ -154,8 +154,12 @@ window.renderSoil = async (field) => {
     <span>TAW=${p.taw_s?.toFixed(0)}/${p.taw_d?.toFixed(0)}mm · RAW=${p.raw_s?.toFixed(0)}/${p.raw_d?.toFixed(0)}mm</span>
     <span>${dsi !== null ? `Son sulama: ${dsi}g önce` : 'Sulama kaydı yok'}</span>
     ${s.satCalibrated
-      ? '<span class="tag tg" style="font-size:10px;">📡 Uydu kalibrasyonu</span>'
-      : '<span class="tag ta" style="font-size:10px;">⚠️ Model tahmini</span>'}
+      ? '<span class="tag tg" style="font-size:10px;">📡 Başlangıç: Uydu kalibreli</span>'
+      : '<span class="tag ta" style="font-size:10px;">⚠️ Başlangıç: Model tahmini</span>'}
+  </div>
+  <div style="font-size:10px;color:var(--text3);margin-top:6px;">
+    ℹ️ Model, uydudan sadece ilk kurulumda başlangıç nemi alır; sonrasında 90 günlük pencerede
+    tamamen hava verisi + sulama kayıtlarına dayalı saf fiziksel simülasyon yürütür — günlük uydu düzeltmesi yapılmaz.
   </div>`;
 
   const COLORS = {
@@ -214,13 +218,14 @@ window.renderSoil = async (field) => {
       st.innerHTML = `<div style="overflow-x:auto;"><table class="tbl">
         <thead><tr>
           <th>Tarih</th><th>Pe</th><th>Sulama</th>
-          <th>ETc-Yüz</th><th>ETc-Der</th><th>Sızma</th>
+          <th>ETc-Yüz</th><th>ETc-Der</th><th>Sızma</th><th>Kök Altı</th>
           <th>Dr (mm)</th><th>Yüzey %</th><th>Derin %</th><th>Kc</th><th>Ks</th>
         </tr></thead>
         <tbody>${logs.map(r => {
           const pct_s = r.pct_s ?? r.pct_surf ?? 50;
           const sc2 = scl(pct_s);
           const ksVal = r.Ks_s ?? 1;
+          const percDeep = r.percDeep ?? 0;
           return `<tr>
             <td style="white-space:nowrap;">${fd(r.date)}</td>
             <td>${+(r.Pe ?? r.rain ?? 0).toFixed(1)}mm</td>
@@ -228,6 +233,7 @@ window.renderSoil = async (field) => {
             <td>${+(r.ETc_s ?? r.et_surf ?? 0).toFixed(1)}mm</td>
             <td>${+(r.ETc_d ?? r.et_deep ?? 0).toFixed(1)}mm</td>
             <td>${+(r.perc ?? r.percolation ?? 0).toFixed(1)}mm</td>
+            <td style="color:${percDeep>0?'var(--amber)':'inherit'};" title="Kök bölgesi altına drene olan su (kalıcı kayıp)">${percDeep.toFixed(1)}mm</td>
             <td style="font-weight:600;">${+(r.Dr_s ?? 0).toFixed(1)}</td>
             <td><span class="tag ${sc2.tag}">${pct_s}%</span></td>
             <td>${r.pct_d ?? r.pct_deep ?? '—'}%</td>

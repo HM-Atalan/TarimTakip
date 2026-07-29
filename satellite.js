@@ -1,5 +1,11 @@
 // ============================================================
 // satellite.js – Uydu verileri, NDVI, SoilGrids
+//
+// DÜZELTME: fetchSat() artık her çalıştığında toprak nem modelini
+// (RZWB ledger) günlük olarak uyduya doğru "düzeltmiyor". Uydu verisi
+// sadece soilModel.js içindeki bootstrap (ilk kurulum) aşamasında
+// başlangıç nemini tahmin etmek için kullanılıyor; softCalibrateRZWB
+// çağrısı bilerek kaldırıldı.
 // ============================================================
 
 window.ndviCls = (v) => {
@@ -88,7 +94,11 @@ window.fetchSat = async (field) => {
   invSoil(id);
   renderSat(field, R);
 
-  window.softCalibrateRZWB(field).catch(e => console.warn('Yumuşak kalibrasyon hatası:', e.message));
+  // NOT: Önceden burada her uydu yenilemesinde bugünün RZWB kaydını
+  // uyduya doğru çeken bir "softCalibrateRZWB" çağrısı vardı. Bu,
+  // 90 günlük fiziksel simülasyonu keyfi biçimde bozduğu için
+  // kaldırıldı. Uydu artık sadece ledger boşken (bootstrap) başlangıç
+  // seviyesi tahmini için kullanılıyor — bkz. soilModel.js.
 };
 
 window.renderSat = (field, R) => {

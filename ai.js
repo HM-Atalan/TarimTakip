@@ -51,7 +51,8 @@ window.buildFieldContext = async (field) => {
   const costStr = Object.entries(costMap).map(([k,v])=>`${k}: ${Math.round(v)}₺`).join(' · ');
   const totalRevenue = (field.events||[]).reduce((s,e)=>s+(e.revenue||0),0);
   const historyLen = wxDays.filter(d=>d.date<=today).length;
-  
+  const drainLog = (s.log||[]).reduce((t,r)=>t+(r.percDeep||0),0);
+
   return `═══ TARLA BİLGİSİ ═══
 Tarla: ${field.name} | Ürün: ${field.crop||'?'} (${field.category||''}) | Alan: ${field.area} ${field.areaUnit||'dönüm'} | Toprak: ${field.soilType}
 Konum: ${field.location||''} (${field.lat.toFixed(4)}°N, ${field.lon.toFixed(4)}°E)
@@ -67,11 +68,13 @@ ${ph?`Dönem: ${ph.stage} — toplam %${ph.totPct} (${ph.days} gün, ${ph.gdd} G
 ${he?`${he.already?'🟢 HASAT ZAMANI':he.daysLeft+' gün kaldı'} | ${fd(he.estDate)} | GDD: ${he.gddAcc}/${he.gddTarget} (%${he.gddPct}) | Güvenilirlik: ${he.conf}`:'Hesaplanamadı'}
 
 ═══ TOPRAK NEM — FAO-56 RZWB ═══
-Model: FAO-56 Kök Bölgesi Su Dengesi | ${s.satCalibrated ? '📡 Uydu kalibrasyonlu' : '⚠️ Model tahmini'}
+Model: FAO-56 Kök Bölgesi Su Dengesi — 90 günlük saf fiziksel simülasyon (hava verisi + sulama kayıtları). Uydu SADECE ilk kurulumda başlangıç seviyesini belirlemek için kullanılır, günlük düzeltme yapılmaz.
+Başlangıç seviyesi: ${s.satCalibrated ? '📡 Uydu ile kalibre edildi (ilk kurulumda, tek seferlik)' : '⚠️ Model varsayımıyla tahmin edildi'}
 Yüzey (0-10cm): %${s.surface.pct} | Nem=${s.surface.moist}mm | Dr=${s.surface.Dr?.toFixed(1)??'—'}mm | Ks=${s.surface.Ks?.toFixed(2)??'1.00'}
 Derin (10-30cm): %${s.deep.pct} | Nem=${s.deep.moist}mm | Dr=${s.deep.Dr?.toFixed(1)??'—'}mm | Ks=${s.deep.Ks?.toFixed(2)??'1.00'}
 Parametreler: FC=${s.params?.fcs??'—'}/${s.params?.fcd??'—'}mm · TAW=${s.params?.taw_s?.toFixed(0)??'—'}/${s.params?.taw_d?.toFixed(0)??'—'}mm · RAW=${s.params?.raw_s?.toFixed(0)??'—'}/${s.params?.raw_d?.toFixed(0)??'—'}mm · MAD=%${s.params?Math.round(s.params.mad*100):'—'}
 Bugünkü Kc=${s.kc?.toFixed(3)??'—'} | ETc=${s.ETc??'—'}mm/g
+Son 7g kök-altı drenaj (kök bölgesinin altına sızan/kaybolan su): ${drainLog.toFixed(1)}mm
 Sulama durumu: ${(()=>{const irr=window.calcIrrigationNeed(field,s);return `${irr.label} | Açık=${irr.deficitMm}mm | Öneri=${irr.recommendedMm}mm | Kritik'e ${irr.daysUntilCritical}g`;})()}
 7g net su dengesi: +${Math.round(futR)}mm yağış − ${Math.round(futET)}mm ET = ${Math.round(futR-futET)}mm
 Son sulama: ${lastIrr?lastIrr.date+' ('+Math.round((Date.now()-new Date(lastIrr.date))/(864e5))+' gün önce)':'kayıt yok'}
@@ -129,7 +132,7 @@ Yukarıdaki tüm verileri, fotoğrafları${memory.length>0?' ve önceki konuşma
 
 KURALLAR:
 • Başlık başlık liste YOK — sadece akıcı paragraflar
-• Çift katman toprak nemi analizini (yüzey + derin) yoruma entegre et
+• Çift katman toprak nemi analizini (yüzey + derin + kök altı drenaj) yoruma entegre et
 • Hava + nem + uydu + fenoloji + geçmiş uygulamalar tek analize entegre
 • ${memory.length>0?'Önceki analizlerle tutarlılık sağla, değişimleri vurgula':''}
 • Somut tarih ve miktar belirterek aksiyon ver

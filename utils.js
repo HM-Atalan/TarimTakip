@@ -61,6 +61,14 @@ window.areaToDecare = (field) => {
   return area;
 };
 
+// ─── SULAMA MİKTARI → mm DÖNÜŞÜMÜ ──────────────────────────────
+// KURAL: Event formundaki (index.html #e-unit) tüm birimler DÖNÜM
+// BAŞINA girilir ("kg/da veya lt/da" vb. etiketlerle tutarlı).
+// Büyüklüğe göre tahmin YAPILMAZ — her birim sabit, fiziksel bir
+// katsayıyla mm'ye çevrilir. 1 dönüm = 1000 m² olduğundan:
+//   1000 kg (=1000 lt su, yoğunluk≈1) / dönüm = 1mm
+//   1 ton / dönüm = 1mm
+// "toplam" seçeneği (Toplam (mm)) doğrudan mm derinliği ifade eder.
 window.parseIrrMm = (evt, fcs, field = null) => {
   const qty = parseFloat(evt.qty) || 0;
   const u   = (evt.unit || '').toLowerCase().trim();
@@ -69,52 +77,47 @@ window.parseIrrMm = (evt, fcs, field = null) => {
 
   if(qty <= 0) return 0;
 
-  const decare  = window.areaToDecare(field);
-  const m2Total = decare * 1000;
-
   let mm = 0;
 
-  if(u === 'mm') {
-    mm = qty;
-  } else if(u === 'lt') {
-    if(qty > 50000 && m2Total > 0) {
-      mm = qty / m2Total;
-    } else {
-      mm = qty / 1000;
-    }
-  } else if(u === 'ton') {
-    if(decare > 50 && qty > 200) {
-      mm = m2Total > 0 ? (qty * 1000) / m2Total : qty;
-    } else {
+  switch(u) {
+    case 'mm':
+    case 'toplam':          // "Toplam (mm)" — sulamada doğrudan mm derinliği
       mm = qty;
-    }
-  } else if(u === 'kg') {
-    if(qty > 50000 && m2Total > 0) {
-      mm = qty / m2Total;
-    } else {
-      mm = qty / 1000;
-    }
-  } else if(u === 'saat') {
-    const debit = sm.includes('Damla')    ? 2.0
-      : sm.includes('Yağmurlama')         ? 5.0
-      : sm.includes('Salma') || sm.includes('Karık') ? 8.0
-      : sm.includes('Mikro')              ? 1.5 : 3.0;
-    const hours = sd > 0 ? sd : qty;
-    mm = hours * debit;
-  } else if(u === 'toplam') {
-    if(qty < 500) {
+      break;
+    case 'ton':              // ton / dönüm → 1 ton/da = 1mm
       mm = qty;
-    } else {
-      mm = m2Total > 0 ? qty / m2Total : qty / 1000;
+      break;
+    case 'kg':                // kg / dönüm
+    case 'lt':                  // litre / dönüm
+    case 'dönüm':                // ₺/Dönüm seçilip miktar alanı da /da girilmişse
+      mm = qty / 1000;           // 1000 kg veya lt / dönüm = 1mm
+      break;
+    case 'saat': {
+      const debit = sm.includes('Damla')    ? 2.0
+        : sm.includes('Yağmurlama')         ? 5.0
+        : (sm.includes('Salma') || sm.includes('Karık')) ? 8.0
+        : sm.includes('Mikro')              ? 1.5 : 3.0;
+      const hours = sd > 0 ? sd : qty;
+      mm = hours * debit;
+      break;
     }
-  } else if(u === 'dönüm') {
-    mm = qty / 1000;
-  } else {
-    if(qty > 0 && qty <= 300) mm = qty;
-    else mm = 25;
+    case 'adet':
+      console.warn('⚠️ Sulama "adet" birimiyle girilmiş; mm hesaplanamaz, 0 kabul edildi. Lütfen mm, saat, kg/da, lt/da veya ton/da girin.');
+      mm = 0;
+      break;
+    default:
+      // Bilinmeyen/boş birim: en güvenli varsayım doğrudan mm kabul etmektir,
+      // büyüklüğe göre tahmin yapılmaz.
+      mm = qty;
   }
 
-  return Math.max(0, Math.min(mm, fcs * 1.5));
+  // Fiziksel güvenlik sınırı: tek uygulamada yüzey tarla kapasitesinin
+  // 1.5 katını aşan giriş, muhtemelen yanlış birim/yazım hatasıdır.
+  const maxSingleApp = Math.max(1, fcs) * 1.5;
+  if(mm > maxSingleApp) {
+    console.warn(`⚠️ Sulama girişi mantık dışı yüksek (${mm.toFixed(1)}mm) → ${maxSingleApp.toFixed(0)}mm ile sınırlandırıldı.`, evt);
+  }
+  return Math.max(0, Math.min(mm, maxSingleApp));
 };
 
 window.calcMoistureState = (fc, taw, Dr) => {
@@ -144,9 +147,14 @@ window.normalizeRZWBRecord = (rec, params) => {
   };
 };
 
+// ─── Kayıt eksiklik kontrolü ────────────────────────────────────
+// percDeep (kök-altı drenaj) alanı da artık zorunlu; eski kayıtlarda
+// bu alan yoksa "eksik" sayılıp otomatik onarım (repair) mekanizması
+// tarafından yeniden hesaplanacak.
 window.isIncompleteRZWBRecord = (rec, expectedIrr) => {
   if(!rec) return true;
-  const fieldsMissing = ['Pe', 'ETc_s', 'ETc_d', 'Ks_s', 'Ks_d'].some(k => rec[k] === undefined || rec[k] === null)
+  const fieldsMissing = ['Pe', 'ETc_s', 'ETc_d', 'Ks_s', 'Ks_d', 'percDeep']
+    .some(k => rec[k] === undefined || rec[k] === null)
     || ((rec.ETc_s ?? 0) === 0 && (rec.ETc_d ?? 0) === 0);
   if(fieldsMissing) return true;
   if(expectedIrr !== undefined) {

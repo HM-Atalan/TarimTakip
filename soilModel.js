@@ -1,5 +1,21 @@
 // ============================================================
 // soilModel.js – FAO‑56 RZWB çift katman toprak nem modeli
+//
+// DÜZELTME NOTLARI:
+// 1) Uydu verisi ARTIK SADECE ledger boşken (ilk kurulum / bootstrap)
+//    başlangıç Dr_s / Dr_d seviyesini tahmin etmek için kullanılıyor.
+//    Önceki "softCalibrateRZWB" — her uydu yenilemesinde bugünün
+//    değerini uyduya doğru çeken günlük drift-correction — TAMAMEN
+//    KALDIRILDI. Sebep: uydu, tarla ölçeğinden çok daha geniş/kaba
+//    çözünürlüklü bir toprak nemi veriyor; bunu günlük "gerçek"
+//    referans gibi kullanmak fiziksel simülasyonu bozan, keyfi bir
+//    dış müdahaleydi. Artık 90 günlük pencere boyunca model sadece
+//    hava verisi + sulama olaylarıyla kendi başına, tutarlı şekilde
+//    ilerliyor.
+// 2) rzwbStep içinde derin katman artık kendi tarla kapasitesini
+//    aştığında bu fazlayı "percDeep" (kök bölgesi altına drenaj/kayıp)
+//    olarak günlük hesaplayıp raporluyor — önceden bu su sessizce
+//    clamp ile yok oluyordu.
 // ============================================================
 
 window.getRZWBParams = (field) => {
@@ -64,13 +80,20 @@ window.rzwbStep = (prev, dayWx, irrMm, params, field) => {
   const Dr_s_before = +prev.Dr_s.toFixed(1);
   const Dr_d_before = +prev.Dr_d.toFixed(1);
 
-  const rawDr_s = prev.Dr_s - Pe - irrMm + ETc_s;
-
   const percCoeff = PERC_COEFF[field.soilType] || 0.60;
-  const perc = rawDr_s < 0 ? Math.min(-rawDr_s * percCoeff, taw_d) : 0;
 
+  // ── YÜZEY KATMANI (0-10cm) ──
+  const rawDr_s = prev.Dr_s - Pe - irrMm + ETc_s;
+  // Yüzey tarla kapasitesini aşan fazla su, katsayıya göre derine sızar
+  const percToDeep = rawDr_s < 0 ? Math.min(-rawDr_s * percCoeff, taw_d) : 0;
   const Dr_s = Math.max(0, Math.min(taw_s, rawDr_s));
-  const Dr_d = Math.max(0, Math.min(taw_d, prev.Dr_d - perc + ETc_d));
+
+  // ── DERİN KATMAN (10-30cm) — yüzeyden gelen sızmayı alır ──
+  const rawDr_d = prev.Dr_d - percToDeep + ETc_d;
+  // Derin katman da kendi tarla kapasitesini aşarsa, fazlası kök
+  // bölgesinin altına drene olur (gerçek fiziksel kayıp / percDeep)
+  const percBelowRoot = rawDr_d < 0 ? +(-rawDr_d).toFixed(1) : 0;
+  const Dr_d = Math.max(0, Math.min(taw_d, rawDr_d));
 
   const surfState = window.calcMoistureState(fcs, taw_s, Dr_s);
   const deepState = window.calcMoistureState(fcd, taw_d, Dr_d);
@@ -82,7 +105,9 @@ window.rzwbStep = (prev, dayWx, irrMm, params, field) => {
     ETc_s: +ETc_s.toFixed(1), ETc_d: +ETc_d.toFixed(1),
     et0: +et0.toFixed(1), rain: +rain.toFixed(1),
     Pe, irr: +irrMm.toFixed(1),
-    perc: +perc.toFixed(1), netIn: +(Pe + irrMm).toFixed(1),
+    perc: +percToDeep.toFixed(1),     // yüzey → derin katman sızması
+    percDeep: percBelowRoot,          // derin katman → kök altı drenaj (kalıcı kayıp)
+    netIn: +(Pe + irrMm).toFixed(1),
     pct_s: surfState.pct, pct_d: deepState.pct,
     moist_s: surfState.moist, moist_d: deepState.moist,
     Dr_s_before, Dr_d_before,
@@ -136,6 +161,10 @@ window.calcSoilRZWB = async (field, force = false) => {
   let simStart, initDr_s, initDr_d, satCalibrated = false;
 
   if(isBootstrap) {
+    // ── BAŞLANGIÇ SEVİYESİ TAHMİNİ ──
+    // Uydu verisi SADECE burada, ledger hiç yokken, ilk gün için bir
+    // başlangıç nemi tahmini olarak kullanılır. Bu tarih sonrasında
+    // model artık uyduya bakmaz; tamamen hava + sulama fiziğiyle ilerler.
     const agroMid  = SATC[field.id]?.data?.soilM3;
     const agroDeep = SATC[field.id]?.data?.soilMDeep;
     const satDate  = SATC[field.id]?.at;
@@ -149,11 +178,11 @@ window.calcSoilRZWB = async (field, force = false) => {
       initDr_s = Math.min(initDr_s, taw_s);
       initDr_d = Math.min(initDr_d, taw_d);
       satCalibrated = true;
-      console.log(`🛰️ Bootstrap uydu: Dr_s=${initDr_s.toFixed(1)} Dr_d=${initDr_d.toFixed(1)}`);
+      console.log(`🛰️ Başlangıç (uydu): Dr_s=${initDr_s.toFixed(1)} Dr_d=${initDr_d.toFixed(1)}`);
     } else {
       initDr_s = Math.min(taw_s * 0.55, taw_s);
       initDr_d = Math.min(taw_d * 0.50, taw_d);
-      console.log(`⚠️ Bootstrap varsayılan: Dr_s=${initDr_s.toFixed(1)} Dr_d=${initDr_d.toFixed(1)}`);
+      console.log(`⚠️ Başlangıç (varsayılan): Dr_s=${initDr_s.toFixed(1)} Dr_d=${initDr_d.toFixed(1)}`);
     }
 
     await window.fetchWXHistory(field);
@@ -261,7 +290,7 @@ window.calcSoilRZWB = async (field, force = false) => {
       pct_s: surfState.pct, pct_d: deepState.pct,
       moist_s: surfState.moist, moist_d: deepState.moist,
       kc: 0.7, Ks_s: 1, Ks_d: 1, ETc_s: 0, ETc_d: 0,
-      et0: 0, rain: 0, irr: 0, perc: 0, netIn: 0, date: today,
+      et0: 0, rain: 0, irr: 0, perc: 0, percDeep: 0, netIn: 0, date: today,
     };
   }
 
@@ -275,7 +304,7 @@ window.calcSoilRZWB = async (field, force = false) => {
       pct_s: surfState.pct, pct_d: deepState.pct,
       moist_s: surfState.moist, moist_d: deepState.moist,
       kc: 0.7, Ks_s: 1, Ks_d: 1, ETc_s: 0, ETc_d: 0,
-      et0: 0, rain: 0, irr: 0, perc: 0, netIn: 0, date: today,
+      et0: 0, rain: 0, irr: 0, perc: 0, percDeep: 0, netIn: 0, date: today,
     };
   }
 
@@ -309,7 +338,7 @@ window.calcSoilRZWB = async (field, force = false) => {
     ETc:          +((todayRec.ETc_s ?? 0) + (todayRec.ETc_d ?? 0)).toFixed(1),
     log:          ledger.slice(-7),
     params,
-    satCalibrated,
+    satCalibrated,   // sadece bootstrap gününde true olabilir; sürekli kalibrasyon YOK
     isBootstrap,
     pct:   pct_s_out,
     moist: moist_s_out,
@@ -358,7 +387,8 @@ window.debugSoilModel = async (field = window.CUR) => {
     sulama_mm: r.irr,
     ETc_yuzey_mm: r.ETc_s,
     ETc_derin_mm: r.ETc_d,
-    sizma_mm: r.perc,
+    sizma_yuzeyden_derine_mm: r.perc,
+    kok_alti_drenaj_mm: r.percDeep,
     Dr_yuzey_mm: r.Dr_s,
     Dr_derin_mm: r.Dr_d,
     nem_yuzey_pct: r.pct_s,
@@ -452,76 +482,6 @@ window.calcIrrigationNeed = (field, s) => {
 window.calcFieldCapacity = (soilType, cl, sa, si, layer='surface') => {
   const p = window.getRZWBParams({ soilType, soilComposition: cl!=null?{clay:cl,sand:sa,silt:si}:null });
   return layer === 'deep' ? p.fcd : p.fcs;
-};
-
-// ─── YUMUŞAK UYDU KALİBRASYONU ────────────────────────────────
-window.softCalibrateRZWB = async (field) => {
-  if(!field) return;
-  const agroMid  = SATC[field.id]?.data?.soilM3;
-  const agroDeep = SATC[field.id]?.data?.soilMDeep;
-  if(!(agroMid > 0.01)) return;
-
-  const params = window.getRZWBParams(field);
-  if(!params) return;
-  const { fcs, fcd, taw_s, taw_d } = params;
-
-  const today = tstr();
-  const fbKey = 'tt_rzwb_' + field.id;
-  let ledger = [];
-  try {
-    const raw = localStorage.getItem(fbKey);
-    if(raw) ledger = JSON.parse(raw);
-  } catch(e) {}
-  if(!ledger.length) return;
-
-  const todayIdx = ledger.findIndex(r => r.date === today);
-  if(todayIdx < 0) return;
-
-  const rec = ledger[todayIdx];
-
-  const sat_moist_s = Math.min(fcs, agroMid * fcs * 1.15);
-  const sat_moist_d = Math.min(fcd, (agroDeep || agroMid * 0.88) * fcd);
-  const satDr_s = Math.max(0, Math.min(taw_s, fcs - sat_moist_s));
-  const satDr_d = Math.max(0, Math.min(taw_d, fcd - sat_moist_d));
-
-  const modelPct_s = Math.round((1 - rec.Dr_s/Math.max(1,taw_s))*100);
-  const satPct_s    = Math.round((1 - satDr_s/Math.max(1,taw_s))*100);
-  const diffPct_s   = Math.abs(modelPct_s - satPct_s);
-
-  const modelPct_d = Math.round((1 - rec.Dr_d/Math.max(1,taw_d))*100);
-  const satPct_d    = Math.round((1 - satDr_d/Math.max(1,taw_d))*100);
-  const diffPct_d   = Math.abs(modelPct_d - satPct_d);
-
-  let changed = false;
-  const SMOOTH = 0.30;
-
-  if(diffPct_s > 20) {
-    const newDr_s = rec.Dr_s + (satDr_s - rec.Dr_s) * SMOOTH;
-    console.log(`🛰️ Yumuşak kalibrasyon (yüzey): model=%${modelPct_s} uydu=%${satPct_s} fark=%${diffPct_s} → düzeltiliyor`);
-    rec.Dr_s = +newDr_s.toFixed(1);
-    changed = true;
-  }
-  if(diffPct_d > 20) {
-    const newDr_d = rec.Dr_d + (satDr_d - rec.Dr_d) * SMOOTH;
-    console.log(`🛰️ Yumuşak kalibrasyon (derin): model=%${modelPct_d} uydu=%${satPct_d} fark=%${diffPct_d} → düzeltiliyor`);
-    rec.Dr_d = +newDr_d.toFixed(1);
-    changed = true;
-  }
-
-  if(changed) {
-    const normalized = window.normalizeRZWBRecord(rec, params);
-    ledger[todayIdx] = normalized;
-    try { localStorage.setItem(fbKey, JSON.stringify(ledger)); } catch(e) {}
-    delete window.RZWB_CACHE[field.id];
-    const uid = window.FB_USER?.uid;
-    if(uid && window.FB_MODE) {
-      try {
-        await window.fbSaveRZWB(uid, field.id, ledger);
-        window.RZWB_CACHE[field.id] = { records: ledger, loadedAt: Date.now() };
-      } catch(e) {}
-    }
-    if(typeof window.invSoil === 'function') window.invSoil(field.id);
-  }
 };
 
 // ─── Firebase RZWB yardımcıları ──────────────────────────────
