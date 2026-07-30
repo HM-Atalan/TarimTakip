@@ -188,22 +188,43 @@
     <div class="card"><div class="ct">🔗 Uydu Platformları</div><div id="sat-links"></div></div>
   </div>
 
-  <!-- EVENTS TAB -->
-  <div id="tp-ev" class="tp">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-      <span style="font-size:14px;font-weight:700;">Olay & Maliyet Kayıtları</span>
-      <button class="btn btns btnp" onclick="window.openEM()">+ Olay Ekle</button>
-    </div>
-    <div class="card" style="padding:0;overflow:hidden;">
-      <div style="overflow-x:auto;">
-        <table class="tbl">
-          <thead><tr><th>Tarih</th><th>Tür</th><th>Detay</th><th>Miktar</th><th>Birim₺</th><th>Toplam</th><th>Gelir</th><th style="width:70px;"></th></tr></thead>
-          <tbody id="ev-tbody"></tbody>
-        </table>
-      </div>
-    </div>
-    <div class="card"><div class="ct">Maliyet Dağılımı</div><div id="ev-cost"></div></div>
+<!-- EVENTS TAB -->
+<div id="tp-ev" class="tp">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+    <span style="font-size:14px;font-weight:700;">Olay & Maliyet Kayıtları</span>
+    <button class="btn btns btnp" onclick="window.openEM()">+ Olay Ekle</button>
   </div>
+
+  <div class="rep-filter-bar">
+    <input type="text" id="ev-search" placeholder="🔍 Tür veya açıklamada ara..." style="flex:1;min-width:150px;" oninput="window.onEvFilterChange()"/>
+    <select id="ev-filter-type" style="width:auto;" onchange="window.onEvFilterChange()">
+      <option value="all">Tüm Türler</option>
+    </select>
+    <input type="date" id="ev-filter-from" style="width:auto;" onchange="window.onEvFilterChange()"/>
+    <span style="font-size:11px;color:var(--text3);">—</span>
+    <input type="date" id="ev-filter-to" style="width:auto;" onchange="window.onEvFilterChange()"/>
+    <button class="btn btns" onclick="window.clearEvFilters()">✕ Temizle</button>
+    <span style="margin-left:auto;display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text3);white-space:nowrap;">
+      Sayfa başına:
+      <select id="ev-pagesize" style="width:auto;" onchange="window.onEvPageSizeChange()">
+        <option value="10">10</option>
+        <option value="15">15</option>
+        <option value="20">20</option>
+      </select>
+    </span>
+  </div>
+
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div style="overflow-x:auto;">
+      <table class="tbl">
+        <thead><tr><th>Tarih</th><th>Tür</th><th>Detay</th><th>Miktar</th><th>Birim₺</th><th>Toplam</th><th>Gelir</th><th style="width:70px;"></th></tr></thead>
+        <tbody id="ev-tbody"></tbody>
+      </table>
+    </div>
+    <div id="ev-pagination" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;padding:10px 14px;border-top:1px solid var(--bdr);font-size:12px;"></div>
+  </div>
+  <div class="card"><div class="ct">Maliyet Dağılımı <span id="ev-cost-label" style="font-size:10px;color:var(--text3);font-weight:400;"></span></div><div id="ev-cost"></div></div>
+</div>
 
   <!-- RECS TAB -->
   <div id="tp-rec" class="tp">
