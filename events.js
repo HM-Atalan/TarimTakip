@@ -104,7 +104,19 @@ window.saveEvent = async () => {
   const invalidateFrom = (oldDate && oldDate < dt) ? oldDate : dt;
   await window.invalidateRZWBFrom(CUR.id, invalidateFrom);
 
-  closeM('event'); await renderFieldPage(CUR); await renderSB(); await renderDash();
+  closeM('event');
+  // DÜZELTME: Önceden burada renderFieldPage(CUR) çağrılıyordu — bu fonksiyon
+  // içeriden her zaman goTab('map') çağırdığı için, kullanıcı Olaylar
+  // sekmesindeyken bir kayıt ekleyip/düzenlediğinde otomatik olarak Harita
+  // sekmesine fırlatılıyordu. Bu hem can sıkıcıydı hem de yeni eklenen
+  // sayfalama/filtre state'ini anlamsızlaştırıyordu. Artık hangi sekmedeysek
+  // orada kalıyoruz, sadece o sekmenin içeriğini tazeliyoruz.
+  if(qs('#fp-name')) qs('#fp-name').textContent = CUR.name;
+  await renderFKPIs(CUR);
+  if(curTab==='ev'){ EV_FILTER.page = 1; renderEvTab(CUR); }
+  else if(curTab==='soil') await renderSoil(CUR);
+  else if(curTab==='rec') await renderRecTab(CUR);
+  await renderSB(); await renderDash();
   toast(eid?'Güncellendi':'Kaydedildi');
   await window.computeAllSoils(true);
 };
@@ -128,33 +140,159 @@ window.delEv = async (id) => {
   await window.computeAllSoils(true);
 };
 
+// ============================================================
+// OLAY LİSTESİ — SAYFALAMA / FİLTRE / ARAMA
+// ============================================================
+// State tek bir tarla+sekme oturumu için tutulur. pageSize kullanıcı
+// tercihi olarak localStorage'da kalıcıdır; diğer filtreler farklı bir
+// tarlaya geçildiğinde sıfırlanır (kafa karışıklığını önlemek için).
+window.EV_FILTER = window.EV_FILTER || {
+  page: 1,
+  pageSize: parseInt(localStorage.getItem('tt_ev_pagesize')) || 10,
+  type: 'all',
+  dateFrom: '',
+  dateTo: '',
+  search: '',
+  fieldId: null,
+};
+
+window.onEvFilterChange = () => {
+  EV_FILTER.search   = qs('#ev-search')?.value.trim().toLowerCase() || '';
+  EV_FILTER.type     = qs('#ev-filter-type')?.value || 'all';
+  EV_FILTER.dateFrom = qs('#ev-filter-from')?.value || '';
+  EV_FILTER.dateTo   = qs('#ev-filter-to')?.value || '';
+  EV_FILTER.page = 1;
+  if(CUR) renderEvTab(CUR);
+};
+
+window.onEvPageSizeChange = () => {
+  const val = parseInt(qs('#ev-pagesize')?.value) || 10;
+  EV_FILTER.pageSize = val;
+  EV_FILTER.page = 1;
+  try{ localStorage.setItem('tt_ev_pagesize', String(val)); }catch(e){}
+  if(CUR) renderEvTab(CUR);
+};
+
+window.clearEvFilters = () => {
+  EV_FILTER.search = ''; EV_FILTER.type = 'all';
+  EV_FILTER.dateFrom = ''; EV_FILTER.dateTo = '';
+  EV_FILTER.page = 1;
+  if(qs('#ev-search')) qs('#ev-search').value = '';
+  if(qs('#ev-filter-type')) qs('#ev-filter-type').value = 'all';
+  if(qs('#ev-filter-from')) qs('#ev-filter-from').value = '';
+  if(qs('#ev-filter-to')) qs('#ev-filter-to').value = '';
+  if(CUR) renderEvTab(CUR);
+};
+
+window.evGoToPage = (p) => {
+  EV_FILTER.page = p;
+  if(CUR) renderEvTab(CUR);
+};
+
 window.renderEvTab = (field) => {
   const tb=qs('#ev-tbody'); if(!tb) return;
-  const evs=field.events||[];
-  if(!evs.length){ tb.innerHTML=`<tr><td colspan="8" style="text-align:center;padding:22px;color:var(--text3);">Kayıt yok.</td></tr>`; const cc=qs('#ev-cost'); if(cc) cc.innerHTML=''; return; }
-  tb.innerHTML=evs.map(e=>{
-    const total=e.total||(e.cost*(e.qty||1));
-    const extra=e.extra?Object.entries(e.extra).filter(([k])=>['e-ft','e-pn','e-sm','e-ft2','e-fbrand'].includes(k)).map(([,v])=>v).join(' · '):'';
-    return`<tr>
-      <td style="white-space:nowrap;">${fd(e.date)}</td>
-      <td><span>${EVI[e.type]||'📝'}</span> ${e.type}${e.planned?'<br/><span class="tag tb" style="font-size:9px;">Planlandı</span>':''}</td>
-      <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${extra?`<small style="color:var(--text3);">${extra}</small><br/>`:''}${e.notes||'—'}</td>
-      <td>${e.qty||'—'} ${e.unit||''}</td>
-      <td>${e.cost?e.cost.toLocaleString('tr-TR')+'₺':'—'}</td>
-      <td style="font-weight:600;">${total?Math.round(total).toLocaleString('tr-TR')+'₺':'—'}</td>
-      <td>${e.revenue?Math.round(e.revenue).toLocaleString('tr-TR')+'₺':(e.type==='hasat'?'—':'')}</td>
-      <td><div style="display:flex;gap:3px;"><button class="btn btnxs btna" onclick="openEM('${e.id}')">✏️</button><button class="btn btnxs btnd" onclick="delEv('${e.id}')">✕</button></div></td>
-    </tr>`;
-  }).join('');
+  const F = EV_FILTER;
+
+  // Farklı bir tarlaya geçilmişse filtre/arama/sayfa sıfırlanır
+  // (sayfa boyutu tercihi kalıcı kalmaya devam eder)
+  if(F.fieldId !== field.id){
+    F.fieldId = field.id; F.page = 1; F.type = 'all';
+    F.dateFrom = ''; F.dateTo = ''; F.search = '';
+  }
+
+  const allEvs = field.events||[];
+
+  // Tür filtresi dropdown'ını bu tarladaki mevcut türlerle doldur
+  const typeSel = qs('#ev-filter-type');
+  if(typeSel){
+    if(typeSel.dataset.fieldId !== field.id){
+      const typesPresent = [...new Set(allEvs.map(e=>e.type))].sort();
+      typeSel.innerHTML = '<option value="all">Tüm Türler</option>' +
+        typesPresent.map(t=>`<option value="${t}">${EVI[t]||'📝'} ${t}</option>`).join('');
+      typeSel.dataset.fieldId = field.id;
+    }
+    typeSel.value = F.type;
+  }
+  if(qs('#ev-search') && qs('#ev-search').value !== F.search) qs('#ev-search').value = F.search;
+  if(qs('#ev-filter-from')) qs('#ev-filter-from').value = F.dateFrom;
+  if(qs('#ev-filter-to')) qs('#ev-filter-to').value = F.dateTo;
+  if(qs('#ev-pagesize')) qs('#ev-pagesize').value = String(F.pageSize);
+
+  const pg=qs('#ev-pagination'); const cc=qs('#ev-cost'); const lbl=qs('#ev-cost-label');
+
+  if(!allEvs.length){
+    tb.innerHTML=`<tr><td colspan="8" style="text-align:center;padding:22px;color:var(--text3);">Kayıt yok.</td></tr>`;
+    if(cc) cc.innerHTML=''; if(pg) pg.innerHTML=''; if(lbl) lbl.textContent='';
+    return;
+  }
+
+  // ── FİLTRELEME (tür, tarih aralığı, tür+açıklama araması) ──
+  const filtered = allEvs.filter(e=>{
+    if(F.type!=='all' && e.type!==F.type) return false;
+    if(F.dateFrom && e.date < F.dateFrom) return false;
+    if(F.dateTo && e.date > F.dateTo) return false;
+    if(F.search){
+      const extraStr = e.extra ? Object.values(e.extra).join(' ').toLowerCase() : '';
+      const hay = `${e.type} ${e.notes||''} ${extraStr}`.toLowerCase();
+      if(!hay.includes(F.search)) return false;
+    }
+    return true;
+  });
+
+  // ── SAYFALAMA ──
+  const totalPages = Math.max(1, Math.ceil(filtered.length / F.pageSize));
+  if(F.page > totalPages) F.page = totalPages;
+  if(F.page < 1) F.page = 1;
+  const startIdx = (F.page-1)*F.pageSize;
+  const pageItems = filtered.slice(startIdx, startIdx+F.pageSize);
+
+  if(!filtered.length){
+    tb.innerHTML=`<tr><td colspan="8" style="text-align:center;padding:22px;color:var(--text3);">🔍 Filtreyle eşleşen kayıt yok.</td></tr>`;
+  }else{
+    tb.innerHTML=pageItems.map(e=>{
+      const total=e.total||(e.cost*(e.qty||1));
+      const extra=e.extra?Object.entries(e.extra).filter(([k])=>['e-ft','e-pn','e-sm','e-ft2','e-fbrand'].includes(k)).map(([,v])=>v).join(' · '):'';
+      return`<tr>
+        <td style="white-space:nowrap;">${fd(e.date)}</td>
+        <td><span>${EVI[e.type]||'📝'}</span> ${e.type}${e.planned?'<br/><span class="tag tb" style="font-size:9px;">Planlandı</span>':''}</td>
+        <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${extra?`<small style="color:var(--text3);">${extra}</small><br/>`:''}${e.notes||'—'}</td>
+        <td>${e.qty||'—'} ${e.unit||''}</td>
+        <td>${e.cost?e.cost.toLocaleString('tr-TR')+'₺':'—'}</td>
+        <td style="font-weight:600;">${total?Math.round(total).toLocaleString('tr-TR')+'₺':'—'}</td>
+        <td>${e.revenue?Math.round(e.revenue).toLocaleString('tr-TR')+'₺':(e.type==='hasat'?'—':'')}</td>
+        <td><div style="display:flex;gap:3px;"><button class="btn btnxs btna" onclick="openEM('${e.id}')">✏️</button><button class="btn btnxs btnd" onclick="delEv('${e.id}')">✕</button></div></td>
+      </tr>`;
+    }).join('');
+  }
+
+  // ── SAYFALAMA KONTROLLERİ ──
+  if(pg){
+    if(totalPages<=1){
+      pg.innerHTML = `<span style="color:var(--text3);">${filtered.length} kayıt${filtered.length!==allEvs.length?` (${allEvs.length} toplam içinden filtrelendi)`:''}</span>`;
+    }else{
+      const rangeStart = filtered.length? startIdx+1 : 0;
+      const rangeEnd = Math.min(startIdx+F.pageSize, filtered.length);
+      pg.innerHTML = `
+        <span style="color:var(--text3);">${rangeStart}–${rangeEnd} / ${filtered.length} kayıt</span>
+        <div style="display:flex;gap:4px;align-items:center;">
+          <button class="btn btnxs" style="opacity:${F.page<=1?0.4:1};" ${F.page<=1?'disabled':''} onclick="window.evGoToPage(${F.page-1})">‹ Önceki</button>
+          <span style="padding:0 6px;">Sayfa ${F.page} / ${totalPages}</span>
+          <button class="btn btnxs" style="opacity:${F.page>=totalPages?0.4:1};" ${F.page>=totalPages?'disabled':''} onclick="window.evGoToPage(${F.page+1})">Sonraki ›</button>
+        </div>`;
+    }
+  }
+
+  // ── MALİYET DAĞILIMI (aktif filtreye göre) ──
   const cm={};let tot=0, totRev=0, totProfit=0;
-  evs.filter(e=>e.cost>0).forEach(e=>{ const t=e.total||(e.cost*(e.qty||1)); cm[e.type]=(cm[e.type]||0)+t; tot+=t; });
-  evs.filter(e=>e.revenue).forEach(e=>{ totRev+=e.revenue; });
+  filtered.filter(e=>e.cost>0).forEach(e=>{ const t=e.total||(e.cost*(e.qty||1)); cm[e.type]=(cm[e.type]||0)+t; tot+=t; });
+  filtered.filter(e=>e.revenue).forEach(e=>{ totRev+=e.revenue; });
   totProfit = totRev - tot;
-  const cc=qs('#ev-cost');
   if(cc) cc.innerHTML=Object.keys(cm).length
     ? Object.entries(cm).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="pr"><span class="prl">${EVI[k]||'📝'} ${k}</span><div class="prt"><div class="prf" style="width:${tot?Math.round(v/tot*100):0}%;background:${EVC[k]||'var(--green2)'};"></div></div><span class="prv">${Math.round(v).toLocaleString()}₺</span></div>`).join('')+`
     <div style="display:flex;justify-content:space-between;font-weight:700;font-size:14px;padding-top:9px;margin-top:5px;border-top:1px solid var(--bdr);"><span>Toplam Maliyet</span><span>${Math.round(tot).toLocaleString('tr-TR')} ₺</span></div>
     <div style="display:flex;justify-content:space-between;font-size:14px;margin-top:6px;"><span>Toplam Gelir</span><span>${Math.round(totRev).toLocaleString('tr-TR')} ₺</span></div>
     <div style="display:flex;justify-content:space-between;font-weight:800;font-size:15px;margin-top:6px;color:${totProfit>=0?'var(--green2)':'var(--red)'}"><span>Net Kar</span><span>${Math.round(totProfit).toLocaleString('tr-TR')} ₺</span></div>`
     : 'Maliyet kaydı yok.';
+
+  if(lbl) lbl.textContent = filtered.length!==allEvs.length ? `(filtrelenmiş ${filtered.length}/${allEvs.length} kayıt)` : '';
 };
