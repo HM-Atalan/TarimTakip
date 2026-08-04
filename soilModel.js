@@ -1,21 +1,12 @@
 // ============================================================
 // soilModel.js – FAO‑56 RZWB çift katman toprak nem modeli
-//
-// DÜZELTME NOTLARI:
-// 1) Uydu verisi ARTIK SADECE ledger boşken (ilk kurulum / bootstrap)
-//    başlangıç Dr_s / Dr_d seviyesini tahmin etmek için kullanılıyor.
-//    Önceki "softCalibrateRZWB" — her uydu yenilemesinde bugünün
-//    değerini uyduya doğru çeken günlük drift-correction — TAMAMEN
-//    KALDIRILDI. Sebep: uydu, tarla ölçeğinden çok daha geniş/kaba
-//    çözünürlüklü bir toprak nemi veriyor; bunu günlük "gerçek"
-//    referans gibi kullanmak fiziksel simülasyonu bozan, keyfi bir
-//    dış müdahaleydi. Artık 90 günlük pencere boyunca model sadece
-//    hava verisi + sulama olaylarıyla kendi başına, tutarlı şekilde
-//    ilerliyor.
-// 2) rzwbStep içinde derin katman artık kendi tarla kapasitesini
-//    aştığında bu fazlayı "percDeep" (kök bölgesi altına drenaj/kayıp)
-//    olarak günlük hesaplayıp raporluyor — önceden bu su sessizce
-//    clamp ile yok oluyordu.
+// NOT: Bu, gerçek soilModel.js'in TAMAMI DEĞİLDİR.
+// Sadece DOM/localStorage/Firebase bağımlılığı olmayan SAF
+// fonksiyonlar (getRZWBParams, rzwbStep, scl) buraya BİREBİR,
+// TEK SATIR DEĞİŞTİRİLMEDEN kopyalanmıştır. calcSoilRZWB,
+// fbSaveRZWB/fbLoadRZWB, invalidateRZWBFrom, calcIrrigationNeed
+// gibi fonksiyonlar bu harness'te ayrı bir bölümde "test
+// edilemeyenler" olarak raporlanmıştır (bkz. rapor).
 // ============================================================
 
 window.getRZWBParams = (field) => {
@@ -81,38 +72,115 @@ window.rzwbStep = (prev, dayWx, irrMm, params, field) => {
   const Dr_d_before = +prev.Dr_d.toFixed(1);
 
   const percCoeff = PERC_COEFF[field.soilType] || 0.60;
+  const prevSurplus_s = prev.surplus_s || 0;
+  const prevSurplus_d = prev.surplus_d || 0;
 
-  // ── YÜZEY KATMANI (0-10cm) ──
-  const rawDr_s = prev.Dr_s - Pe - irrMm + ETc_s;
-  // Yüzey tarla kapasitesini aşan fazla su, katsayıya göre derine sızar
-  const percToDeep = rawDr_s < 0 ? (-rawDr_s * percCoeff) : 0;
-  const Dr_s = Math.max(0, Math.min(taw_s, rawDr_s));
+  const effPrevDr_s = prev.Dr_s - prevSurplus_s;
+  const rawDr_s = effPrevDr_s - Pe - irrMm + ETc_s;
 
-  // ── DERİN KATMAN (10-30cm) — yüzeyden gelen sızmayı alır ──
-  const rawDr_d = prev.Dr_d - percToDeep + ETc_d;
-  // Derin katman da kendi tarla kapasitesini aşarsa, fazlası kök
-  // bölgesinin altına drene olur (gerçek fiziksel kayıp / percDeep)
-  const percBelowRoot = rawDr_d < 0 ? +(-rawDr_d).toFixed(1) : 0;
-  const Dr_d = Math.max(0, Math.min(taw_d, rawDr_d));
+  let percToDeep = 0, Dr_s, surplus_s_out = 0;
+  if (rawDr_s < 0) {
+    const totalSurplus = -rawDr_s;
+    const capSurplus   = taw_s;
+    const fastBypass   = Math.max(0, totalSurplus - capSurplus);
+    const slowPool     = Math.min(totalSurplus, capSurplus);
+    const slowDrain    = slowPool * percCoeff;
+    percToDeep     = fastBypass + slowDrain;
+    surplus_s_out  = Math.max(0, slowPool - slowDrain);
+    Dr_s = 0;
+  } else {
+    Dr_s = Math.min(taw_s, rawDr_s);
+  }
+  // DÜZELTME (su muhasebesi bug fix): Önceden burada
+  // "percToDeep = Math.min(percToDeep, taw_d);" satırı vardı.
+  // Bu satır, tek günde derin katmanın TAW'ını (taw_d) aşan
+  // percToDeep miktarını HİÇBİR DEĞİŞKENE YAZMADAN siliyordu
+  // (aşırı sulama/yağış testlerinde su kayboluyordu).
+  // Artık percToDeep KIRPILMADAN aşağıdaki derin katman
+  // hesabına aktarılıyor; derin katmanın KENDİ ZATEN VAR OLAN
+  // taşma mekanizması (fastBypass + slowDrain → percBelowRoot)
+  // taw_d'yi aşan her mm'yi otomatik olarak kök-altı kalıcı
+  // drenaja (percDeep) yönlendiriyor. Yeni bir kayıp mekanizması
+  // İCAT EDİLMEDİ — mevcut derin-katman taşma mantığı kullanıldı.
+
+  const effPrevDr_d = prev.Dr_d - prevSurplus_d;
+  const rawDr_d = effPrevDr_d - percToDeep + ETc_d;
+
+  let percBelowRoot = 0, Dr_d, surplus_d_out = 0;
+  if (rawDr_d < 0) {
+    const totalSurplus = -rawDr_d;
+    const capSurplus   = taw_d;
+    const fastBypass   = Math.max(0, totalSurplus - capSurplus);
+    const slowPool     = Math.min(totalSurplus, capSurplus);
+    const slowDrain    = slowPool * percCoeff;
+    percBelowRoot  = +(fastBypass + slowDrain).toFixed(1);
+    surplus_d_out  = Math.max(0, slowPool - slowDrain);
+    Dr_d = 0;
+  } else {
+    Dr_d = Math.min(taw_d, rawDr_d);
+  }
 
   const surfState = window.calcMoistureState(fcs, taw_s, Dr_s);
   const deepState = window.calcMoistureState(fcd, taw_d, Dr_d);
 
   return {
     Dr_s: surfState.Dr, Dr_d: deepState.Dr,
+    surplus_s: +surplus_s_out.toFixed(2),
+    surplus_d: +surplus_d_out.toFixed(2),
     kc:   +kc.toFixed(3),
     Ks_s: +ks_s.toFixed(3), Ks_d: +ks_d.toFixed(3),
     ETc_s: +ETc_s.toFixed(1), ETc_d: +ETc_d.toFixed(1),
     et0: +et0.toFixed(1), rain: +rain.toFixed(1),
     Pe, irr: +irrMm.toFixed(1),
-    perc: +percToDeep.toFixed(1),     // yüzey → derin katman sızması
-    percDeep: percBelowRoot,          // derin katman → kök altı drenaj (kalıcı kayıp)
+    perc: +percToDeep.toFixed(1),
+    percDeep: percBelowRoot,
     netIn: +(Pe + irrMm).toFixed(1),
     pct_s: surfState.pct, pct_d: deepState.pct,
     moist_s: surfState.moist, moist_d: deepState.moist,
     Dr_s_before, Dr_d_before,
     rootS, rootD, percCoeff,
   };
+};
+
+window.scl = (pct) => {
+  if(pct>78) return {l:'Islak',  tag:'tb'};
+  if(pct>58) return {l:'Nemli',  tag:'tg'};
+  if(pct>38) return {l:'Yeterli',tag:'tgr'};
+  if(pct>20) return {l:'Kuru',   tag:'ta'};
+  return            {l:'Kurak',  tag:'tr'};
+};
+
+// ============================================================
+// SENARYO 4 yardımcısı: tarlanın "var olmaya başladığı" en erken
+// makul tarih. Öncelik sırası:
+//   1) field.plantDate (ekim/dikim tarihi) — varsa en güvenilir sinyal.
+//   2) field.id içine gid() tarafından gömülü oluşturma zaman damgası
+//      (gid = Date.now().toString(36) + 4 haneli rastgele sonek).
+//      Bu, veri modeline YENİ BİR ALAN EKLEMEDEN mevcut id'den
+//      okunabiliyor.
+//   3) Hiçbiri çözülemezse null döner — çağıran taraf bu durumda
+//      mevcut 90 günlük pencere sınırını (cutoff90) kullanmaya
+//      devam eder (davranış bozulmaz, sadece daha güvenilir bir
+//      sinyal varsa ona öncelik verilir).
+// ============================================================
+window.resolveFieldEarliestDate = (field) => {
+  if (field?.plantDate) return field.plantDate;
+  const id = field?.id || '';
+  if (id.length > 4) {
+    try {
+      const tsPart = id.slice(0, -4); // gid() son 4 karakteri rastgele sonek
+      const ms = parseInt(tsPart, 36);
+      if (Number.isFinite(ms)) {
+        const d = new Date(ms);
+        const y = d.getFullYear();
+        // Makul aralık kontrolü: eski/bozuk/manuel id formatlarına karşı savunma
+        if (y >= 2020 && d.getTime() <= Date.now() + 86400000) {
+          return window.dateKey(d);
+        }
+      }
+    } catch (e) { /* id decode edilemedi — sessizce null'a düş */ }
+  }
+  return null;
 };
 
 window.calcSoilRZWB = async (field, force = false) => {
@@ -158,50 +226,80 @@ window.calcSoilRZWB = async (field, force = false) => {
   const lastRec  = ledger.length ? ledger[ledger.length - 1] : null;
   const isBootstrap = !lastRec;
 
-  let simStart, initDr_s, initDr_d, satCalibrated = false;
+  let simStart, initDr_s, initDr_d, satCalibrated = false, bootstrapInfo = null;
 
   if(isBootstrap) {
-    // ── BAŞLANGIÇ SEVİYESİ TAHMİNİ ──
-    // Uydu verisi SADECE burada, ledger hiç yokken, ilk gün için bir
-    // başlangıç nemi tahmini olarak kullanılır. Bu tarih sonrasında
-    // model artık uyduya bakmaz; tamamen hava + sulama fiziğiyle ilerler.
-    const agroMid  = SATC[field.id]?.data?.soilM3;
-    const agroDeep = SATC[field.id]?.data?.soilMDeep;
-    const satDate  = SATC[field.id]?.at;
-    const satFresh = agroMid > 0.01 && satDate && (Date.now() - satDate) < 43200000;
+    // ── SENARYO 4: tarlanın var olmaya başladığı en erken tarih ──
+    // 90 günlük pencere, tarladan daha eskiye gidemez.
+    const earliestFromField = window.resolveFieldEarliestDate(field);
+    const earliestAllowed = (earliestFromField && earliestFromField > cutoff90str)
+      ? earliestFromField
+      : cutoff90str;
+    // Gelecekteki bir dikim tarihi girilmişse (henüz ekilmemiş tarla),
+    // bugünden ileri gidilemez — bootstrap günü en fazla "bugün" olabilir.
+    const earliestClamped = earliestAllowed > today ? today : earliestAllowed;
 
-    if(satFresh) {
+    // ── SENARYO 2 kontrolü: uydu verisi var ve KENDİ GERÇEK TARİHİYLE
+    // kullanılabilir mi? (Artık "bugüne göre taze mi" değil, "tarihi
+    // biliniyor mu ve tarla/90-gün penceresi içinde mi" kontrol ediliyor.) ──
+    const agroMid   = SATC[field.id]?.data?.soilM3;
+    const agroDeep  = SATC[field.id]?.data?.soilMDeep;
+    const satAt     = SATC[field.id]?.at;
+    const satDateStr = satAt ? window.dateKey(new Date(satAt)) : null;
+    const satUsable = agroMid > 0.01 && satDateStr
+      && satDateStr >= earliestClamped && satDateStr <= today;
+
+    let bootstrapSource, bootstrapDate;
+
+    if (satUsable) {
+      // DÜZELTME: uydu, KENDİ ölçüm tarihine (satDateStr) ankraj ediliyor —
+      // bugünkü nem artık 90 gün öncesinin başlangıcı olarak KULLANILMIYOR.
       const sat_moist_s = Math.min(fcs, agroMid * fcs * 1.15);
       const sat_moist_d = Math.min(fcd, (agroDeep || agroMid * 0.88) * fcd);
-      initDr_s = Math.max(0, fcs - sat_moist_s);
-      initDr_d = Math.max(0, fcd - sat_moist_d);
-      initDr_s = Math.min(initDr_s, taw_s);
-      initDr_d = Math.min(initDr_d, taw_d);
-      satCalibrated = true;
-      console.log(`🛰️ Başlangıç (uydu): Dr_s=${initDr_s.toFixed(1)} Dr_d=${initDr_d.toFixed(1)}`);
+      initDr_s = Math.min(taw_s, Math.max(0, fcs - sat_moist_s));
+      initDr_d = Math.min(taw_d, Math.max(0, fcd - sat_moist_d));
+      bootstrapSource = 'satellite';
+      bootstrapDate   = satDateStr;
+      satCalibrated   = true;
     } else {
+      // ── SENARYO 3: uydu yok/kullanılamaz → makul varsayılan.
+      // Bu state'in HANGİ TARİHE ait olduğu artık açıkça belirleniyor
+      // (önceden bu belirsizdi, sessizce cutoff90'a bağlanıyordu). ──
       initDr_s = Math.min(taw_s * 0.55, taw_s);
       initDr_d = Math.min(taw_d * 0.50, taw_d);
-      console.log(`⚠️ Başlangıç (varsayılan): Dr_s=${initDr_s.toFixed(1)} Dr_d=${initDr_d.toFixed(1)}`);
+      bootstrapSource = 'default';
+      bootstrapDate   = earliestClamped;
     }
 
     await window.fetchWXHistory(field);
-    simStart = cutoff90str;
+
+    // DÜZELTME: simStart artık HER ZAMAN cutoff90str değil — bootstrap
+    // state'in gerçekten ait olduğu tarihten (bootstrapDate) başlıyor.
+    // bootstrapDate'in kendisi de simülasyona dahil edilir: initDr_s/
+    // initDr_d o günün BAŞLANGIÇ (gün başı) durumu kabul edilip, o günün
+    // gerçek ET/yağış/sulaması rzwbStep ile düşülerek ledger'a yazılır.
+    // Bu, ledger formatının ("her kayıt = bir rzwbStep çıktısı") bütünlüğünü
+    // korur ve bozuk-kayıt onarım mekanizmasıyla çakışmayı önler.
+    simStart = bootstrapDate;
+
+    bootstrapInfo = {
+      bootstrapSource, bootstrapDate,
+      bootstrapDr_s: +initDr_s.toFixed(1), bootstrapDr_d: +initDr_d.toFixed(1),
+      simulationStart: simStart, simulationEnd: today,
+    };
+    console.log(
+      `🧭 RZWB bootstrap [${field.name || field.id}] source=${bootstrapSource} ` +
+      `bootstrapDate=${bootstrapDate} Dr_s=${bootstrapInfo.bootstrapDr_s} ` +
+      `Dr_d=${bootstrapInfo.bootstrapDr_d} sim=${simStart}→${today}`
+    );
   } else {
     initDr_s = lastRec.Dr_s;
     initDr_d = lastRec.Dr_d;
     const nextDay = new Date(lastRec.date + 'T12:00:00');
     nextDay.setDate(nextDay.getDate() + 1);
     simStart = window.dateKey(nextDay);
-    // NOT: simStart her zaman "son kayıt + 1 gün" olarak hesaplanır. Eğer
-    // bu, bugünün tarihinden ilerideyse (simStart > today), aşağıdaki
-    // simDays filtresi (d.date >= simStart && d.date <= today) hiçbir
-    // günü seçemez — yani HİÇBİR gelecek tarih simüle EDİLMEZ. Bu durumda
-    // log mesajını "zaten güncel" olarak yazdırıyoruz ki yanıltıcı
-    // görünmesin (önceden simStart bugünden ileri olsa bile "→ simStart"
-    // yazdırılıyordu, sanki yarın hesaplanacakmış gibi okunuyordu).
     if (simStart > today) {
-      console.log(`📖 Ledger güncel: ${field.name} — son kayıt zaten bugüne (${lastRec.date}) ait, yeni gün hesaplanmayacak. Dr_s=${initDr_s} Dr_d=${initDr_d}`);
+      console.log(`📖 Ledger güncel: ${field.name} — son kayıt zaten bugüne (${lastRec.date}) ait. Dr_s=${initDr_s} Dr_d=${initDr_d}`);
     } else {
       console.log(`📖 Ledger devam: ${field.name} — ${lastRec.date} → ${simStart} arası hesaplanacak. Dr_s=${initDr_s} Dr_d=${initDr_d}`);
     }
@@ -349,8 +447,9 @@ window.calcSoilRZWB = async (field, force = false) => {
     ETc:          +((todayRec.ETc_s ?? 0) + (todayRec.ETc_d ?? 0)).toFixed(1),
     log:          ledger.slice(-7),
     params,
-    satCalibrated,   // sadece bootstrap gününde true olabilir; sürekli kalibrasyon YOK
+    satCalibrated,
     isBootstrap,
+    bootstrapInfo,   // YENİ: bootstrapSource/Date/Dr_s/Dr_d/simulationStart/End — test ve tanı için
     pct:   pct_s_out,
     moist: moist_s_out,
     fc:    fcs,
