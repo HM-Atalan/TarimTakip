@@ -249,7 +249,7 @@ window.calcSoilRZWB = async (field, force = false) => {
     const satUsable = agroMid > 0.01 && satDateStr
       && satDateStr >= earliestClamped && satDateStr <= today;
 
-    let bootstrapSource, bootstrapDate;
+    let bootstrapSource, bootstrapDate, anchorRecord = null;
 
     if (satUsable) {
       // DÜZELTME: uydu, KENDİ ölçüm tarihine (satDateStr) ankraj ediliyor —
@@ -261,6 +261,52 @@ window.calcSoilRZWB = async (field, force = false) => {
       bootstrapSource = 'satellite';
       bootstrapDate   = satDateStr;
       satCalibrated   = true;
+
+      // ══ FAZ 3.1 — Approach B ══
+      // Uydu ölçümü GÜN İÇİNDE herhangi bir saatte alınmış olabilir
+      // (00:00–23:59 arası — bkz. FAZ 3 zamanlama analizi). Bu değeri
+      // "gün başı" (00:00) durumu sayıp bootstrapDate'i rzwbStep ile
+      // YENİDEN simüle etmek, ölçüm anına kadar geçen akışın
+      // (ET/yağış/sulama) İKİNCİ KEZ sayılmasına yol açar — çünkü uydu
+      // okuması zaten o akışı içinde barındırır.
+      //
+      // Bunun yerine: uydu değeri doğrudan bootstrapDate'in NİHAİ
+      // (gözlemsel) kaydı olarak ledger'a yazılır — tıpkı normal
+      // ledger'daki bir "lastRec"in kendi gününün akışını bir daha
+      // görmemesi gibi (AYNI prensip, Existing-Ledger senaryosuyla
+      // birebir tutarlı). rzwbStep bu gün için HİÇ ÇAĞRILMAZ.
+      // Simülasyon bootstrapDate+1'den başlar.
+      const surfAnchor = window.calcMoistureState(fcs, taw_s, initDr_s);
+      const deepAnchor = window.calcMoistureState(fcd, taw_d, initDr_d);
+      anchorRecord = {
+        date: bootstrapDate,
+        source: 'satellite-anchor', // ← isIncompleteRZWBRecord bu kaydı ATLAR (bkz. utils.js)
+        Dr_s: surfAnchor.Dr, Dr_d: deepAnchor.Dr,
+        pct_s: surfAnchor.pct, pct_d: deepAnchor.pct,
+        moist_s: surfAnchor.moist, moist_d: deepAnchor.moist,
+        surplus_s: 0, surplus_d: 0,
+        kc: null, Ks_s: 1, Ks_d: 1,
+        // et0/rain/Pe/irr/netIn BİLEREK null: bu gün rzwbStep tarafından
+        // simüle EDİLMEDİ, dolayısıyla "0 akış oldu" ile "akış bilinmiyor/
+        // ölçüme dahil" arasındaki farkı açık tutmak için 0 değil null.
+        ETc_s: 0, ETc_d: 0, et0: null, rain: null, Pe: null, irr: null,
+        perc: 0, percDeep: 0, netIn: null,
+      };
+
+      // Bootstrap gününe (=uydu ölçüm günü) rastlayan bir sulama kaydı
+      // varsa: bu akış modele UYGULANMIYOR (yukarıdaki gerekçeyle — o gün
+      // zaten simüle edilmiyor). Bu SESSİZCE olmasın diye açıkça loglanır.
+      // Sulama kaydının kendisi field.events'te (maliyet/rapor amaçlı)
+      // OLDUĞU GİBİ kalır — sadece toprak nemi modeline dahil edilmiyor.
+      const irrOnAnchorDay = irrMap[bootstrapDate] || 0;
+      if (irrOnAnchorDay > 0) {
+        console.warn(
+          `⚠️ RZWB [${field.name || field.id}]: ${bootstrapDate} tarihinde ` +
+          `${irrOnAnchorDay.toFixed(1)}mm sulama kaydı var, ama bu tarih uydu ` +
+          `ankraj günü olduğu için TOPRAK NEMİ MODELİNE uygulanmıyor (uydu ` +
+          `ölçümü o günün nihai durumunu zaten yansıttığı varsayılıyor).`
+        );
+      }
     } else {
       // ── SENARYO 3: uydu yok/kullanılamaz → makul varsayılan.
       // Bu state'in HANGİ TARİHE ait olduğu artık açıkça belirleniyor
@@ -269,28 +315,41 @@ window.calcSoilRZWB = async (field, force = false) => {
       initDr_d = Math.min(taw_d * 0.50, taw_d);
       bootstrapSource = 'default';
       bootstrapDate   = earliestClamped;
+      // NOT (FAZ 3.1 analizi — item 7): default varsayım GERÇEK bir
+      // ölçüm ANI DEĞİL, sabit bir tahmindir (taw×0.55 / taw×0.50).
+      // Hiçbir gerçek "önceden olmuş" akışı temsil etmediği için, bu
+      // günü rzwbStep ile simüle etmek (Approach A) ÇİFT SAYIMA yol
+      // AÇMAZ — çakışacak bir gözlem yoktur. Bu yüzden default bootstrap
+      // BİLEREK Approach A'da bırakıldı (aşağıda anchorRecord=null kalır,
+      // simStart=bootstrapDate olur ve o gün normal şekilde simüle edilir).
     }
 
     await window.fetchWXHistory(field);
 
-    // DÜZELTME: simStart artık HER ZAMAN cutoff90str değil — bootstrap
-    // state'in gerçekten ait olduğu tarihten (bootstrapDate) başlıyor.
-    // bootstrapDate'in kendisi de simülasyona dahil edilir: initDr_s/
-    // initDr_d o günün BAŞLANGIÇ (gün başı) durumu kabul edilip, o günün
-    // gerçek ET/yağış/sulaması rzwbStep ile düşülerek ledger'a yazılır.
-    // Bu, ledger formatının ("her kayıt = bir rzwbStep çıktısı") bütünlüğünü
-    // korur ve bozuk-kayıt onarım mekanizmasıyla çakışmayı önler.
-    simStart = bootstrapDate;
+    if (anchorRecord) {
+      // Approach B (sadece uydu için): anchor kaydı DOĞRUDAN ledger'a
+      // yazılır, rzwbStep bu gün için ÇAĞRILMAZ. Simülasyon ertesi
+      // günden başlar.
+      ledger = [anchorRecord];
+      const nextDay = new Date(bootstrapDate + 'T12:00:00'); nextDay.setDate(nextDay.getDate() + 1);
+      simStart = window.dateKey(nextDay);
+    } else {
+      // Approach A (sadece default bootstrap): bootstrapDate'in kendisi
+      // de simülasyona dahil edilir (yukarıdaki not).
+      simStart = bootstrapDate;
+    }
 
     bootstrapInfo = {
       bootstrapSource, bootstrapDate,
       bootstrapDr_s: +initDr_s.toFixed(1), bootstrapDr_d: +initDr_d.toFixed(1),
       simulationStart: simStart, simulationEnd: today,
+      anchorApplied: !!anchorRecord, // FAZ 3.1: true ise bootstrapDate rzwbStep'e HİÇ girmedi
     };
     console.log(
       `🧭 RZWB bootstrap [${field.name || field.id}] source=${bootstrapSource} ` +
       `bootstrapDate=${bootstrapDate} Dr_s=${bootstrapInfo.bootstrapDr_s} ` +
-      `Dr_d=${bootstrapInfo.bootstrapDr_d} sim=${simStart}→${today}`
+      `Dr_d=${bootstrapInfo.bootstrapDr_d} sim=${simStart}→${today} ` +
+      `anchorApplied=${bootstrapInfo.anchorApplied}`
     );
   } else {
     initDr_s = lastRec.Dr_s;

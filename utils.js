@@ -157,6 +157,15 @@ window.normalizeRZWBRecord = (rec, params) => {
 // mevcut kullanıcıların ledger'ı yeni fizik mantığına sorunsuz geçer.
 window.isIncompleteRZWBRecord = (rec, expectedIrr) => {
   if(!rec) return true;
+  // DÜZELTME (FAZ 3.1): Uydu "bootstrap anchor" kayıtları rzwbStep
+  // tarafından ÜRETİLMEZ (kasıtlı — bkz. calcSoilRZWB Approach B),
+  // bu yüzden ETc_s/ETc_d gibi alanlar bu kayıtlarda anlamlı biçimde
+  // 0'dır. Aşağıdaki "eksik alan" sezgisi bunu YANLIŞLIKLA "bozuk
+  // kayıt" sanmasın diye, açıkça işaretlenmiş anchor kayıtları erken
+  // döner. BU KONTROL source ALANI OLMAYAN (tüm eski/normal) kayıtların
+  // davranışını HİÇ DEĞİŞTİRMEZ — sadece source==='satellite-anchor'
+  // olanları atlar (geriye dönük uyumlu, ek/opsiyonel alan).
+  if (rec.source === 'satellite-anchor') return false;
   const fieldsMissing = ['Pe', 'ETc_s', 'ETc_d', 'Ks_s', 'Ks_d', 'percDeep', 'surplus_s', 'surplus_d']
     .some(k => rec[k] === undefined || rec[k] === null)
     || ((rec.ETc_s ?? 0) === 0 && (rec.ETc_d ?? 0) === 0);
