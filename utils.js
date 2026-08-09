@@ -192,3 +192,74 @@ window.wicon = (c) => {
 };
 
 // (diğer yardımcı fonksiyonlar buraya eklenebilir)
+
+// ============================================================
+// FAZ 4 — Ledger normalizasyonu: sıralama + tekilleştirme
+// ============================================================
+// ÖNCELİK 1-4 (FAZ 4 görev tanımı):
+//   1) Ledger her zaman tarih sırasına göre normalize edilmeli.
+//   2) Firebase veya localStorage kayıt sırasına güvenilmemeli.
+//   3) En son kayıt, KRONOLOJİK olarak en son kayıt olmalı
+//      (dizideki son eleman değil).
+//   4) Duplicate date kayıtları kontrol edilmeli.
+//
+// Bu fonksiyon SAF'tır (DOM/ağ/Firebase'e dokunmaz) — bir ledger
+// dizisini alır, temizlenmiş+sıralanmış+tekilleştirilmiş halini döner.
+// calcSoilRZWB, ledger'ı HER YÜKLEDİĞİNDE ve HER DEĞİŞTİRDİĞİNDE bunu
+// çağırır; böylece "lastRec = ledger[ledger.length-1]" ifadesi HER
+// ZAMAN gerçekten kronolojik olarak en son kaydı verir — dizinin
+// Firebase/localStorage'dan hangi SIRADA geldiğinden bağımsız olarak.
+window.normalizeRZWBLedger = (ledger, fieldLabel) => {
+  const removed = [];
+  if (!Array.isArray(ledger)) return { ledger: [], removed };
+
+  const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+  // (5) Bozuk/yapısal olarak geçersiz kayıtları tespit et: tarih alanı
+  // yoksa veya geçerli YYYY-MM-DD formatında değilse, bu kayıt
+  // sıralanamaz/karşılaştırılamaz — güvenle atılır (o tarih için gün
+  // zaten eksik sayılıp normal simülasyon/repair akışıyla yeniden
+  // üretilecektir, yeni bir mekanizma İCAT EDİLMEDİ).
+  const valid = ledger.filter(rec => {
+    const ok = rec && typeof rec.date === 'string' && DATE_RE.test(rec.date);
+    if (!ok) removed.push({ reason: 'invalid-record', record: rec });
+    return ok;
+  });
+
+  // (1)(2)(3) Tarihe göre KARARLI (stable) sırala. Array.prototype.sort
+  // ES2019'dan beri stabildir — aynı tarihli kayıtlar arasında ORİJİNAL
+  // (yükleme sırasındaki) göreli sırayı korur; bu, aşağıdaki tekilleştirme
+  // adımında "sonraki = muhtemelen daha güncel yazılan" varsayımını
+  // güvenle kullanmamızı sağlar.
+  const sorted = [...valid].sort((a, b) => a.date.localeCompare(b.date));
+
+  // (4) Aynı tarihte birden fazla kayıt (duplicate) varsa tekilleştir:
+  //   - biri 'satellite-anchor' ise HER ZAMAN O tercih edilir (gözlemsel
+  //     ground-truth, simüle edilmiş bir kayıttan daha güvenilir).
+  //   - aksi halde, stable sort sayesinde SONRAKİ (daha yeni yazılmış
+  //     olma ihtimali yüksek) kayıt tercih edilir.
+  const byDate = new Map();
+  for (const rec of sorted) {
+    const existing = byDate.get(rec.date);
+    if (!existing) { byDate.set(rec.date, rec); continue; }
+    const preferNew = rec.source === 'satellite-anchor' || existing.source !== 'satellite-anchor';
+    if (preferNew) {
+      removed.push({ reason: 'duplicate-date', record: existing, keptDate: rec.date });
+      byDate.set(rec.date, rec);
+    } else {
+      removed.push({ reason: 'duplicate-date', record: rec, keptDate: existing.date });
+    }
+  }
+
+  const clean = Array.from(byDate.values()); // Map insertion sırası = tarih sırası (korunur)
+
+  if (removed.length) {
+    console.warn(
+      `⚠️ RZWB ledger normalize [${fieldLabel || '?'}]: ${removed.length} kayıt temizlendi ` +
+      `(geçersiz/duplicate).`,
+      removed.map(r => ({ reason: r.reason, date: r.record?.date }))
+    );
+  }
+
+  return { ledger: clean, removed };
+};

@@ -183,6 +183,98 @@ window.resolveFieldEarliestDate = (field) => {
   return null;
 };
 
+// ============================================================
+// FAZ 4 — Paylaşılan bootstrap/simülasyon yardımcıları
+//
+// Bu iki fonksiyon, FAZ 3.1'de calcSoilRZWB'nin isBootstrap bloğu
+// içine gömülü olan mantığın SAF (yan etkisiz, tekrar kullanılabilir)
+// halidir. Davranış BİREBİR AYNI kaldı — sadece kod, hem normal
+// bootstrap akışında HEM DE aşağıdaki repairFrom===0 (ilk kayıt bozuk)
+// onarım durumunda TEKRARSIZ şekilde kullanılabilsin diye ayrıştırıldı.
+// (ÖNCELİK 6: "repairFrom=0 durumunda bozuk kaydı başlangıç state'i
+// olarak kullanma → bootstrap mekanizmasını yeniden çalıştır" — bu,
+// tam olarak aynı mekanizmanın YENİDEN ÇAĞRILMASIYLA sağlanıyor,
+// yeni bir mekanizma icat edilmedi.)
+// ============================================================
+
+// Uydu/varsayılan başlangıç state'ini belirler (SAF — DOM/ağ yok,
+// sadece SATC'yi okur). fetchWXHistory çağrısı bilerek dışarıda
+// bırakıldı (yan etki, çağıran tarafın sorumluluğunda).
+window.resolveRZWBBootstrapState = (field, params, today, cutoff90str) => {
+  const { fcs, fcd, taw_s, taw_d } = params;
+
+  const earliestFromField = window.resolveFieldEarliestDate(field);
+  const earliestAllowed = (earliestFromField && earliestFromField > cutoff90str)
+    ? earliestFromField
+    : cutoff90str;
+  const earliestClamped = earliestAllowed > today ? today : earliestAllowed;
+
+  const agroMid   = SATC[field.id]?.data?.soilM3;
+  const agroDeep  = SATC[field.id]?.data?.soilMDeep;
+  const satAt     = SATC[field.id]?.at;
+  const satDateStr = satAt ? window.dateKey(new Date(satAt)) : null;
+  const satUsable = agroMid > 0.01 && satDateStr
+    && satDateStr >= earliestClamped && satDateStr <= today;
+
+  let bootstrapSource, bootstrapDate, initDr_s, initDr_d, anchorRecord = null, satCalibrated = false;
+
+  if (satUsable) {
+    const sat_moist_s = Math.min(fcs, agroMid * fcs * 1.15);
+    const sat_moist_d = Math.min(fcd, (agroDeep || agroMid * 0.88) * fcd);
+    initDr_s = Math.min(taw_s, Math.max(0, fcs - sat_moist_s));
+    initDr_d = Math.min(taw_d, Math.max(0, fcd - sat_moist_d));
+    bootstrapSource = 'satellite';
+    bootstrapDate   = satDateStr;
+    satCalibrated   = true;
+
+    // Approach B (FAZ 3.1): uydu değeri doğrudan bootstrapDate'in nihai
+    // (gözlemsel) kaydı olarak kullanılır — rzwbStep bu gün için HİÇ
+    // çağrılmaz (çift sayım riskini yapısal olarak ortadan kaldırır).
+    const surfAnchor = window.calcMoistureState(fcs, taw_s, initDr_s);
+    const deepAnchor = window.calcMoistureState(fcd, taw_d, initDr_d);
+    anchorRecord = {
+      date: bootstrapDate,
+      source: 'satellite-anchor',
+      Dr_s: surfAnchor.Dr, Dr_d: deepAnchor.Dr,
+      pct_s: surfAnchor.pct, pct_d: deepAnchor.pct,
+      moist_s: surfAnchor.moist, moist_d: deepAnchor.moist,
+      surplus_s: 0, surplus_d: 0,
+      kc: null, Ks_s: 1, Ks_d: 1,
+      ETc_s: 0, ETc_d: 0, et0: null, rain: null, Pe: null, irr: null,
+      perc: 0, percDeep: 0, netIn: null,
+    };
+  } else {
+    // Default bootstrap: gerçek bir ölçüm anı değil, sabit bir tahmin —
+    // Approach A (bootstrapDate'in kendisi de rzwbStep ile simüle edilir)
+    // bilerek korunuyor (bkz. FAZ 3.1 analizi — çift sayım riski yok).
+    initDr_s = Math.min(taw_s * 0.55, taw_s);
+    initDr_d = Math.min(taw_d * 0.50, taw_d);
+    bootstrapSource = 'default';
+    bootstrapDate   = earliestClamped;
+  }
+
+  return { bootstrapSource, bootstrapDate, initDr_s, initDr_d, anchorRecord, satCalibrated, earliestClamped };
+};
+
+// Bir başlangıç durumundan (initDr_s/initDr_d) bugüne kadar, simStart
+// tarihinden başlayarak her gün için rzwbStep'i sırayla çalıştırır.
+// SAF — sadece verilen wxAll dizisini kullanır, hangi tarihlerin
+// "zaten ledger'da var" olduğunu bilmez/umursamaz; bu filtrelemeyi
+// (existingDates hariç tutma VEYA repair'de tam yeniden inşa) ÇAĞIRAN
+// TARAF, wxAll'ı önceden filtreleyerek yapar.
+window.simulateRZWBForward = (initDr_s, initDr_d, simStart, today, wxAll, irrMap, params, field) => {
+  const simDays = wxAll.filter(d => d.date >= simStart && d.date <= today);
+  let prev = { Dr_s: initDr_s, Dr_d: initDr_d };
+  const records = [];
+  for (const dayWx of simDays) {
+    const irrMm = irrMap[dayWx.date] || 0;
+    const step = window.rzwbStep(prev, dayWx, irrMm, params, field);
+    records.push({ date: dayWx.date, ...step });
+    prev = { Dr_s: step.Dr_s, Dr_d: step.Dr_d };
+  }
+  return records;
+};
+
 window.calcSoilRZWB = async (field, force = false) => {
   const params  = window.getRZWBParams(field);
   const { fcs, fcd, taw_s, taw_d } = params;
@@ -211,6 +303,16 @@ window.calcSoilRZWB = async (field, force = false) => {
     } catch(e) {}
   }
 
+  // ══ FAZ 4 — Ledger NORMALİZASYONU (yüklendiği anda) ══
+  // Firebase veya localStorage'ın kayıtları HANGİ SIRADA döndürdüğüne
+  // (insertion order, eşzamanlı yazma çakışması, elle düzenleme, vb.)
+  // GÜVENİLMEZ. Ledger kullanılmadan ÖNCE her zaman tarihe göre
+  // normalize edilir: geçersiz tarihli kayıtlar atılır, tarihe göre
+  // sıralanır, aynı tarihte birden fazla kayıt varsa tekilleştirilir.
+  // Bu, aşağıdaki "lastRec = ledger[ledger.length-1]" satırının HER
+  // ZAMAN kronolojik olarak GERÇEKTEN en son kaydı almasını garantiler.
+  ({ ledger } = window.normalizeRZWBLedger(ledger, field.name || field.id));
+
   const cutoff90 = new Date(); cutoff90.setDate(cutoff90.getDate() - 90);
   const cutoff90str = window.dateKey(cutoff90);
   ledger = ledger.filter(r => r.date >= cutoff90str && r.date <= today);
@@ -229,125 +331,45 @@ window.calcSoilRZWB = async (field, force = false) => {
   let simStart, initDr_s, initDr_d, satCalibrated = false, bootstrapInfo = null;
 
   if(isBootstrap) {
-    // ── SENARYO 4: tarlanın var olmaya başladığı en erken tarih ──
-    // 90 günlük pencere, tarladan daha eskiye gidemez.
-    const earliestFromField = window.resolveFieldEarliestDate(field);
-    const earliestAllowed = (earliestFromField && earliestFromField > cutoff90str)
-      ? earliestFromField
-      : cutoff90str;
-    // Gelecekteki bir dikim tarihi girilmişse (henüz ekilmemiş tarla),
-    // bugünden ileri gidilemez — bootstrap günü en fazla "bugün" olabilir.
-    const earliestClamped = earliestAllowed > today ? today : earliestAllowed;
+    // ══ FAZ 4: bootstrap çözümlemesi artık paylaşılan
+    // resolveRZWBBootstrapState yardımcısından geliyor — davranış FAZ 3.1
+    // ile BİREBİR AYNI, sadece kod aşağıdaki repairFrom===0 durumuyla
+    // paylaşılabilsin diye ortak fonksiyona taşındı. ══
+    const bs = window.resolveRZWBBootstrapState(field, params, today, cutoff90str);
+    initDr_s = bs.initDr_s; initDr_d = bs.initDr_d;
+    satCalibrated = bs.satCalibrated;
 
-    // ── SENARYO 2 kontrolü: uydu verisi var ve KENDİ GERÇEK TARİHİYLE
-    // kullanılabilir mi? (Artık "bugüne göre taze mi" değil, "tarihi
-    // biliniyor mu ve tarla/90-gün penceresi içinde mi" kontrol ediliyor.) ──
-    const agroMid   = SATC[field.id]?.data?.soilM3;
-    const agroDeep  = SATC[field.id]?.data?.soilMDeep;
-    const satAt     = SATC[field.id]?.at;
-    const satDateStr = satAt ? window.dateKey(new Date(satAt)) : null;
-    const satUsable = agroMid > 0.01 && satDateStr
-      && satDateStr >= earliestClamped && satDateStr <= today;
+    await window.fetchWXHistory(field);
 
-    let bootstrapSource, bootstrapDate, anchorRecord = null;
+    if (bs.anchorRecord) {
+      ledger = [bs.anchorRecord];
+      const nextDay = new Date(bs.bootstrapDate + 'T12:00:00'); nextDay.setDate(nextDay.getDate() + 1);
+      simStart = window.dateKey(nextDay);
+    } else {
+      simStart = bs.bootstrapDate;
+    }
 
-    if (satUsable) {
-      // DÜZELTME: uydu, KENDİ ölçüm tarihine (satDateStr) ankraj ediliyor —
-      // bugünkü nem artık 90 gün öncesinin başlangıcı olarak KULLANILMIYOR.
-      const sat_moist_s = Math.min(fcs, agroMid * fcs * 1.15);
-      const sat_moist_d = Math.min(fcd, (agroDeep || agroMid * 0.88) * fcd);
-      initDr_s = Math.min(taw_s, Math.max(0, fcs - sat_moist_s));
-      initDr_d = Math.min(taw_d, Math.max(0, fcd - sat_moist_d));
-      bootstrapSource = 'satellite';
-      bootstrapDate   = satDateStr;
-      satCalibrated   = true;
-
-      // ══ FAZ 3.1 — Approach B ══
-      // Uydu ölçümü GÜN İÇİNDE herhangi bir saatte alınmış olabilir
-      // (00:00–23:59 arası — bkz. FAZ 3 zamanlama analizi). Bu değeri
-      // "gün başı" (00:00) durumu sayıp bootstrapDate'i rzwbStep ile
-      // YENİDEN simüle etmek, ölçüm anına kadar geçen akışın
-      // (ET/yağış/sulama) İKİNCİ KEZ sayılmasına yol açar — çünkü uydu
-      // okuması zaten o akışı içinde barındırır.
-      //
-      // Bunun yerine: uydu değeri doğrudan bootstrapDate'in NİHAİ
-      // (gözlemsel) kaydı olarak ledger'a yazılır — tıpkı normal
-      // ledger'daki bir "lastRec"in kendi gününün akışını bir daha
-      // görmemesi gibi (AYNI prensip, Existing-Ledger senaryosuyla
-      // birebir tutarlı). rzwbStep bu gün için HİÇ ÇAĞRILMAZ.
-      // Simülasyon bootstrapDate+1'den başlar.
-      const surfAnchor = window.calcMoistureState(fcs, taw_s, initDr_s);
-      const deepAnchor = window.calcMoistureState(fcd, taw_d, initDr_d);
-      anchorRecord = {
-        date: bootstrapDate,
-        source: 'satellite-anchor', // ← isIncompleteRZWBRecord bu kaydı ATLAR (bkz. utils.js)
-        Dr_s: surfAnchor.Dr, Dr_d: deepAnchor.Dr,
-        pct_s: surfAnchor.pct, pct_d: deepAnchor.pct,
-        moist_s: surfAnchor.moist, moist_d: deepAnchor.moist,
-        surplus_s: 0, surplus_d: 0,
-        kc: null, Ks_s: 1, Ks_d: 1,
-        // et0/rain/Pe/irr/netIn BİLEREK null: bu gün rzwbStep tarafından
-        // simüle EDİLMEDİ, dolayısıyla "0 akış oldu" ile "akış bilinmiyor/
-        // ölçüme dahil" arasındaki farkı açık tutmak için 0 değil null.
-        ETc_s: 0, ETc_d: 0, et0: null, rain: null, Pe: null, irr: null,
-        perc: 0, percDeep: 0, netIn: null,
-      };
-
-      // Bootstrap gününe (=uydu ölçüm günü) rastlayan bir sulama kaydı
-      // varsa: bu akış modele UYGULANMIYOR (yukarıdaki gerekçeyle — o gün
-      // zaten simüle edilmiyor). Bu SESSİZCE olmasın diye açıkça loglanır.
-      // Sulama kaydının kendisi field.events'te (maliyet/rapor amaçlı)
-      // OLDUĞU GİBİ kalır — sadece toprak nemi modeline dahil edilmiyor.
-      const irrOnAnchorDay = irrMap[bootstrapDate] || 0;
+    if (bs.anchorRecord) {
+      const irrOnAnchorDay = irrMap[bs.bootstrapDate] || 0;
       if (irrOnAnchorDay > 0) {
         console.warn(
-          `⚠️ RZWB [${field.name || field.id}]: ${bootstrapDate} tarihinde ` +
+          `⚠️ RZWB [${field.name || field.id}]: ${bs.bootstrapDate} tarihinde ` +
           `${irrOnAnchorDay.toFixed(1)}mm sulama kaydı var, ama bu tarih uydu ` +
           `ankraj günü olduğu için TOPRAK NEMİ MODELİNE uygulanmıyor (uydu ` +
           `ölçümü o günün nihai durumunu zaten yansıttığı varsayılıyor).`
         );
       }
-    } else {
-      // ── SENARYO 3: uydu yok/kullanılamaz → makul varsayılan.
-      // Bu state'in HANGİ TARİHE ait olduğu artık açıkça belirleniyor
-      // (önceden bu belirsizdi, sessizce cutoff90'a bağlanıyordu). ──
-      initDr_s = Math.min(taw_s * 0.55, taw_s);
-      initDr_d = Math.min(taw_d * 0.50, taw_d);
-      bootstrapSource = 'default';
-      bootstrapDate   = earliestClamped;
-      // NOT (FAZ 3.1 analizi — item 7): default varsayım GERÇEK bir
-      // ölçüm ANI DEĞİL, sabit bir tahmindir (taw×0.55 / taw×0.50).
-      // Hiçbir gerçek "önceden olmuş" akışı temsil etmediği için, bu
-      // günü rzwbStep ile simüle etmek (Approach A) ÇİFT SAYIMA yol
-      // AÇMAZ — çakışacak bir gözlem yoktur. Bu yüzden default bootstrap
-      // BİLEREK Approach A'da bırakıldı (aşağıda anchorRecord=null kalır,
-      // simStart=bootstrapDate olur ve o gün normal şekilde simüle edilir).
-    }
-
-    await window.fetchWXHistory(field);
-
-    if (anchorRecord) {
-      // Approach B (sadece uydu için): anchor kaydı DOĞRUDAN ledger'a
-      // yazılır, rzwbStep bu gün için ÇAĞRILMAZ. Simülasyon ertesi
-      // günden başlar.
-      ledger = [anchorRecord];
-      const nextDay = new Date(bootstrapDate + 'T12:00:00'); nextDay.setDate(nextDay.getDate() + 1);
-      simStart = window.dateKey(nextDay);
-    } else {
-      // Approach A (sadece default bootstrap): bootstrapDate'in kendisi
-      // de simülasyona dahil edilir (yukarıdaki not).
-      simStart = bootstrapDate;
     }
 
     bootstrapInfo = {
-      bootstrapSource, bootstrapDate,
-      bootstrapDr_s: +initDr_s.toFixed(1), bootstrapDr_d: +initDr_d.toFixed(1),
+      bootstrapSource: bs.bootstrapSource, bootstrapDate: bs.bootstrapDate,
+      bootstrapDr_s: +bs.initDr_s.toFixed(1), bootstrapDr_d: +bs.initDr_d.toFixed(1),
       simulationStart: simStart, simulationEnd: today,
-      anchorApplied: !!anchorRecord, // FAZ 3.1: true ise bootstrapDate rzwbStep'e HİÇ girmedi
+      anchorApplied: !!bs.anchorRecord,
     };
     console.log(
-      `🧭 RZWB bootstrap [${field.name || field.id}] source=${bootstrapSource} ` +
-      `bootstrapDate=${bootstrapDate} Dr_s=${bootstrapInfo.bootstrapDr_s} ` +
+      `🧭 RZWB bootstrap [${field.name || field.id}] source=${bs.bootstrapSource} ` +
+      `bootstrapDate=${bs.bootstrapDate} Dr_s=${bootstrapInfo.bootstrapDr_s} ` +
       `Dr_d=${bootstrapInfo.bootstrapDr_d} sim=${simStart}→${today} ` +
       `anchorApplied=${bootstrapInfo.anchorApplied}`
     );
@@ -366,27 +388,16 @@ window.calcSoilRZWB = async (field, force = false) => {
 
   const wxAll = window.getBestWXDays(field);
   const existingDates = new Set(ledger.map(r => r.date));
+  const wxForSim = wxAll.filter(d => !existingDates.has(d.date));
 
-  const simDays = wxAll.filter(d =>
-    d.date >= simStart &&
-    d.date <= today &&
-    !existingDates.has(d.date)
-  );
-
-  let prev = { Dr_s: initDr_s, Dr_d: initDr_d };
-  const newRecords = [];
-
-  for(const dayWx of simDays) {
-    const irrMm = irrMap[dayWx.date] || 0;
-    const step  = window.rzwbStep(prev, dayWx, irrMm, params, field);
-    newRecords.push({ date: dayWx.date, ...step });
-    prev = { Dr_s: step.Dr_s, Dr_d: step.Dr_d };
-  }
+  const newRecords = window.simulateRZWBForward(initDr_s, initDr_d, simStart, today, wxForSim, irrMap, params, field);
+  let prev = newRecords.length
+    ? { Dr_s: newRecords[newRecords.length - 1].Dr_s, Dr_d: newRecords[newRecords.length - 1].Dr_d }
+    : { Dr_s: initDr_s, Dr_d: initDr_d };
 
   if(newRecords.length) {
-    ledger = [...ledger, ...newRecords]
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .filter(r => r.date >= cutoff90str && r.date <= today);
+    const merged = [...ledger, ...newRecords].filter(r => r.date >= cutoff90str && r.date <= today);
+    ({ ledger } = window.normalizeRZWBLedger(merged, field.name || field.id));
 
     try { localStorage.setItem(fbKey, JSON.stringify(ledger)); } catch(e) {}
 
@@ -401,15 +412,16 @@ window.calcSoilRZWB = async (field, force = false) => {
 
   let repaired = false;
   const wxByDate = Object.fromEntries(wxAll.map(d => [d.date, d]));
-  ledger = ledger.sort((a, b) => a.date.localeCompare(b.date));
+  ({ ledger } = window.normalizeRZWBLedger(ledger, field.name || field.id));
   const repairFrom = ledger.findIndex(rec =>
     wxByDate[rec.date] && window.isIncompleteRZWBRecord(rec, irrMap[rec.date] || 0)
   );
-  if(repairFrom >= 0) {
+
+  if(repairFrom > 0) {
+    // ── ÖNCELİK 6 (repairFrom > 0): önceki GEÇERLİ kayıttan devam et ──
+    // (davranış DEĞİŞMEDİ — bu dal zaten doğruydu)
     const repairedLedger = ledger.slice(0, repairFrom);
-    let repairPrev = repairFrom > 0
-      ? { Dr_s: ledger[repairFrom - 1].Dr_s, Dr_d: ledger[repairFrom - 1].Dr_d }
-      : { Dr_s: ledger[repairFrom].Dr_s, Dr_d: ledger[repairFrom].Dr_d };
+    let repairPrev = { Dr_s: ledger[repairFrom - 1].Dr_s, Dr_d: ledger[repairFrom - 1].Dr_d };
 
     for(let i = repairFrom; i < ledger.length; i++) {
       const rec = ledger[i];
@@ -419,19 +431,48 @@ window.calcSoilRZWB = async (field, force = false) => {
         repairPrev = { Dr_s: rec.Dr_s, Dr_d: rec.Dr_d };
         continue;
       }
-      const step = window.rzwbStep(
-        repairPrev,
-        dayWx,
-        irrMap[rec.date] || 0,
-        params,
-        field
-      );
+      const step = window.rzwbStep(repairPrev, dayWx, irrMap[rec.date] || 0, params, field);
       repairedLedger.push({ ...rec, ...step });
       repairPrev = { Dr_s: step.Dr_s, Dr_d: step.Dr_d };
     }
 
     ledger = repairedLedger;
     repaired = true;
+
+  } else if (repairFrom === 0) {
+    // ══ FAZ 4 DÜZELTME (ÖNCELİK 6 — KRİTİK) ══
+    // İLK KAYIT BOZUK: bu kaydın KENDİ Dr_s/Dr_d değerleri güvenilmez
+    // (zaten bozuk olduğu için burada — eksik/tutarsız alanlar içerebilir).
+    // Bu değerleri başlangıç state'i olarak KULLANMAK YERİNE, bootstrap
+    // mekanizması (resolveRZWBBootstrapState) — isBootstrap===true
+    // durumundaki İLE TAMAMEN AYNI fonksiyon — YENİDEN ÇALIŞTIRILIR ve
+    // ledger, bootstrapDate'ten bugüne kadar SIFIRDAN yeniden inşa edilir.
+    console.warn(
+      `🔧 RZWB [${field.name || field.id}]: İLK KAYIT BOZUK (tarih=${ledger[0]?.date}) — ` +
+      `bozuk kaydın kendi Dr_s/Dr_d değerleri başlangıç state'i olarak ` +
+      `KULLANILMIYOR. Bootstrap mekanizması yeniden çalıştırılıyor.`
+    );
+
+    const bs = window.resolveRZWBBootstrapState(field, params, today, cutoff90str);
+    let rebuildSimStart;
+    if (bs.anchorRecord) {
+      const nextDay = new Date(bs.bootstrapDate + 'T12:00:00'); nextDay.setDate(nextDay.getDate() + 1);
+      rebuildSimStart = window.dateKey(nextDay);
+    } else {
+      rebuildSimStart = bs.bootstrapDate;
+    }
+    const rebuiltRecords = window.simulateRZWBForward(
+      bs.initDr_s, bs.initDr_d, rebuildSimStart, today, wxAll, irrMap, params, field
+    );
+    const rebuilt = [...(bs.anchorRecord ? [bs.anchorRecord] : []), ...rebuiltRecords];
+    ({ ledger } = window.normalizeRZWBLedger(rebuilt, field.name || field.id));
+    repaired = true;
+
+    console.warn(
+      `🔧 RZWB [${field.name || field.id}]: yeniden-bootstrap tamamlandı — ` +
+      `yeni bootstrapSource=${bs.bootstrapSource}, bootstrapDate=${bs.bootstrapDate}, ` +
+      `ledger ${ledger.length} kayıtla yeniden inşa edildi.`
+    );
   }
 
   if(repaired) {

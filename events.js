@@ -104,6 +104,21 @@ window.saveEvent = async () => {
   const invalidateFrom = (oldDate && oldDate < dt) ? oldDate : dt;
   await window.invalidateRZWBFrom(CUR.id, invalidateFrom);
 
+  // ══ FAZ 4 DÜZELTME (UI güncelliği): computeAllSoils(true) BURAYA,
+  // aşağıdaki renderSB()/renderDash() çağrılarından ÖNCEYE taşındı.
+  // Önceden EN SONDA çağrılıyordu — ama renderSB() ve renderDash()
+  // KENDİ İÇLERİNDE force=false ile computeAllSoils() çağırıyor, ve bu
+  // fonksiyon SOIL_CACHE'in 5 dakikalık TTL'i dolmadıysa CACHE'TEN
+  // (bayat) veri döndürüyor. invalidateRZWBFrom, RZWB_CACHE'i doğru
+  // şekilde temizlese de, ÜST SEVİYE SOIL_CACHE ayrı bir cache'tir ve
+  // sadece force=true ile hemen temizlenir. Sonuç: kullanıcı bir olay
+  // ekleyip/düzenleyip/silip ANINDA sidebar/dashboard'a baktığında,
+  // düzeltme öncesi en fazla 5 dakika boyunca ESKİ nem yüzdesi
+  // görebiliyordu. Artık computeAllSoils(true) ÖNCE çalışıyor, bu
+  // yüzden ondan sonra gelen TÜM render çağrıları (renderFKPIs,
+  // renderSoil, renderSB, renderDash) güncel veriyi kullanıyor.
+  await window.computeAllSoils(true);
+
   closeM('event');
   // DÜZELTME: Önceden burada renderFieldPage(CUR) çağrılıyordu — bu fonksiyon
   // içeriden her zaman goTab('map') çağırdığı için, kullanıcı Olaylar
@@ -118,7 +133,6 @@ window.saveEvent = async () => {
   else if(curTab==='rec') await renderRecTab(CUR);
   await renderSB(); await renderDash();
   toast(eid?'Güncellendi':'Kaydedildi');
-  await window.computeAllSoils(true);
 };
 
 window.delEv = async (id) => {
@@ -136,8 +150,13 @@ window.delEv = async (id) => {
     await window.invalidateRZWBFrom(CUR.id, delDate);
   }
 
-  renderEvTab(CUR); await renderDash(); toast('Silindi');
+  // ══ FAZ 4 DÜZELTME: computeAllSoils(true), renderDash()'ten ÖNCEYE
+  // taşındı — aynı gerekçe: renderDash() içeriden force=false ile
+  // computeAllSoils() çağırıyor ve SOIL_CACHE'in 5dk TTL'i dolmadıysa
+  // bayat veri döner. (bkz. saveEvent'teki aynı düzeltme, events.js)
   await window.computeAllSoils(true);
+
+  renderEvTab(CUR); await renderDash(); toast('Silindi');
 };
 
 // ============================================================
