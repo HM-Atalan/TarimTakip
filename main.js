@@ -6,6 +6,7 @@
 window.agrd = (crop) => { return CROP_AGR[crop] || CROP_AGR.default; };
 window.importFieldFile = window.importFF;
 window.deleteCurrentPh = window.delCurPh;
+window.MOISTURE_MODEL_VERSION = 'rzwb-startup-anchor-v3';
 
 // İlk ekran çizilmeden önce yerel hava geçmişini yükler ve nem defterini
 // zorla doğrular. Eksik/bozuk kısa defterler otomatik yeniden oluşturulur.
@@ -16,19 +17,24 @@ window.prepareMoistureModels = async (fields = window.DB?.fields || []) => {
     const stored=window.loadWXHistoryLocal(field.id);
     if(stored?.length) WX_HISTORY[field.id]={days:stored,updatedAt:Date.now()};
   });
-  try { await window.fetchStartupSoilAnchors(fields); }
-  catch(error) { console.warn('Açılış nem ankrajı alınamadı; hava geçmişiyle yeniden hesaplanıyor:',error.message); }
-  const summary=await window.rebuildAllMoistureModels(fields);
-  if(summary.failed) console.warn(`${summary.failed} tarla için açılış nem modeli yeniden oluşturulamadı.`);
-  const soilData=summary.results.map((result,index)=>{
-    if(result.status==='fulfilled'){
-      const f=fields[index],s=result.value;
-      return {f,s,sc:scl(s.surface.pct),ph:calcPheno(f),he:calcHarvest(f)};
+  const migrationTargets=fields.filter(field=>localStorage.getItem('tt_rzwb_version_'+field.id)!==window.MOISTURE_MODEL_VERSION);
+  if(migrationTargets.length){
+    try {
+      await window.fetchStartupSoilAnchors(migrationTargets);
+      const anchored=migrationTargets.filter(field=>SATC[field.id]?.data?.indexSource==='open-meteo-startup-anchor');
+      if(anchored.length){
+        const summary=await window.rebuildAllMoistureModels(anchored);
+        summary.results.forEach((result,index)=>{
+          if(result.status==='fulfilled') localStorage.setItem('tt_rzwb_version_'+anchored[index].id,window.MOISTURE_MODEL_VERSION);
+        });
+        if(summary.failed) console.warn(`${summary.failed} tarla için tek seferlik nem onarımı tamamlanamadı.`);
+      }
+    } catch(error) {
+      // Ağ yoksa mevcut defteri silme; sonraki açılışta migrasyonu tekrar dene.
+      console.warn('Tek seferlik açılış nem onarımı ertelendi:',error.message);
     }
-    return null;
-  }).filter(Boolean);
-  window.SOIL_CACHE={data:soilData,lastUpdated:Date.now()};
-  return soilData;
+  }
+  return window.computeAllSoils(true);
 };
 
 window.resetMoistureModels = async () => {
@@ -43,6 +49,9 @@ window.resetMoistureModels = async () => {
   if (button) { button.disabled = true; button.textContent = '⏳ Nem modeli hesaplanıyor…'; }
   try {
     const summary = await window.rebuildAllMoistureModels(fields);
+    summary.results.forEach((result,index)=>{
+      if(result.status==='fulfilled') localStorage.setItem('tt_rzwb_version_'+fields[index].id,window.MOISTURE_MODEL_VERSION);
+    });
     // Reuse the freshly rebuilt results so renderers do not trigger a second
     // model run. Failed fields are retried by the normal rendering path.
     if (summary.failed === 0) {
