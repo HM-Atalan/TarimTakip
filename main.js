@@ -16,18 +16,18 @@ window.prepareMoistureModels = async (fields = window.DB?.fields || []) => {
     const stored=window.loadWXHistoryLocal(field.id);
     if(stored?.length) WX_HISTORY[field.id]={days:stored,updatedAt:Date.now()};
   });
-  let soilData=await window.computeAllSoils(true);
-  const needsRepair=soilData.filter(({f,s})=>{
-    const earliest=window.resolveFieldEarliestDate(f);
-    const ageDays=earliest?Math.floor((Date.now()-new Date(earliest+'T12:00:00').getTime())/86400000):0;
-    const minimumRecords=Math.min(7,Math.max(1,ageDays+1));
-    return !Number.isFinite(s?.surface?.pct) || !Number.isFinite(s?.deep?.pct) || ((s?.log?.length||0)<minimumRecords);
-  }).map(item=>item.f);
-  if(needsRepair.length){
-    console.warn(`${needsRepair.length} tarla için eksik nem defteri açılışta otomatik onarılıyor.`);
-    await window.rebuildAllMoistureModels(needsRepair);
-    soilData=await window.computeAllSoils(true);
-  }
+  try { await window.fetchStartupSoilAnchors(fields); }
+  catch(error) { console.warn('Açılış nem ankrajı alınamadı; hava geçmişiyle yeniden hesaplanıyor:',error.message); }
+  const summary=await window.rebuildAllMoistureModels(fields);
+  if(summary.failed) console.warn(`${summary.failed} tarla için açılış nem modeli yeniden oluşturulamadı.`);
+  const soilData=summary.results.map((result,index)=>{
+    if(result.status==='fulfilled'){
+      const f=fields[index],s=result.value;
+      return {f,s,sc:scl(s.surface.pct),ph:calcPheno(f),he:calcHarvest(f)};
+    }
+    return null;
+  }).filter(Boolean);
+  window.SOIL_CACHE={data:soilData,lastUpdated:Date.now()};
   return soilData;
 };
 
@@ -146,7 +146,6 @@ document.addEventListener('DOMContentLoaded',()=>{
   setTimeout(()=>{ if(!window.FB_MODE) noFBNotice(); }, 1500);
   qs('#main')?.addEventListener('click',()=>{ if(window.innerWidth<=768) qs('#sb')?.classList.remove('open'); });
   document.addEventListener('keydown',e=>{ if(e.key==='Escape') closePhViewer(); });
-  if(!window.FB_USER&&DB.fields.length) fetchAllSatellites().catch(e=>console.warn('Başlangıç uydu hatası:', e));
   if('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('./service-worker.js').catch(e=>console.warn('Çevrimdışı destek başlatılamadı:',e.message));
   }

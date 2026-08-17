@@ -1,4 +1,4 @@
-const CACHE='tarimtakip-v1';
+const CACHE='tarimtakip-v2';
 const APP_SHELL=['./','./index.html','./style.css','./icon.svg','./manifest.webmanifest','./firebase-config.js','./cropData.js','./constants.js','./globals.js','./utils.js','./weather.js','./soilModel.js','./satellite.js','./phenology.js','./events.js','./photos.js','./ai.js','./fieldCrud.js','./ui.js','./auth.js','./map.js','./reports.js','./main.js'];
 
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(APP_SHELL)).then(()=>self.skipWaiting())));

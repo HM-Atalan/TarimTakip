@@ -36,6 +36,30 @@ test('PWA and accessible viewport are configured', () => {
   assert.equal(JSON.parse(read('manifest.webmanifest')).name,'TarımTakip');
 });
 
+test('moisture maintenance is in settings and startup prepares the model before rendering', () => {
+  const html=read('index.html');
+  const dashboard=html.slice(html.indexOf('<!-- DASHBOARD -->'),html.indexOf('<!-- FIELD PAGE -->'));
+  const settings=html.slice(html.indexOf('<!-- SETTINGS -->'));
+  assert.ok(!dashboard.includes('reset-moisture-btn'));
+  assert.ok(settings.includes('reset-moisture-btn'));
+  const auth=read('auth.js');
+  assert.ok(auth.indexOf('await window.prepareMoistureModels') < auth.indexOf('await renderAll()'));
+  const sync=read('fieldCrud.js').slice(read('fieldCrud.js').indexOf('window.syncFromDB'));
+  assert.ok(sync.indexOf('await window.prepareMoistureModels') < sync.indexOf('await renderAll()'));
+});
+
+test('startup moisture persistence prefers completed local ledger and avoids satellite refresh races', () => {
+  const soil=read('soilModel.js');
+  assert.ok(soil.includes('localLast>=cloudLast'));
+  assert.ok(soil.includes('await window.fbSaveRZWB(uid, field.id, ledger)'));
+  assert.ok(!read('auth.js').includes('fetchAllSatellites()'));
+  assert.ok(!read('fieldCrud.js').includes('fetchAllSatellites()'));
+  assert.ok(read('main.js').includes('await window.fetchStartupSoilAnchors(fields)'));
+  assert.ok(read('main.js').includes('await window.rebuildAllMoistureModels(fields)'));
+  assert.ok(read('satellite.js').includes("lats=targets.map(field=>Number(field.lat)).join(',')"));
+  assert.ok(read('service-worker.js').includes("tarimtakip-v2"));
+});
+
 test('photos use local IndexedDB instead of Blaze-only Firebase Storage', () => {
   const photos=read('photos.js');
   assert.ok(photos.includes("indexedDB.open('tarimtakip-local'"));

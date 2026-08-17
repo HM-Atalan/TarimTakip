@@ -17,6 +17,35 @@ window.ndviCls = (v) => {
   return           {l:'Çok Zayıf', tag:'tr', color:'var(--red)',    bar:'#e74c3c'};
 };
 
+// Açılışta yalnız nem modelinin başlangıç ankrajını getirir. NASA ve
+// Sentinel çağrıları yapmaz; tüm tarlaları tek Open-Meteo isteğinde toplar.
+window.fetchStartupSoilAnchors = async (fields = window.DB?.fields || []) => {
+  const targets=fields.filter(field=>Number.isFinite(Number(field.lat))&&Number.isFinite(Number(field.lon)));
+  if(!targets.length) return {updated:0};
+  const lats=targets.map(field=>Number(field.lat)).join(',');
+  const lons=targets.map(field=>Number(field.lon)).join(',');
+  const url=`https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(lats)}&longitude=${encodeURIComponent(lons)}&hourly=soil_moisture_3_to_9cm,soil_moisture_9_to_27cm&forecast_days=1&timezone=Europe%2FIstanbul`;
+  const response=await fetch(url);
+  if(!response.ok) throw new Error(`Open-Meteo başlangıç nemi HTTP ${response.status}`);
+  const body=await response.json();
+  const locations=Array.isArray(body)?body:[body];
+  let updated=0;
+  targets.forEach((field,index)=>{
+    const location=locations[index]||locations[0];
+    const times=location?.hourly?.time||[];
+    const nowHour=new Date().toISOString().slice(0,13);
+    let hourIndex=times.findIndex(value=>String(value).slice(0,13)===nowHour);
+    if(hourIndex<0) hourIndex=Math.min(new Date().getHours(),Math.max(0,times.length-1));
+    const soilM3=Number(location?.hourly?.soil_moisture_3_to_9cm?.[hourIndex]);
+    const soilMDeep=Number(location?.hourly?.soil_moisture_9_to_27cm?.[hourIndex]);
+    if(Number.isFinite(soilM3)&&soilM3>0.01){
+      SATC[field.id]={data:{...(SATC[field.id]?.data||{}),soilM3,soilMDeep:Number.isFinite(soilMDeep)?soilMDeep:soilM3,indexSource:'open-meteo-startup-anchor',soilMoistureSource:'open-meteo-model'},at:Date.now()};
+      updated++;
+    }
+  });
+  return {updated};
+};
+
 window.fetchSat = async (field) => {
   field = field||CUR; if(!field) return;
   const id=field.id, lat=field.lat, lon=field.lon;

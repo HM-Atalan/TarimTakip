@@ -34,7 +34,6 @@ window.enterLocalMode = async () => {
   await window.prepareMoistureModels(DB.fields);
   await renderAll();
   DB.fields.forEach(f=>fetchWX(f));
-  fetchAllSatellites().catch(e=>console.warn('Uydu çekim hatası:', e));
   toast('Yerel modda çalışıyorsunuz');
 };
 

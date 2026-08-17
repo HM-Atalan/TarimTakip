@@ -294,7 +294,6 @@ window.syncFromDB = async () => {
       else { CUR=null; goPage('dash'); }
     }
     toast('Veriler güncellendi ✓');
-    fetchAllSatellites().catch(e=>console.warn('Uydu çekim hatası:', e));
   } catch(e) { toast('Senkronizasyon hatası: '+e.message, true); }
 };
 
