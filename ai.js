@@ -2,6 +2,19 @@
 // ai.js – Yapay zeka analizleri ve sohbet
 // ============================================================
 
+window.callGemini = async (contents, generationConfig = {}) => {
+  const apiKey=await window.getGeminiKey();
+  if(!apiKey) throw new Error('Gemini API anahtarı Remote Config üzerinden alınamadı.');
+  const response=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,{
+    method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents,generationConfig})
+  });
+  if(!response.ok){ const body=await response.json().catch(()=>({})); throw new Error(body?.error?.message||`AI servisi: ${response.status}`); }
+  const body=await response.json();
+  const text=body?.candidates?.[0]?.content?.parts?.map(part=>part.text||'').join('').trim();
+  if(!text) throw new Error('AI servisinden yanıt alınamadı.');
+  return text;
+};
+
 window.getAIMemory = (fieldId) => {
   const key = 'tt_aimem_' + fieldId;
   try {
@@ -106,7 +119,7 @@ window.runAI = async () => {
   if(!SATC[CUR.id]||(Date.now()-SATC[CUR.id].at>3600000)){ addB('sys','🛰️ Uydu verisi alınıyor...'); await fetchSat(CUR); }
   goTab('ai');
   const chat=qs('#ai-chat'); if(chat) chat.innerHTML='';
-  const photoCount=(CUR.photos||[]).filter(p=>p.data).length;
+  const photoCount=(CUR.photos||[]).filter(p=>p.localPhotoId||p.data).length;
   const memoryLen = window.getAIMemory(CUR.id).length;
   addB('sys',`🔬 Tüm veriler + uydu + ${photoCount} fotoğraf + ${memoryLen} önceki konuşma işleniyor...`);
   addB('load','');
@@ -143,33 +156,24 @@ KURALLAR:
 • Maksimum 5-6 paragraf: durum → risk → eylem`;
 
     const parts=[{text:prompt}];
-    (CUR.photos||[]).forEach((p,i)=>{
-      if(p.data&&p.data.startsWith('data:')){
+    for(const [i,p] of (CUR.photos||[]).entries()){
+      const photoData=p.localPhotoId?await window.getLocalPhoto(p.localPhotoId):p.data;
+      if(photoData&&photoData.startsWith('data:')){
         try{
-          const b64=p.data.split(',')[1];
-          const mime=p.data.split(';')[0].split(':')[1]||'image/jpeg';
+          const b64=photoData.split(',')[1];
+          const mime=photoData.split(';')[0].split(':')[1]||'image/jpeg';
           parts.push({inline_data:{mime_type:mime,data:b64}});
           parts.push({text:`[Fotoğraf ${i+1}: ${p.date}, tür:${p.type}${p.note?', not:'+p.note:''}]`});
         }catch(e){}
       }
-    });
+    }
     
-    const apiKey = await window.getGeminiKey();
-    if(!apiKey) { toast('Gemini API anahtarı alınamadı.', true); return; }
-    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-    const resp=await fetch(url,{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({contents:[{role:'user',parts}],generationConfig:{temperature:0.62,maxOutputTokens:8192}})
-    });
-    if(!resp.ok){ const err=await resp.json(); throw new Error(err.error?.message||'Gemini '+resp.status); }
-    const data=await resp.json();
-    const text=data.candidates?.[0]?.content?.parts?.[0]?.text||'Yanıt alınamadı';
+    const text=await window.callGemini([{role:'user',parts}],{temperature:0.62,maxOutputTokens:8192});
 
     rmLoad();
     const rendered=text
-      .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
       .split('\n\n').filter(p=>p.trim())
-      .map(p=>`<p style="margin-bottom:10px;">${p.replace(/\n/g,'<br/>')}</p>`)
+      .map(p=>`<p style="margin-bottom:10px;">${window.safeAIHtml(p)}</p>`)
       .join('');
     const el=document.createElement('div');
     el.className='bubble bb'; el.style.lineHeight='1.78'; el.style.fontSize='13px';
@@ -223,13 +227,7 @@ window.sendChat = async () => {
   contents.push({role:'user', parts:[{text:msg}]});
   
   try{
-    const apiKey = await window.getGeminiKey();
-    if(!apiKey) { toast('API anahtarı alınamadı.', true); return; }
-    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-    const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents,generationConfig:{temperature:0.72,maxOutputTokens:4096}})});
-    if(!r.ok){ const e=await r.json(); throw new Error(e.error?.message||'Gemini '+r.status); }
-    const d=await r.json();
-    const text=d.candidates?.[0]?.content?.parts?.[0]?.text||'Yanıt alınamadı';
+    const text=await window.callGemini(contents,{temperature:0.72,maxOutputTokens:4096});
     rmLoad(); addB('bot',text);
     aiHist.push({role:'assistant',content:text});
     
@@ -306,14 +304,8 @@ BİLİNEN ZARARLILAR: ${pests}
 SON İLAÇLAMA: ${lastSpray?lastSpray.date+' ('+Math.round((Date.now()-new Date(lastSpray.date))/(864e5))+' gün önce)':'kayıt yok'}
 
 Türkçe, kısa, uygulanabilir. Maksimum 4-5 madde.`;
-    const apiKey = await window.getGeminiKey();
-    if(!apiKey){ el.innerHTML='<div style="color:var(--red);font-size:12px;">API anahtarı alınamadı.</div>'; return; }
-    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-    const resp = await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts:[{text:prompt}]}],generationConfig:{temperature:0.55,maxOutputTokens:1500}})});
-    if(!resp.ok){ const err=await resp.json(); throw new Error(err.error?.message||resp.status); }
-    const data = await resp.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text||'Yanıt alınamadı';
-    const rendered = text.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').split('\n').map(l=>l.trim()?`<div style="margin-bottom:5px;">${l}</div>`:'').join('');
+    const text = await window.callGemini([{role:'user',parts:[{text:prompt}]}],{temperature:0.55,maxOutputTokens:1500});
+    const rendered = window.safeAIHtml(text);
     el.innerHTML=`<div class="bubble bb" style="font-size:12px;line-height:1.6;margin-top:4px;">${rendered}</div>`;
-  }catch(e){ el.innerHTML=`<div style="color:var(--red);font-size:12px;">AI Hata: ${e.message}</div>`; }
+  }catch(e){ el.innerHTML=`<div style="color:var(--red);font-size:12px;">AI Hata: ${window.esc(e.message)}</div>`; }
 };

@@ -117,11 +117,11 @@ window.renderSat = (field, R) => {
   if(nel) nel.innerHTML=`<div style="text-align:center;padding:8px 0;"><div style="font-size:28px;font-weight:800;color:${nc.color};">${R.ndvi}</div><span class="tag ${nc.tag}" style="margin-top:4px;display:inline-flex;">${nc.l}</span></div>${bar(R.ndvi,0.95,nc.bar)}<div style="font-size:10px;color:var(--text3);margin-top:4px;">-1 (çıplak) ← 0 → +1 (yoğun bitki)</div><div class="tag ta" style="font-size:9px;margin-top:5px;display:inline-flex;">⚠️ Model tahmini${R.s2date?' · S2 geçiş metadata: '+R.s2date:''}</div>`;
 
   const eel=qs('#sat-evi');
-  if(eel) eel.innerHTML=`<div style="text-align:center;padding:8px 0;"><div style="font-size:28px;font-weight:800;color:var(--green2);">${R.evi}</div><span class="tag tg" style="margin-top:4px;display:inline-flex;">${parseFloat(R.evi)>0.4?'İyi Vejetasyon':'Gelişmekte'}</span></div>${bar(R.evi,0.9,'var(--green2)')}<div style="font-size:10px;color:var(--text3);margin-top:4px;">Atmosfer düzeltmeli (0–0.9)</div>`;
+  if(eel) eel.innerHTML=`<div style="text-align:center;padding:8px 0;"><div style="font-size:28px;font-weight:800;color:var(--green2);">${R.evi}</div><span class="tag tg" style="margin-top:4px;display:inline-flex;">${parseFloat(R.evi)>0.4?'İyi Vejetasyon':'Gelişmekte'}</span></div>${bar(R.evi,0.9,'var(--green2)')}<div style="font-size:10px;color:var(--text3);margin-top:4px;">Hava-toprak modeli tahmini (0–0.9), uydu bant hesabı değildir</div>`;
 
   const nwl=parseFloat(R.ndwi)>0.3?'Yüksek Su':parseFloat(R.ndwi)>0?'Orta':parseFloat(R.ndwi)>-0.2?'Düşük':'Kuru/Stres';
   const wel=qs('#sat-ndwi');
-  if(wel) wel.innerHTML=`<div style="text-align:center;padding:8px 0;"><div style="font-size:28px;font-weight:800;color:var(--blue);">${R.ndwi}</div><span class="tag tb" style="margin-top:4px;display:inline-flex;">${nwl}</span></div>${bar((parseFloat(R.ndwi)+0.5),1.3,'var(--blue)')}<div style="font-size:10px;color:var(--text3);margin-top:4px;">Bitki su stresi göstergesi</div>`;
+  if(wel) wel.innerHTML=`<div style="text-align:center;padding:8px 0;"><div style="font-size:28px;font-weight:800;color:var(--blue);">${R.ndwi}</div><span class="tag tb" style="margin-top:4px;display:inline-flex;">${nwl}</span></div>${bar((parseFloat(R.ndwi)+0.5),1.3,'var(--blue)')}<div style="font-size:10px;color:var(--text3);margin-top:4px;">Model tabanlı su stresi tahmini, gerçek NDWI bant hesabı değildir</div>`;
 
   const lv=parseFloat(R.lst)||20;
   const lel=qs('#sat-lst');

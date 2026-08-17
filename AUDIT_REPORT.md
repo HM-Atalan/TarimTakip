@@ -33,7 +33,22 @@ Bu komut bütün üretim JavaScript dosyalarının sözdizimini ve kalıcı regr
 - Çok yıllık bitkilerde gerçek fenolojik başlangıç (ör. tomurcuk uyanması) tutulmadığı için `plantDate` temelli GDD sınırlıdır.
 - Open-Meteo toprak nemi bir hava modeli çıktısıdır; doğrudan tarla sensörü veya uydu bant ölçümü değildir.
 - Sulama önerisi net mm verir; sistem/uygulama randımanı için güvenilir tarla parametresi bulunmadığından brütleme yapılmaz.
-- Firebase güvenlik kuralları bu istemci arşivinde bulunmadığı için sunucu tarafı yetkilendirme audit kapsamı dışındadır.
+- Firebase güvenlik kuralları arşive eklenmiştir; canlı projede dağıtıldıkları ayrıca Firebase Console üzerinden doğrulanmalıdır.
+
+## 18 Ağustos 2026 Spark uyumluluk ve güvenlik güncellemesi
+
+- Kullanıcının tercihi doğrultusunda Gemini AI, ilk sürümde olduğu gibi Remote Config `GMINIK` parametresinden anahtar alır. Bu değer istemci tarafından görülebileceğinden gerçek bir sunucu sırrı değildir; anahtar kısıtları ve kota takibi gerektirir.
+- AI yanıtları güvenli HTML dönüşümü öncesinde tamamen kaçırılıyor.
+- UID izolasyonlu, varsayılan-red Firestore kuralları eklendi.
+- Blaze gerektiren Cloud Functions ve Firebase Storage projeden çıkarıldı.
+- Fotoğraflar ücretsiz yerel IndexedDB'de tutulur; JSON yedeği fotoğrafları da içerir ve eski gömülü fotoğraflar otomatik taşınır.
+- Tarla kayıtlarına revizyon tabanlı iyimser eşzamanlılık, bekleyen kayıt durumu ve olay/fotoğraf korumalı çakışma birleştirme eklendi.
+- JSON içe aktarmaya dosya boyutu, şema, koordinat, tarih, kimlik, kayıt sayısı ve metin uzunluğu kontrolleri eklendi.
+- PWA manifesti, uygulama kabuğu önbelleği, görünür klavye odağı, hareket azaltma ve temel sekme/diyalog semantiği eklendi.
+- Firebase Hosting güvenlik başlıkları ve GitHub Actions doğrulama akışı eklendi.
+- Kalıcı doğrulama paketi Spark mimarisini de denetler.
+
+Canlı Firebase projesinde yapılması gereken Remote Config ve Spark dağıtım adımları `DEPLOYMENT.md` içinde belgelenmiştir.
 
 ## Bilimsel referanslar
 

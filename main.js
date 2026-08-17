@@ -66,8 +66,10 @@ setInterval(async () => {
   if(window.FB_USER&&window.FB_MODE){
     try{
       const fields = await window.fbLoadFields(window.FB_USER.uid);
-      if(fields?.length){ window.DB.fields=fields; saveLocalDB(); invSoilAll(); await renderSB(); await renderDash(); if(window.CUR){ const u=window.DB.fields.find(f=>f.id===window.CUR.id); if(u) window.CUR=u; } }
-    }catch(e){}
+      window.DB.fields=window.mergeCloudFields(fields||[]); saveLocalDB(); invSoilAll(); await renderSB(); await renderDash(); if(window.CUR){ const u=window.DB.fields.find(f=>f.id===window.CUR.id); if(u) window.CUR=u; }
+      const pending=window.DB.fields.filter(f=>f._syncStatus==='pending');
+      await Promise.allSettled(pending.map(f=>window.saveFieldToDB(f)));
+    }catch(e){ console.warn('Arka plan senkronizasyonu başarısız:',e.message); }
   }
 }, 300000);
 
@@ -92,11 +94,23 @@ setInterval(() => {
 // Tab elemanları statik olduğu için (yeniden oluşturulmuyorlar),
 // tek seferlik bir delegasyon yeterli ve her zaman çalışır.
 function bindTabClicks() {
+  document.querySelectorAll('.tab[data-t]').forEach(tab => {
+    tab.setAttribute('role','tab'); tab.setAttribute('tabindex',tab.classList.contains('on')?'0':'-1');
+  });
   document.addEventListener('click', (e) => {
     const tabEl = e.target.closest('.tab[data-t]');
     if(!tabEl) return;
     const t = tabEl.dataset.t;
     if(t) window.goTab(t);
+  });
+  document.addEventListener('keydown', (e) => {
+    const tabEl=e.target.closest?.('.tab[data-t]');
+    if(tabEl && (e.key==='Enter'||e.key===' ')){ e.preventDefault(); window.goTab(tabEl.dataset.t); }
+  });
+  document.addEventListener('click',e=>{
+    const quick=e.target.closest?.('.ai-quick-question'); if(!quick) return;
+    const input=qs('#ai-inp'); if(input) input.value=quick.dataset.question||'';
+    window.sendChat();
   });
 }
 
@@ -109,4 +123,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   qs('#main')?.addEventListener('click',()=>{ if(window.innerWidth<=768) qs('#sb')?.classList.remove('open'); });
   document.addEventListener('keydown',e=>{ if(e.key==='Escape') closePhViewer(); });
   if(!window.FB_USER&&DB.fields.length) fetchAllSatellites().catch(e=>console.warn('Başlangıç uydu hatası:', e));
+  if('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    navigator.serviceWorker.register('./service-worker.js').catch(e=>console.warn('Çevrimdışı destek başlatılamadı:',e.message));
+  }
 });

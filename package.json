@@ -2,6 +2,7 @@
   "name": "tarim-takip",
   "private": true,
   "scripts": {
+    "start": "node tools/dev-server.js",
     "test": "node --test tests/*.test.js",
     "verify": "node tests/verify-syntax.js && node --test tests/*.test.js"
   }

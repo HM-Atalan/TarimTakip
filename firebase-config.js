@@ -2,10 +2,10 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getAuth, onAuthStateChanged, signInWithPopup, signInWithEmailAndPassword,
          createUserWithEmailAndPassword, GoogleAuthProvider, signOut }
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-import { getFirestore, doc, collection, getDocs, setDoc, deleteDoc, onSnapshot, query, orderBy }
+import { getFirestore, doc, collection, getDocs, setDoc, deleteDoc, runTransaction }
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-import { getRemoteConfig, fetchAndActivate, getValue } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-remote-config.js';
-import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
+import { getRemoteConfig, fetchAndActivate, getValue }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-remote-config.js';
 
 // ── FIREBASE CONFIG ──────────────────────────────
 const FB_CONFIG = {
@@ -22,7 +22,6 @@ let app = null, auth = null, db = null, remoteConfig = null;
 let FB_READY = false;
 let GEMINI_KEY = null;
 let remoteConfigPromise = null;
-let functions = null;  // TANIMLA!
 
 function initFirebase(){
   if(!FB_CONFIG.apiKey){ window.FB_MODE=false; return; }
@@ -37,18 +36,12 @@ function initFirebase(){
     window.FB_MODE = true;
     FB_READY = true;
 
-    // Remote Config yükleme
     remoteConfigPromise = fetchAndActivate(remoteConfig)
       .then(() => {
         GEMINI_KEY = getValue(remoteConfig, 'GMINIK').asString();
         if(!GEMINI_KEY) console.warn('Remote Config: GMINIK parametresi bulunamadı');
-        else console.log('Remote Config: Gemini anahtarı alındı');
       })
-      .catch(err => console.warn('Remote Config kullanılamıyor; uygulama yerel/ana özelliklerle devam ediyor:', err.message));
-
-    // Firebase Functions'i başlat
-    functions = getFunctions(app);
-    window.FB_FUNCTIONS = functions;
+      .catch(err => console.warn('Remote Config kullanılamıyor; AI dışındaki özellikler devam ediyor:', err.message));
 
     onAuthStateChanged(auth, user => {
       window.FB_USER = user;
@@ -65,23 +58,27 @@ window.getGeminiKey = async () => {
     try {
       await fetchAndActivate(remoteConfig);
       GEMINI_KEY = getValue(remoteConfig, 'GMINIK').asString();
-    } catch(e) { console.warn('Remote Config tekrar deneme hatası:', e); }
+    } catch(e) { console.warn('Remote Config tekrar deneme hatası:', e.message); }
   }
   return GEMINI_KEY || null;
-};
-
-// fbCallFunction'ı window üzerine global olarak tanımla
-window.fbCallFunction = async (name, data) => {
-  if (!functions) throw new Error('Functions not initialized. Firebase başlatılmamış olabilir.');
-  const callable = httpsCallable(functions, name);
-  const result = await callable(data);
-  return result.data;
 };
 
 window.fbSaveField = async (uid, field) => {
   if(!db) return;
   const ref = doc(db, 'users', uid, 'fields', field.id);
-  await setDoc(ref, field);
+  return runTransaction(db, async transaction => {
+    const snapshot = await transaction.get(ref);
+    const remoteRevision = Number(snapshot.data()?._revision) || 0;
+    const expectedRevision = Number(field._revision) || 0;
+    if(snapshot.exists() && remoteRevision > expectedRevision) {
+      const error = new Error('Bu tarla başka bir cihazda güncellendi. Veriler yenilenip tekrar denenmeli.');
+      error.code = 'sync/conflict';
+      throw error;
+    }
+    const saved = { ...field, _revision: remoteRevision + 1, updatedAt: new Date().toISOString() };
+    transaction.set(ref, saved);
+    return saved;
+  });
 };
 window.fbDeleteField = async (uid, fieldId) => {
   if(!db) return;

@@ -1,29 +1,36 @@
 # TarımTakip
 
-Tarla, hava, toprak su dengesi, fenoloji, sulama ve uydu/model verilerini birlikte izleyen tarayıcı tabanlı uygulama.
+Tarla, hava, çift katmanlı toprak su dengesi, fenoloji, sulama, üretim olayları ve model tabanlı uzaktan algılama göstergelerini birlikte izleyen web uygulaması.
 
-## Çalıştırma
+## Tamamen ücretsiz mimari
 
-Proje statik dosyalardan oluşur. Bir yerel HTTP sunucusuyla proje kökünü açın; doğrudan `file://` kullanmayın.
+- Firebase Spark: Authentication, Cloud Firestore, Remote Config ve Hosting
+- Fotoğraflar: cihazdaki IndexedDB; Firebase Storage kullanılmaz
+- AI: Firebase Remote Config içindeki `GMINIK` parametresi ve Gemini ücretsiz kotası
+- Hava/toprak kaynakları: Open-Meteo, NASA POWER, Earth Search ve SoilGrids
 
-Örnek:
+Cloud Functions, Cloud Storage, Cloud Run ve faturalandırma hesabı gerektiren hiçbir servis kullanılmaz.
+
+## Yerel çalıştırma
+
+Node.js 20 veya üzeriyle:
 
 ```bash
-python -m http.server 8765
+npm start
 ```
 
 Ardından `http://127.0.0.1:8765/` adresini açın.
 
 ## Doğrulama
 
-Node.js 18 veya üzeriyle:
-
 ```bash
 npm run verify
 ```
 
-Komut üretim JavaScript dosyalarının sözdizimini ve FAZ 6–14 regresyon paketini doğrular. Harici npm paketi kurulması gerekmez.
+## Veri notları
 
-## Audit
+Tarla ve olay metadata'sı Firestore ile cihazlar arasında eşitlenir. Fotoğraflar ücretsiz kalmak için yalnızca eklendikleri cihazda tutulur. Ayarlar → JSON Dışa Aktar işlemi fotoğrafları da yedeğe ekler; diğer cihazda JSON İçe Aktar ile geri yüklenebilir.
 
-Bilimsel varsayımlar, yapılan düzeltmeler ve açık riskler için [AUDIT_REPORT.md](AUDIT_REPORT.md) dosyasına bakın.
+AI çıktıları ekranda gösterilmeden önce güvenli biçimde kaçırılır. `GMINIK` Remote Config yaklaşımı ilk sürümle uyumludur fakat istemci tarafında kullanılan bir anahtarı tamamen gizlemez; anahtarın yalnız Gemini API ile sınırlandırılması ve kullanım kotasının izlenmesi önerilir.
+
+Yayınlama adımları için [DEPLOYMENT.md](DEPLOYMENT.md) dosyasına bakın.

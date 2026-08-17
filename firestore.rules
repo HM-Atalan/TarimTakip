@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedInAs(uid) { return request.auth != null && request.auth.uid == uid; }
+    function validField() {
+      return request.resource.data.id is string
+        && request.resource.data.id.size() >= 6
+        && request.resource.data.id.size() <= 80
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 1
+        && request.resource.data.name.size() <= 120
+        && request.resource.data.lat is number
+        && request.resource.data.lat >= -90 && request.resource.data.lat <= 90
+        && request.resource.data.lon is number
+        && request.resource.data.lon >= -180 && request.resource.data.lon <= 180
+        && request.resource.data.keys().hasOnly([
+          'id','name','lat','lon','area','areaUnit','location','category','crop','qty','qunit',
+          'soilType','plantDate','harvestDate','color','notes','status','irrigation','fencing',
+          'waterSource','plantingAge','polygon','events','photos','aiRecs','soilComposition',
+          '_revision','updatedAt'
+        ]);
+    }
+    match /users/{uid}/fields/{fieldId} {
+      allow read, delete: if signedInAs(uid);
+      allow create, update: if signedInAs(uid) && fieldId == request.resource.data.id && validField();
+    }
+    match /users/{uid}/rzwb/{fieldId} {
+      allow read, write: if signedInAs(uid)
+        && request.resource.data.records is list
+        && request.resource.data.records.size() <= 800;
+    }
+    match /_system_ai_usage/{uid} { allow read, write: if false; }
+    match /{document=**} { allow read, write: if false; }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "TarımTakip",
+  "short_name": "TarımTakip",
+  "description": "Tarla, hava, toprak nemi, sulama ve üretim takibi",
+  "lang": "tr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f7f2",
+  "theme_color": "#2d6a4f",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

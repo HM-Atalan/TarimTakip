@@ -9,6 +9,12 @@ window.esc = (value) => String(value ?? '')
   .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
   .replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 
+// AI çıktısı önce tamamen kaçırılır; yalnız kontrollü kalın yazı ve satır
+// sonları tekrar HTML'e çevrilir. Böylece model çıktısı kod çalıştıramaz.
+window.safeAIHtml = (value) => window.esc(value)
+  .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+  .replace(/\r?\n/g, '<br>');
+
 window.safeCssColor = (value, fallback = '#40916c') => {
   const color = String(value || '').trim();
   return /^(#[0-9a-f]{3,8}|rgba?\([\d.,%\s]+\)|hsla?\([\d.,%\s]+\))$/i.test(color) ? color : fallback;
@@ -19,6 +25,12 @@ window.safeHttpUrl = (value) => {
     const url = new URL(String(value || ''), window.location?.href || 'https://localhost/');
     return ['http:', 'https:'].includes(url.protocol) ? url.href : '';
   } catch (_) { return ''; }
+};
+
+window.safePhotoUrl = (value) => {
+  const raw = String(value || '');
+  if(/^data:image\/(jpeg|png|webp);base64,[a-z0-9+/=]+$/i.test(raw)) return raw;
+  return window.safeHttpUrl(raw);
 };
 
 window.dateKey = (date = new Date()) => {

@@ -2,10 +2,13 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<title>Tarla Takip</title>
+<meta name="theme-color" content="#2d6a4f"/>
+<title>TarımTakip</title>
+<meta name="description" content="Tarla, hava, toprak nemi, fenoloji, sulama ve üretim kayıtlarını tek yerde takip edin."/>
+<link rel="manifest" href="manifest.webmanifest"/>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%232d6a4f'/%3E%3Cpath d='M12 46h40M16 42c6-18 18-28 34-25-2 17-14 27-34 25z' fill='%23d8f3dc'/%3E%3Cpath d='M18 42c8-8 16-14 28-21' stroke='%232d6a4f' stroke-width='4' fill='none'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -20,7 +23,7 @@
   <div class="auth-box">
     <div class="auth-logo">
       <svg viewBox="0 0 26 26" fill="none"><rect x="2" y="14" width="8" height="10" rx="1.5" fill="currentColor" opacity=".55"/><rect x="11" y="9" width="8" height="15" rx="1.5" fill="currentColor"/><path d="M6 14Q8 8 13 6Q18 4 20 10" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"/></svg>
-      TarlaTakip
+      TarımTakip
     </div>
     <div id="no-fb-note" style="display:none;">
       ⚠️ Firebase yapılandırılmamış. Yerel modda kullanabilirsiniz.
@@ -54,10 +57,10 @@
 
 <!-- ══ TOPBAR ══ -->
 <div id="top">
-  <button class="ibtn" id="mbtn" onclick="window.togSB()">☰</button>
+  <button class="ibtn" id="mbtn" onclick="window.togSB()" aria-label="Menüyü aç veya kapat">☰</button>
   <div class="logo">
     <svg viewBox="0 0 26 26" fill="none"><rect x="2" y="14" width="8" height="10" rx="1.5" fill="currentColor" opacity=".55"/><rect x="11" y="9" width="8" height="15" rx="1.5" fill="currentColor"/><path d="M6 14Q8 8 13 6Q18 4 20 10" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"/></svg>
-    <span>TarlaTakip</span>
+    <span>TarımTakip</span>
   </div>
   <div id="tnav">
     <button class="tn on" onclick="window.goPage('dash')">🏠 Genel</button>
@@ -66,7 +69,7 @@
     <button class="tn" onclick="window.goPage('cfg')">⚙️ Ayarlar</button>
   </div>
   <div id="tright">
-    <button class="ibtn" onclick="window.togTheme()">🌓</button>
+    <button class="ibtn" onclick="window.togTheme()" aria-label="Renk temasını değiştir">🌓</button>
     <div id="user-chip" onclick="window.goPage('cfg')">
       <div id="user-avatar">?</div>
       <span id="user-name" style="font-size:12px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
@@ -239,6 +242,7 @@
 
   <!-- PHOTO TAB -->
   <div id="tp-ph" class="tp">
+    <div class="card" style="font-size:11px;color:var(--text2);">ℹ️ Spark planında Firebase Storage kullanılamadığı için fotoğraflar yalnızca bu cihazda saklanır. Başka cihaza taşımak için Ayarlar → JSON Dışa Aktar seçeneğini kullanın.</div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
       <span style="font-size:14px;font-weight:700;">Fotoğraflar</span>
       <button class="btn btns btnp" onclick="window.openPhotoM()">+ Fotoğraf</button>
@@ -353,7 +357,7 @@
 </div>
 
 <!-- ══ FIELD MODAL ══ -->
-<div class="mback" id="m-field" onclick="if(event.target===this)window.closeM('field')">
+<div class="mback" id="m-field" role="dialog" aria-modal="true" aria-labelledby="fm-title" onclick="if(event.target===this)window.closeM('field')">
 <div class="modal" style="max-width:580px;">
   <button class="mclose" onclick="window.closeM('field')">✕</button>
   <div class="mtitle" id="fm-title">Yeni Tarla Ekle</div>
@@ -516,7 +520,7 @@
 </div>
 
 <!-- ══ EVENT MODAL ══ -->
-<div class="mback" id="m-event" onclick="if(event.target===this)window.closeM('event')">
+<div class="mback" id="m-event" role="dialog" aria-modal="true" aria-label="Olay ekle veya düzenle" onclick="if(event.target===this)window.closeM('event')">
 <div class="modal">
   <button class="mclose" onclick="window.closeM('event')">✕</button>
   <div class="mtitle" id="em-title">Olay / Maliyet Kaydı</div>
@@ -573,7 +577,7 @@
 </div>
 
 <!-- ══ PHOTO MODAL ══ -->
-<div class="mback" id="m-photo" onclick="if(event.target===this)window.closeM('photo')">
+<div class="mback" id="m-photo" role="dialog" aria-modal="true" aria-label="Fotoğraf ekle" onclick="if(event.target===this)window.closeM('photo')">
 <div class="modal">
   <button class="mclose" onclick="window.closeM('photo')">✕</button>
   <div class="mtitle">📷 Fotoğraf Ekle & AI Analiz</div>

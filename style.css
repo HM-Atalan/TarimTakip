@@ -312,3 +312,6 @@ label{font-size:12px;color:var(--text2);display:block;margin-bottom:4px;font-wei
 }
 
 @keyframes dl{0%,80%,100%{opacity:.3}40%{opacity:1}}
+/* Klavye kullanıcıları için görünür ve tutarlı odak halkası */
+:focus-visible{outline:3px solid #f4a261!important;outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}

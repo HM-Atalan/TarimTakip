@@ -2,6 +2,26 @@
 // photos.js – Fotoğraf yönetimi ve analizi
 // ============================================================
 
+window.openPhotoDB = () => new Promise((resolve,reject) => {
+  const request=indexedDB.open('tarimtakip-local',1);
+  request.onupgradeneeded=()=>{ if(!request.result.objectStoreNames.contains('photos')) request.result.createObjectStore('photos'); };
+  request.onsuccess=()=>resolve(request.result); request.onerror=()=>reject(request.error);
+});
+window.storeLocalPhoto = async (id,data) => {
+  const db=await window.openPhotoDB();
+  return new Promise((resolve,reject)=>{ const tx=db.transaction('photos','readwrite'); tx.objectStore('photos').put(data,id); tx.oncomplete=()=>{db.close();resolve();}; tx.onerror=()=>reject(tx.error); });
+};
+window.getLocalPhoto = async (id) => {
+  if(!id) return '';
+  const db=await window.openPhotoDB();
+  return new Promise((resolve,reject)=>{ const tx=db.transaction('photos','readonly'); const req=tx.objectStore('photos').get(id); req.onsuccess=()=>{db.close();resolve(req.result||'');}; req.onerror=()=>reject(req.error); });
+};
+window.deleteLocalPhoto = async (id) => {
+  if(!id) return;
+  const db=await window.openPhotoDB();
+  return new Promise((resolve,reject)=>{ const tx=db.transaction('photos','readwrite'); tx.objectStore('photos').delete(id); tx.oncomplete=()=>{db.close();resolve();}; tx.onerror=()=>reject(tx.error); });
+};
+
 window.prevPhoto = async (e) => {
   const file=e.target.files[0]; if(!file) return;
   const si=qs('#p-size-info'); if(si) si.textContent='Sıkıştırılıyor...';
@@ -30,7 +50,10 @@ window.savePhoto = async () => {
   if(!pendPh){ toast('Fotoğraf seçin',true); return; } if(!CUR) return;
   CUR.photos=CUR.photos||[];
   const aiText=qs('#p-ai')?.innerText||'';
-  CUR.photos.push({id:gid(),date:qs('#p-date').value||tstr(),type:qs('#p-type').value,note:qs('#p-note').value,data:pendPh,ai:aiText.length>10?aiText:''});
+  const photo={id:gid(),localPhotoId:gid(),date:qs('#p-date').value||tstr(),type:qs('#p-type').value,note:qs('#p-note').value,ai:aiText.length>10?aiText:''};
+  try { await window.storeLocalPhoto(photo.localPhotoId,pendPh); }
+  catch(e){ toast('Fotoğraf cihazda saklanamadı: '+e.message,true); return; }
+  CUR.photos.push(photo);
   const fi=DB.fields.findIndex(f=>f.id===CUR.id); if(fi>=0) DB.fields[fi]=CUR;
   await saveFieldToDB(CUR);
   closeM('photo'); pendPh=null; renderPhTab(CUR); toast('Fotoğraf kaydedildi');
@@ -39,21 +62,28 @@ window.savePhoto = async () => {
 window.renderPhTab = (field) => {
   const grid=qs('#ph-grid'); if(!grid) return;
   if(!field.photos?.length){ grid.innerHTML='<div style="grid-column:1/-1;"><div class="empty">📷<br/>Fotoğraf yok</div></div>'; return; }
-  grid.innerHTML=field.photos.map((p,idx)=>`
+  grid.innerHTML=field.photos.map((p,idx)=>{
+    return `
     <div style="aspect-ratio:1;border-radius:var(--r);overflow:hidden;background:var(--bg3);border:1px solid var(--bdr);position:relative;cursor:pointer;" onclick="openPhV(${idx})">
-      <img src="${p.data}" alt="${p.type}" loading="lazy" style="width:100%;height:100%;object-fit:cover;"/>
+      <img data-local-photo="${window.esc(p.localPhotoId||'')}" src="${window.esc(window.safePhotoUrl(p.url||p.data))}" alt="${window.esc(p.type||'Tarla fotoğrafı')}" loading="lazy" style="width:100%;height:100%;object-fit:cover;"/>
       <div class="ph-thumb-ov">
         <button class="btn btns" onclick="event.stopPropagation();openPhV(${idx})">🔍</button>
         <button class="btn btns btnd" onclick="event.stopPropagation();delPhoto(${idx})">🗑️</button>
       </div>
-      <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.55);color:#fff;font-size:9px;padding:3px 5px;">${fd(p.date)} · ${p.type}</div>
-    </div>`).join('');
+      <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.55);color:#fff;font-size:9px;padding:3px 5px;">${window.esc(fd(p.date))} · ${window.esc(p.type||'')}</div>
+    </div>`;
+  }).join('');
+  grid.querySelectorAll('img[data-local-photo]').forEach(async img=>{
+    if(!img.dataset.localPhoto) return;
+    try{ const data=await window.getLocalPhoto(img.dataset.localPhoto); if(data) img.src=data; }catch(e){ console.warn('Yerel fotoğraf okunamadı:',e.message); }
+  });
 };
 
-window.openPhV = (idx) => {
+window.openPhV = async (idx) => {
   if(!CUR?.photos?.[idx]) return;
   curPhIdx=idx; const p=CUR.photos[idx];
-  qs('#ph-viewer-img').src=p.data;
+  const src=p.localPhotoId?await window.getLocalPhoto(p.localPhotoId):window.safePhotoUrl(p.url||p.data);
+  qs('#ph-viewer-img').src=src;
   qs('#ph-viewer-info').textContent=`${fd(p.date)} · ${p.type}${p.note?' · '+p.note:''}${p.ai&&p.ai.length>10?'\n🤖 '+p.ai.slice(0,150)+'...':''}`;
   qs('#ph-viewer').classList.add('on');
 };
@@ -72,14 +102,16 @@ window.editPhNote = () => {
 window.delCurPh = async () => {
   if(curPhIdx===null||!CUR?.photos) return;
   if(!confirm('Bu fotoğrafı silmek istediğinizden emin misiniz?')) return;
-  CUR.photos.splice(curPhIdx,1);
+  const [removed]=CUR.photos.splice(curPhIdx,1);
+  if(removed?.localPhotoId) try{ await window.deleteLocalPhoto(removed.localPhotoId); }catch(e){ toast('Yerel fotoğraf temizleme uyarısı: '+e.message,true); }
   const fi=DB.fields.findIndex(f=>f.id===CUR.id); if(fi>=0) DB.fields[fi]=CUR;
   await saveFieldToDB(CUR); closePhViewer(); renderPhTab(CUR); toast('Silindi');
 };
 
 window.delPhoto = async (idx) => {
   if(!CUR?.photos||!confirm('Bu fotoğrafı silmek istediğinizden emin misiniz?')) return;
-  CUR.photos.splice(idx,1);
+  const [removed]=CUR.photos.splice(idx,1);
+  if(removed?.localPhotoId) try{ await window.deleteLocalPhoto(removed.localPhotoId); }catch(e){ toast('Yerel fotoğraf temizleme uyarısı: '+e.message,true); }
   const fi=DB.fields.findIndex(f=>f.id===CUR.id); if(fi>=0) DB.fields[fi]=CUR;
   await saveFieldToDB(CUR); renderPhTab(CUR); toast('Silindi');
 };
@@ -112,13 +144,7 @@ Türkçe, uzman görüşü:
 5. Acil müdahale gerektiren durum (varsa)
 6. Hasat olgunluğu değerlendirmesi`}
     ];
-    const apiKey = await window.getGeminiKey();
-    if(!apiKey) throw new Error('API anahtarı alınamadı');
-    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-    const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts}],generationConfig:{maxOutputTokens:2000}})});
-    if(!r.ok){ const e=await r.json(); throw new Error(e.error?.message||r.status); }
-    const d=await r.json();
-    const text=d.candidates?.[0]?.content?.parts?.[0]?.text||'Analiz yapılamadı';
-    el.innerHTML=`<div class="bubble bb" style="white-space:pre-line;margin-top:7px;">${text}</div>`;
-  }catch(e){ el.innerHTML=`<div style="color:var(--red);font-size:12px;margin-top:6px;">Hata: ${e.message}</div>`; }
+    const text=await window.callGemini([{role:'user',parts}],{maxOutputTokens:2000});
+    el.innerHTML=`<div class="bubble bb" style="white-space:pre-line;margin-top:7px;">${window.safeAIHtml(text)}</div>`;
+  }catch(e){ el.innerHTML=`<div style="color:var(--red);font-size:12px;margin-top:6px;">Hata: ${window.esc(e.message)}</div>`; }
 };

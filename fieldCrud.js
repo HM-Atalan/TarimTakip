@@ -124,8 +124,12 @@ window.saveField = async () => {
 
 window.delField = async (id) => {
   if(!id||!confirm('Bu tarla ve tüm verileri silinecek. Emin misiniz?')) return;
+  const target=DB.fields.find(f=>f.id===id);
+  try { await deleteFieldFromDB(id); }
+  catch(e){ toast('Tarla buluttan silinemedi; kayıt korundu: '+e.message,true); return; }
+  if(target?.photos) await Promise.allSettled(target.photos.filter(p=>p.localPhotoId).map(p=>window.deleteLocalPhoto(p.localPhotoId)));
   DB.fields=DB.fields.filter(f=>f.id!==id);
-  await deleteFieldFromDB(id);
+  saveLocalDB();
   delete WXC[id]; delete SATC[id]; invSoil(id);
   if(CUR?.id===id){ CUR=null; goPage('dash'); }
   await renderAll();
@@ -148,7 +152,7 @@ window.importFF = async (e) => {
     if(R.location) qs('#f-loc').value=R.location;
     if(R.polygon && qs('#f-polygon')) qs('#f-polygon').value=JSON.stringify(R.polygon);
     const prev=qs('#f-import-preview');
-    if(prev){ prev.style.display='block'; prev.innerHTML=`✅ <strong>Dosyadan:</strong> ${R.name||'İsimsiz'} · ${R.lat?.toFixed(4)}, ${R.lon?.toFixed(4)}${R.area?' · Alan: '+R.area.toFixed(1)+' '+(R.areaUnit||'m²'):''}${R.polygon?' · <span style="color:var(--green2);">'+R.polygon.length+' köşeli poligon</span>':''}`; }
+    if(prev){ prev.style.display='block'; prev.innerHTML=`✅ <strong>Dosyadan:</strong> ${window.esc(R.name||'İsimsiz')} · ${R.lat?.toFixed(4)}, ${R.lon?.toFixed(4)}${R.area?' · Alan: '+R.area.toFixed(1)+' '+window.esc(R.areaUnit||'m²'):''}${R.polygon?' · <span style="color:var(--green2);">'+R.polygon.length+' köşeli poligon</span>':''}`; }
     toast('Dosya verisi yüklendi ✓');
   };
   reader.readAsText(file);
@@ -221,17 +225,56 @@ window.calcPolyArea = (ring) => {
 };
 
 window.saveFieldToDB = async (field) => {
-  const clean=JSON.parse(JSON.stringify(field));
-  delete clean._soilCache;
   const uid=window.FB_USER?.uid;
-  if(uid&&window.FB_MODE){ try{ await window.fbSaveField(uid,clean); }catch(e){ toast('DB kayıt hatası: '+e.message,true); } }
+  // Eski sürümden gelen gömülü fotoğrafları ilk kayıtta ücretsiz IndexedDB'ye taşı.
+  if(Array.isArray(field.photos)) {
+    for(const photo of field.photos) {
+      if(photo.data && !photo.localPhotoId) {
+        photo.localPhotoId=gid(); await window.storeLocalPhoto(photo.localPhotoId,photo.data); delete photo.data;
+      }
+    }
+  }
+  const clean=JSON.parse(JSON.stringify(field));
+  delete clean._soilCache; delete clean._syncStatus;
+  field._syncStatus=uid&&window.FB_MODE?'pending':undefined;
   saveLocalDB();
+  if(uid&&window.FB_MODE){
+    try{
+      const saved=await window.fbSaveField(uid,clean);
+      Object.assign(field,{_revision:saved._revision,updatedAt:saved.updatedAt});
+      delete field._syncStatus; saveLocalDB();
+    }catch(e){
+      field._syncStatus=e.code==='sync/conflict'?'conflict':'pending'; saveLocalDB();
+      toast('Bulut senkronizasyonu bekliyor: '+e.message,true);
+    }
+  }
 };
 
 window.deleteFieldFromDB = async (fieldId) => {
   const uid=window.FB_USER?.uid;
-  if(uid&&window.FB_MODE){ try{ await window.fbDeleteField(uid,fieldId); }catch(e){ toast('DB silme hatası: '+e.message,true); } }
+  if(uid&&window.FB_MODE) await window.fbDeleteField(uid,fieldId);
   saveLocalDB();
+};
+
+window.mergeCloudFields = (remoteFields) => {
+  const localById=new Map((DB.fields||[]).map(field=>[field.id,field]));
+  const mergeById=(remote=[],local=[])=>{
+    const all=new Map(remote.map(item=>[item.id,item]));
+    local.forEach(item=>all.set(item.id,item));
+    return [...all.values()];
+  };
+  const merged=(remoteFields||[]).map(remote=>{
+    const local=localById.get(remote.id); localById.delete(remote.id);
+    if(local?._syncStatus==='conflict') return {
+      ...remote,...local,
+      events:mergeById(remote.events,local.events),photos:mergeById(remote.photos,local.photos),
+      _revision:remote._revision,_syncStatus:'pending'
+    };
+    return local?._syncStatus ? local : remote;
+  });
+  // Başka cihazdan henüz yüklenmemiş yerel kayıtları koru.
+  for(const local of localById.values()) if(local._syncStatus) merged.push(local);
+  return merged;
 };
 
 window.syncFromDB = async () => {
@@ -239,7 +282,7 @@ window.syncFromDB = async () => {
   if(!uid || !window.FB_MODE) return;
   try {
     const fields = await window.fbLoadFields(uid);
-    DB.fields = fields || [];
+    DB.fields = window.mergeCloudFields(fields || []);
     saveLocalDB();
     invSoilAll();
     DB.fields.forEach(f => { if(!WXC[f.id]) fetchWX(f); });
@@ -264,8 +307,42 @@ window.loadSettings = () => {
   if(qs('#acu-key')) qs('#acu-key').value=DB.s.acuKey||'';
 };
 
-window.expData = () => { const a=document.createElement('a'); a.href='data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify({fields:DB.fields},null,2)); a.download='tarim_'+tstr()+'.json'; a.click(); };
-window.impData = (e) => { const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=ev=>{ try{ const d=JSON.parse(ev.target.result); if(d.fields){ DB.fields=d.fields; saveLocalDB(); renderAll(); toast('İçe aktarıldı'); } }catch{ toast('Geçersiz JSON',true); } }; r.readAsText(f); };
+window.expData = async () => {
+  const fields=JSON.parse(JSON.stringify(DB.fields));
+  for(const field of fields) for(const photo of (field.photos||[])) {
+    if(photo.localPhotoId) try{ photo.data=await window.getLocalPhoto(photo.localPhotoId); }catch(e){ console.warn('Fotoğraf yedeğe eklenemedi:',e.message); }
+  }
+  const blob=new Blob([JSON.stringify({version:2,exportedAt:new Date().toISOString(),fields},null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='tarim_'+tstr()+'.json'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+};
+window.validateImport = (data) => {
+  if(!data || !Array.isArray(data.fields) || data.fields.length>500) throw new Error('Tarla listesi geçersiz veya çok büyük.');
+  const ids=new Set();
+  return data.fields.map((raw,index)=>{
+    if(!raw || typeof raw!=='object') throw new Error(`${index+1}. tarla geçersiz.`);
+    const name=String(raw.name||'').trim().slice(0,120);
+    const lat=Number(raw.lat), lon=Number(raw.lon);
+    if(!name || !Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lon) || lon < -180 || lon > 180) {
+      throw new Error(`${index+1}. tarlanın adı veya koordinatları geçersiz.`);
+    }
+    const id=/^[a-z0-9_-]{6,80}$/i.test(String(raw.id||''))?String(raw.id):gid();
+    if(ids.has(id)) throw new Error('Tekrarlanan tarla kimliği bulundu.'); ids.add(id);
+    const events=Array.isArray(raw.events)?raw.events.slice(0,5000).filter(ev=>ev&&typeof ev==='object').map(ev=>({
+      ...ev,id:String(ev.id||gid()).slice(0,80),date:/^\d{4}-\d{2}-\d{2}$/.test(ev.date)?ev.date:tstr(),
+      notes:String(ev.notes||'').slice(0,2000)
+    })):[];
+    const photos=Array.isArray(raw.photos)?raw.photos.slice(0,100).filter(photo=>photo&&typeof photo==='object').map(photo=>({
+      id:String(photo.id||gid()).slice(0,80),date:/^\d{4}-\d{2}-\d{2}$/.test(photo.date)?photo.date:tstr(),
+      type:String(photo.type||'genel').slice(0,40),note:String(photo.note||'').slice(0,1000),
+      ...(/^[a-z0-9_-]{6,80}$/i.test(String(photo.localPhotoId||''))?{localPhotoId:String(photo.localPhotoId)}:{}),
+      ...(window.safePhotoUrl(photo.url)?{url:window.safePhotoUrl(photo.url)}:{}),
+      ...(window.safePhotoUrl(photo.data).startsWith('data:')?{data:window.safePhotoUrl(photo.data)}:{})
+    })):[];
+    return {...raw,id,name,lat,lon,area:Math.max(0,Number(raw.area)||0),notes:String(raw.notes||'').slice(0,5000),events,photos,_syncStatus:'pending'};
+  });
+};
+
+window.impData = (e) => { const f=e.target.files[0]; if(!f) return; if(f.size>25*1024*1024){ toast('Dosya 25 MB sınırını aşıyor.',true); return; } const r=new FileReader(); r.onload=async ev=>{ try{ DB.fields=window.validateImport(JSON.parse(ev.target.result)); for(const field of DB.fields) for(const photo of (field.photos||[])){ if(photo.data){ photo.localPhotoId=photo.localPhotoId||gid(); await window.storeLocalPhoto(photo.localPhotoId,photo.data); delete photo.data; } } saveLocalDB(); renderAll(); toast('Doğrulanmış veriler ve yerel fotoğraflar içe aktarıldı'); }catch(err){ toast('İçe aktarma hatası: '+err.message,true); } finally { e.target.value=''; } }; r.readAsText(f); };
 
 window.exportToCSV = () => {
   if(!DB.fields.length){ toast('Aktarılacak veri yok', true); return; }

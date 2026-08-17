@@ -108,9 +108,9 @@ window.renderCal = () => {
   qs('#cal-cells').innerHTML=html;
   const me=[]; DB.fields.forEach(f=>(f.events||[]).filter(e=>e.date.startsWith(mon)).forEach(e=>me.push({...e,fn:f.name})));
   me.sort((a,b)=>a.date.localeCompare(b.date));
-  qs('#cal-evs').innerHTML=me.length?me.map(e=>`<div class="evrow"><div class="evico" style="background:${EVC[e.type]||'#eee'};font-size:12px;">${EVI[e.type]||'📝'}</div><div class="evbody"><div class="evtitle">${e.fn}</div><div class="evsub">${e.type} · ${fd(e.date)}</div></div>${e.total?`<span class="evcost">${Math.round(e.total).toLocaleString()}₺</span>`:''}</div>`).join(''):'<div style="color:var(--text3);font-size:13px;">Bu ay olay yok.</div>';
+  qs('#cal-evs').innerHTML=me.length?me.map(e=>`<div class="evrow"><div class="evico" style="background:${EVC[e.type]||'#eee'};font-size:12px;">${EVI[e.type]||'📝'}</div><div class="evbody"><div class="evtitle">${window.esc(e.fn)}</div><div class="evsub">${window.esc(e.type)} · ${window.esc(fd(e.date))}</div></div>${e.total?`<span class="evcost">${Math.round(e.total).toLocaleString()}₺</span>`:''}</div>`).join(''):'<div style="color:var(--text3);font-size:13px;">Bu ay olay yok.</div>';
   const aiS=[]; DB.fields.forEach(f=>{ if(f.aiRecs?.length) aiS.push({fn:f.name,text:f.aiRecs[0].text.slice(0,130)+'...',date:f.aiRecs[0].date}); });
-  qs('#cal-ai').innerHTML=aiS.length?aiS.map(s=>`<div class="ritem" style="background:var(--glt);"><div class="rico" style="background:var(--gbg);color:var(--green2);">🤖</div><div class="rbody"><div class="rtitle">${s.fn}</div><div class="rsub">${s.text}</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">${fd(s.date)}</div></div></div>`).join(''):'<div style="color:var(--text3);font-size:13px;">AI analizi çalıştırarak öneri alın.</div>';
+  qs('#cal-ai').innerHTML=aiS.length?aiS.map(s=>`<div class="ritem" style="background:var(--glt);"><div class="rico" style="background:var(--gbg);color:var(--green2);">🤖</div><div class="rbody"><div class="rtitle">${window.esc(s.fn)}</div><div class="rsub">${window.safeAIHtml(s.text)}</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">${window.esc(fd(s.date))}</div></div></div>`).join(''):'<div style="color:var(--text3);font-size:13px;">AI analizi çalıştırarak öneri alın.</div>';
 };
 
 window.renderSoil = async (field) => {
@@ -384,7 +384,7 @@ window.renderRecTab = async (field) => {
   const fertH=(field.events||[]).filter(e=>e.type==='gübre').sort((a,b)=>b.date.localeCompare(a.date)).slice(0,3)
     .map(e=>`${fd(e.date)}: ${e.extra?.['e-ft']||''} (${e.qty||'?'}${e.unit||'kg'})`);
   const fr=qs('#rec-fert');
-  if(fr) fr.innerHTML=`<div style="font-size:13px;font-weight:600;margin-bottom:8px;">${field.crop||'Ürün seçilmemiş'} — Gübre Programı</div><div style="font-size:13px;line-height:1.7;background:var(--bg3);padding:10px 12px;border-radius:var(--r);">${a.fert}</div>${fertH.length?`<div style="font-size:11px;color:var(--text3);margin-top:8px;">Son gübrelemeler: ${fertH.join(' · ')}</div>`:''}`;
+  if(fr) fr.innerHTML=`<div style="font-size:13px;font-weight:600;margin-bottom:8px;">${window.esc(field.crop||'Ürün seçilmemiş')} — Gübre Programı</div><div style="font-size:13px;line-height:1.7;background:var(--bg3);padding:10px 12px;border-radius:var(--r);">${window.esc(a.fert)}</div>${fertH.length?`<div style="font-size:11px;color:var(--text3);margin-top:8px;">Son gübrelemeler: ${fertH.map(window.esc).join(' · ')}</div>`:''}`;
 
   const futWx=(WXC[field.id]?.days||simWX(field.lat,field.lon)).filter(d=>d.date>tstr()).slice(0,7);
   const avgR=futWx.reduce((s,d)=>s+d.rain,0)/Math.max(futWx.length,1);
@@ -414,9 +414,10 @@ window.renderRecTab = async (field) => {
 
 window.goTab = async (t) => {
   curTab=t;
-  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+  document.querySelectorAll('.tab').forEach(x=>{ x.classList.remove('on'); x.setAttribute('aria-selected','false'); x.setAttribute('tabindex','-1'); });
   document.querySelectorAll('.tp').forEach(x=>x.classList.remove('on'));
-  qs(`.tab[data-t="${t}"]`)?.classList.add('on');
+  const activeTab=qs(`.tab[data-t="${t}"]`);
+  activeTab?.classList.add('on'); activeTab?.setAttribute('aria-selected','true'); activeTab?.setAttribute('tabindex','0');
   qs('#tp-'+t)?.classList.add('on');
   if(!CUR) return;
   if(t==='map') requestAnimationFrame(()=>{ setTimeout(()=>{ initMap(CUR.lat,CUR.lon,CUR); renderLocInfo(CUR); },80); });
@@ -430,10 +431,10 @@ window.goTab = async (t) => {
     const chat=qs('#ai-chat');
     if(chat&&!chat.children.length){
       const memLen = window.getAIMemory(CUR.id).length;
-      chat.innerHTML=`<div class="bubble bs">👋 <strong>${CUR.name}</strong> tarlası için AI asistanı hazır.${memLen>0?`<br/>🧠 <strong>${memLen}</strong> mesajlık konuşma hafızası yüklendi.`:''}<br/>🤖 <strong>AI Analiz</strong> butonuna basın → Hava + toprak (2 katman) + uydu + fenoloji + konuşma geçmişi tek bütünsel uzman yorumu.</div>`;
+      chat.innerHTML=`<div class="bubble bs">👋 <strong>${window.esc(CUR.name)}</strong> tarlası için AI asistanı hazır.${memLen>0?`<br/>🧠 <strong>${memLen}</strong> mesajlık konuşma hafızası yüklendi.`:''}<br/>🤖 <strong>AI Analiz</strong> butonuna basın → Hava + toprak (2 katman) + uydu + fenoloji + konuşma geçmişi tek bütünsel uzman yorumu.</div>`;
     }
     const qq=qs('#qqbtns');
-    if(qq) qq.innerHTML=['Sulama planı','Gübre tavsiyesi',`${CUR.crop||'ürün'} hastalık riskleri`,'Bu hafta ne yapmalıyım?','Toprak nemi yorumu'].map(q=>`<button style="padding:4px 9px;border-radius:7px;font-size:11px;border:1px solid var(--bdr2);background:transparent;color:var(--text2);cursor:pointer;" onmouseover="this.style.borderColor='var(--green2)';this.style.color='var(--green2)'" onmouseout="this.style.borderColor='var(--bdr2)';this.style.color='var(--text2)'" onclick="qs('#ai-inp').value='${q}';sendChat()">${q}</button>`).join('');
+    if(qq) qq.innerHTML=['Sulama planı','Gübre tavsiyesi',`${CUR.crop||'ürün'} hastalık riskleri`,'Bu hafta ne yapmalıyım?','Toprak nemi yorumu'].map(q=>`<button class="ai-quick-question" data-question="${window.esc(q)}" style="padding:4px 9px;border-radius:7px;font-size:11px;border:1px solid var(--bdr2);background:transparent;color:var(--text2);cursor:pointer;">${window.esc(q)}</button>`).join('');
   }
 };
 
