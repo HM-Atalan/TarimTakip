@@ -285,8 +285,9 @@ window.syncFromDB = async () => {
     DB.fields = window.mergeCloudFields(fields || []);
     saveLocalDB();
     invSoilAll();
-    DB.fields.forEach(f => { if(!WXC[f.id]) fetchWX(f); });
+    await window.prepareMoistureModels(DB.fields);
     await renderAll();
+    DB.fields.forEach(f => { if(!WXC[f.id]) fetchWX(f); });
     if(CUR) {
       const u = DB.fields.find(f=>f.id===CUR.id);
       if(u) { CUR=u; if(qs('#page-field.on')) renderFieldPage(CUR); }
@@ -295,7 +296,6 @@ window.syncFromDB = async () => {
     toast('Veriler güncellendi ✓');
     fetchAllSatellites().catch(e=>console.warn('Uydu çekim hatası:', e));
   } catch(e) { toast('Senkronizasyon hatası: '+e.message, true); }
-  await window.computeAllSoils(true);
 };
 
 window.saveLocalDB = () => { try{ localStorage.setItem('tt_fields',JSON.stringify(DB.fields)); }catch(e){} };

@@ -7,6 +7,30 @@ window.agrd = (crop) => { return CROP_AGR[crop] || CROP_AGR.default; };
 window.importFieldFile = window.importFF;
 window.deleteCurrentPh = window.delCurPh;
 
+// İlk ekran çizilmeden önce yerel hava geçmişini yükler ve nem defterini
+// zorla doğrular. Eksik/bozuk kısa defterler otomatik yeniden oluşturulur.
+window.prepareMoistureModels = async (fields = window.DB?.fields || []) => {
+  if(!fields.length) return [];
+  fields.forEach(field=>{
+    if(WX_HISTORY[field.id]?.days?.length) return;
+    const stored=window.loadWXHistoryLocal(field.id);
+    if(stored?.length) WX_HISTORY[field.id]={days:stored,updatedAt:Date.now()};
+  });
+  let soilData=await window.computeAllSoils(true);
+  const needsRepair=soilData.filter(({f,s})=>{
+    const earliest=window.resolveFieldEarliestDate(f);
+    const ageDays=earliest?Math.floor((Date.now()-new Date(earliest+'T12:00:00').getTime())/86400000):0;
+    const minimumRecords=Math.min(7,Math.max(1,ageDays+1));
+    return !Number.isFinite(s?.surface?.pct) || !Number.isFinite(s?.deep?.pct) || ((s?.log?.length||0)<minimumRecords);
+  }).map(item=>item.f);
+  if(needsRepair.length){
+    console.warn(`${needsRepair.length} tarla için eksik nem defteri açılışta otomatik onarılıyor.`);
+    await window.rebuildAllMoistureModels(needsRepair);
+    soilData=await window.computeAllSoils(true);
+  }
+  return soilData;
+};
+
 window.resetMoistureModels = async () => {
   const fields = window.DB?.fields || [];
   if (!fields.length) { window.toast('Resetlenecek kayıtlı tarla yok.', true); return; }
@@ -45,7 +69,7 @@ window.resetMoistureModels = async () => {
     console.error('Nem modeli reset hatası:', error);
     window.toast('Nem modeli resetlenemedi: ' + error.message, true);
   } finally {
-    if (button) { button.disabled = false; button.textContent = originalLabel || '🔄 Nem Modelini Resetle'; }
+    if (button) { button.disabled = false; button.textContent = originalLabel || '🔄 Nem Modelini Yeniden Hesapla'; }
   }
 };
 

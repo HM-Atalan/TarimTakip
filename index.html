@@ -95,7 +95,6 @@
     <div class="ph-row">
       <div><div class="ph-title">Genel Bakış</div><div class="ph-sub" id="ddate"></div></div>
       <div class="ph-act">
-        <button id="reset-moisture-btn" class="btn btns" onclick="window.resetMoistureModels()" title="Olay ve hava geçmişinden nem modelini sıfırdan hesapla">🔄 Nem Modelini Resetle</button>
         <button class="btn btns btnp" onclick="window.openFM()">+ Yeni Tarla</button>
       </div>
     </div>
@@ -324,6 +323,12 @@
     <div class="ct">🌱 Toprak Verisi — SoilGrids / ISRIC</div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Koordinatlara göre tüm tarlaların toprak tipini SoilGrids'den otomatik günceller (kil/kum/silt yüzdeleri dahil).</div>
     <button class="btn btnp" onclick="updateAllSoilTypes()">🔄 Tüm Tarlaları Güncelle</button>
+  </div>
+
+  <div class="card">
+    <div class="ct">💧 Nem Modeli Bakımı</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Nem değerlerinde beklenmeyen bir sapma görürseniz modeli kayıtlı olaylar ve hava geçmişinden yeniden oluşturabilirsiniz. Normal kullanımda bu işleme gerek yoktur.</div>
+    <button id="reset-moisture-btn" class="btn btns" onclick="window.resetMoistureModels()" title="Olay ve hava geçmişinden nem modelini sıfırdan hesapla">🔄 Nem Modelini Yeniden Hesapla</button>
   </div>
 
   <div class="card">

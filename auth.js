@@ -28,11 +28,12 @@ window.showAErr = (m,msg) => { const el=qs('#'+m+'-err'); if(el){ el.style.displ
 
 window.noFBNotice = () => { qs('#no-fb-note').style.display='block'; qs('#auth-form-wrap').style.display='none'; };
 
-window.enterLocalMode = () => {
+window.enterLocalMode = async () => {
   LOCAL=true; qs('#auth-screen').classList.add('hidden');
   loadLocalDB();
+  await window.prepareMoistureModels(DB.fields);
+  await renderAll();
   DB.fields.forEach(f=>fetchWX(f));
-  renderAll();
   fetchAllSatellites().catch(e=>console.warn('Uydu çekim hatası:', e));
   toast('Yerel modda çalışıyorsunuz');
 };
