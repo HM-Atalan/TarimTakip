@@ -306,7 +306,13 @@ window.calcSoilRZWB = async (field, force = false) => {
   const uid     = window.FB_USER?.uid;
   const fbKey   = 'tt_rzwb_' + field.id;
 
-  let ledger = [];
+  let ledger = [], cloudLedger = [], localLedger = [], needsPersist = false;
+
+  try {
+    const raw = localStorage.getItem(fbKey);
+    if(raw) localLedger = JSON.parse(raw);
+  } catch(e) {}
+  ({ ledger: localLedger } = window.normalizeRZWBLedger(localLedger, field.name || field.id));
 
   if(uid && window.FB_MODE) {
     let cached = window.RZWB_CACHE[field.id];
@@ -317,14 +323,20 @@ window.calcSoilRZWB = async (field, force = false) => {
         window.RZWB_CACHE[field.id] = { records: raw.records, loadedAt: Date.now() };
       }
     }
-    if(cached?.records?.length) ledger = cached.records;
+    if(cached?.records?.length) cloudLedger = cached.records;
   }
+  ({ ledger: cloudLedger } = window.normalizeRZWBLedger(cloudLedger, field.name || field.id));
 
-  if(!ledger.length) {
-    try {
-      const raw = localStorage.getItem(fbKey);
-      if(raw) ledger = JSON.parse(raw);
-    } catch(e) {}
+  // Aynı güne ait yerel model, bu cihazda en son tamamlanan hesaplamadır.
+  // Eski bulut kaydının doğru yerel sonucu açılışta ezmesine izin verme.
+  const localLast=localLedger.at(-1)?.date||'';
+  const cloudLast=cloudLedger.at(-1)?.date||'';
+  if(localLedger.length && localLast>=cloudLast) {
+    ledger=localLedger;
+    needsPersist=!!uid && JSON.stringify(localLedger)!==JSON.stringify(cloudLedger);
+  } else {
+    ledger=cloudLedger;
+    if(cloudLedger.length) try { localStorage.setItem(fbKey,JSON.stringify(cloudLedger)); } catch(e) {}
   }
 
   // ══ FAZ 4 — Ledger NORMALİZASYONU (yüklendiği anda) ══
@@ -429,15 +441,7 @@ window.calcSoilRZWB = async (field, force = false) => {
     const merged = [...ledger, ...newRecords].filter(r => r.date >= cutoff90str && r.date <= today);
     ({ ledger } = window.normalizeRZWBLedger(merged, field.name || field.id));
 
-    try { localStorage.setItem(fbKey, JSON.stringify(ledger)); } catch(e) {}
-
-    if(uid && window.FB_MODE) {
-      window.fbSaveRZWB(uid, field.id, ledger)
-        .then(() => {
-          window.RZWB_CACHE[field.id] = { records: ledger, loadedAt: Date.now() };
-        })
-        .catch(e => console.warn('RZWB Firebase yazma:', e.message));
-    }
+    needsPersist = true;
   }
 
   let repaired = false;
@@ -506,12 +510,7 @@ window.calcSoilRZWB = async (field, force = false) => {
   }
 
   if(repaired) {
-    try { localStorage.setItem(fbKey, JSON.stringify(ledger)); } catch(e) {}
-    if(uid && window.FB_MODE) {
-      window.fbSaveRZWB(uid, field.id, ledger)
-        .then(() => { window.RZWB_CACHE[field.id] = { records: ledger, loadedAt: Date.now() }; })
-        .catch(e => console.warn('RZWB Firebase onarım yazma:', e.message));
-    }
+    needsPersist = true;
   }
 
   ledger = ledger.map(r => window.normalizeRZWBRecord(r, params));
@@ -584,6 +583,16 @@ window.calcSoilRZWB = async (field, force = false) => {
     moist: moist_s_out,
     fc:    fcs,
   };
+
+  if(needsPersist) {
+    try { localStorage.setItem(fbKey, JSON.stringify(ledger)); } catch(e) { console.warn('RZWB yerel kayıt hatası:',e.message); }
+    if(uid && window.FB_MODE) {
+      try {
+        await window.fbSaveRZWB(uid, field.id, ledger);
+        window.RZWB_CACHE[field.id] = { records: ledger, loadedAt: Date.now() };
+      } catch(e) { console.warn('RZWB Firebase yazma:', e.message); }
+    }
+  }
 
   return result;
 };
@@ -733,11 +742,9 @@ window.calcFieldCapacity = (soilType, cl, sa, si, layer='surface') => {
 // ─── Firebase RZWB yardımcıları ──────────────────────────────
 window.fbSaveRZWB = async (uid, fieldId, records) => {
   if(!uid || !window.FB_MODE || !window.FB_DB) return;
-  try {
-    const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-    const ref = doc(window.FB_DB, 'users', uid, 'rzwb', fieldId);
-    await setDoc(ref, { records, updatedAt: new Date().toISOString() });
-  } catch(e) { console.warn('RZWB Firebase kayıt hatası:', e.message); }
+  const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+  const ref = doc(window.FB_DB, 'users', uid, 'rzwb', fieldId);
+  await setDoc(ref, { records, updatedAt: new Date().toISOString() });
 };
 
 window.fbLoadRZWB = async (uid, fieldId) => {
