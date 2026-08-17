@@ -23,6 +23,7 @@ Bu komut bütün üretim JavaScript dosyalarının sözdizimini ve kalıcı regr
 - FAZ 12: Yerel HTTP üzerinden gerçek tarayıcı yüklemesi doğrulandı; sayfa, üretim scriptleri ve ana kimlik ekranı açıldı.
 - FAZ 13: Kritik kullanıcı girdisi yüzeylerine HTML escaping, CSS renk doğrulaması, güvenli profil URL doğrulaması ve inline kullanıcı-ID handler kaldırması uygulandı. Beklenen Remote Config ağ kesintisi fatal hata olarak raporlanmıyor.
 - FAZ 14: State, mass balance, extreme irrigation/rain, mixed event, drought, repair, bootstrap, satellite anchor, invalidation, ET0, parametre, Kc, GDD, sulama ve güvenlik regresyonları kalıcı test paketine alındı.
+- Genel sayfasındaki “Nem Modelini Resetle” işlemi, kayıtlı tüm tarlaların yalnız türetilmiş RZWB ledger/cache verisini temizler; tarla ve olay kayıtlarını korur, hava geçmişini hazırlar ve nem modelini sıfırdan yeniden hesaplar.
 
 ## Bilimsel varsayımlar ve açık riskler
 

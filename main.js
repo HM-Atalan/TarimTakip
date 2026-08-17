@@ -7,6 +7,48 @@ window.agrd = (crop) => { return CROP_AGR[crop] || CROP_AGR.default; };
 window.importFieldFile = window.importFF;
 window.deleteCurrentPh = window.delCurPh;
 
+window.resetMoistureModels = async () => {
+  const fields = window.DB?.fields || [];
+  if (!fields.length) { window.toast('Resetlenecek kayıtlı tarla yok.', true); return; }
+  if (!window.confirm(
+    `${fields.length} tarla için türetilmiş nem modeli silinip olay kayıtları ve hava geçmişinden sıfırdan hesaplanacak. Devam edilsin mi?`
+  )) return;
+
+  const button = qs('#reset-moisture-btn');
+  const originalLabel = button?.textContent;
+  if (button) { button.disabled = true; button.textContent = '⏳ Nem modeli hesaplanıyor…'; }
+  try {
+    const summary = await window.rebuildAllMoistureModels(fields);
+    // Reuse the freshly rebuilt results so renderers do not trigger a second
+    // model run. Failed fields are retried by the normal rendering path.
+    if (summary.failed === 0) {
+      window.SOIL_CACHE = {
+        data: fields.map((f, i) => {
+          const s = summary.results[i].value;
+          return { f, s, sc: scl(s.surface.pct), ph: calcPheno(f), he: calcHarvest(f) };
+        }),
+        lastUpdated: Date.now(),
+      };
+    }
+    await window.renderAll();
+    if (window.CUR) {
+      const current = fields.find(field => field.id === window.CUR.id);
+      if (current) { window.CUR = current; await window.renderFKPIs(current); }
+    }
+    if (summary.failed) {
+      window.toast(`${summary.rebuilt}/${summary.total} tarla hesaplandı; ${summary.failed} tarla başarısız.`, true);
+    } else {
+      const weatherNote = summary.weatherFailed ? ` (${summary.weatherFailed} hava geçmişi uyarısı)` : '';
+      window.toast(`✅ ${summary.rebuilt} tarla için nem modeli sıfırdan hesaplandı${weatherNote}.`);
+    }
+  } catch (error) {
+    console.error('Nem modeli reset hatası:', error);
+    window.toast('Nem modeli resetlenemedi: ' + error.message, true);
+  } finally {
+    if (button) { button.disabled = false; button.textContent = originalLabel || '🔄 Nem Modelini Resetle'; }
+  }
+};
+
 // ─── OTOMATİK YENİLEME ─────────────────────────────────────────
 setInterval(async () => {
   invSoilAll();

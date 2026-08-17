@@ -784,3 +784,44 @@ window.invalidateRZWBFrom = async (fieldId, fromDate) => {
 
   if(typeof window.invSoil === 'function') window.invSoil(fieldId);
 };
+
+// Clears only derived moisture-model state. Field definitions, event records
+// and weather history remain intact and are used to rebuild every ledger.
+window.rebuildAllMoistureModels = async (fields = window.DB?.fields || []) => {
+  const targets = Array.isArray(fields) ? fields.filter(f => f?.id) : [];
+  if (!targets.length) return { total: 0, rebuilt: 0, failed: 0, weatherFailed: 0, results: [] };
+
+  // Weather must be available before any ledger is removed/rebuilt. A cached
+  // history is accepted by fetchWXHistory; network failures retain its local
+  // fallback and are reported in the summary.
+  const weatherResults = await Promise.allSettled(
+    targets.map(field => window.fetchWXHistory(field))
+  );
+
+  const uid = window.FB_USER?.uid;
+  for (const field of targets) {
+    try { localStorage.removeItem('tt_rzwb_' + field.id); } catch (_) {}
+    delete window.RZWB_CACHE[field.id];
+    if (typeof window.invSoil === 'function') window.invSoil(field.id);
+  }
+
+  if (uid && window.FB_MODE) {
+    await Promise.allSettled(targets.map(field => window.fbSaveRZWB(uid, field.id, [])));
+  }
+
+  window.RZWB_CACHE = {};
+  window.SOIL_CACHE = { data: null, lastUpdated: 0 };
+  if (typeof window.invSoilAll === 'function') window.invSoilAll();
+
+  const results = await Promise.allSettled(
+    targets.map(field => window.calcSoilRZWB(field, true))
+  );
+  const rebuilt = results.filter(result => result.status === 'fulfilled').length;
+  return {
+    total: targets.length,
+    rebuilt,
+    failed: targets.length - rebuilt,
+    weatherFailed: weatherResults.filter(result => result.status === 'rejected').length,
+    results,
+  };
+};
