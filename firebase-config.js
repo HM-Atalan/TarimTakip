@@ -44,7 +44,7 @@ function initFirebase(){
         if(!GEMINI_KEY) console.warn('Remote Config: GMINIK parametresi bulunamadı');
         else console.log('Remote Config: Gemini anahtarı alındı');
       })
-      .catch(err => console.error('Remote Config hatası:', err));
+      .catch(err => console.warn('Remote Config kullanılamıyor; uygulama yerel/ana özelliklerle devam ediyor:', err.message));
 
     // Firebase Functions'i başlat
     functions = getFunctions(app);

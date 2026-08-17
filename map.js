@@ -22,7 +22,7 @@ window.initMap = (lat, lon, field) => {
         fillOpacity: isActive ? 0.35 : 0.18,
         weight: isActive ? 3 : 1.5
       });
-      poly.bindPopup(`<b>${f.name}</b><br/>${f.crop||'—'} · ${f.area} ${f.areaUnit||'dönüm'}`);
+      poly.bindPopup(`<b>${window.esc(f.name)}</b><br/>${window.esc(f.crop||'—')} · ${window.esc(f.area)} ${window.esc(f.areaUnit||'dönüm')}`);
       poly.addTo(lmap);
       if(isActive) {
         setTimeout(()=>poly.openPopup(), 300);
@@ -35,7 +35,7 @@ window.initMap = (lat, lon, field) => {
         fillOpacity: 0.7,
         weight: isActive ? 3 : 1.5
       });
-      c.bindPopup(`<b>${f.name}</b><br/>${f.crop||'—'} · ${f.area} ${f.areaUnit||'dönüm'}`);
+      c.bindPopup(`<b>${window.esc(f.name)}</b><br/>${window.esc(f.crop||'—')} · ${window.esc(f.area)} ${window.esc(f.areaUnit||'dönüm')}`);
       c.addTo(lmap);
       if(isActive) setTimeout(()=>c.openPopup(), 300);
     }

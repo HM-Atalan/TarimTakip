@@ -31,6 +31,35 @@ window.getRZWBParams = (field) => {
   return { fcs, wps, fcd, wpd, taw_s, taw_d, raw_s, raw_d, mad };
 };
 
+// A daily RZWB transition is not fully described by depletion alone: water
+// held above field capacity must also survive until the next step.  Older
+// ledgers do not contain the surplus fields, so missing values deliberately
+// fall back to zero for backward compatibility.
+window.toRZWBState = (record, fallbackDr_s = 0, fallbackDr_d = 0) => ({
+  Dr_s: Number.isFinite(record?.Dr_s) ? record.Dr_s : fallbackDr_s,
+  Dr_d: Number.isFinite(record?.Dr_d) ? record.Dr_d : fallbackDr_d,
+  surplus_s: Number.isFinite(record?.surplus_s) ? Math.max(0, record.surplus_s) : 0,
+  surplus_d: Number.isFinite(record?.surplus_d) ? Math.max(0, record.surplus_d) : 0,
+});
+
+window.interpolateCropKc = (kcValues, ratio) => {
+  if (!Array.isArray(kcValues) || kcValues.length < 3 || !kcValues.every(Number.isFinite)) return 0.7;
+  const r = Math.max(0, Math.min(1, Number(ratio) || 0));
+  const lerp = (a, b, t) => a + (b - a) * Math.max(0, Math.min(1, t));
+  if (r >= 1) return kcValues[Math.min(3, kcValues.length - 1)];
+  if (r <= 0.1) return kcValues[0];
+
+  if (kcValues.length === 3) {
+    if (r < 0.5) return lerp(kcValues[0], kcValues[1], (r - 0.1) / 0.4);
+    if (r <= 0.8) return kcValues[1];
+    return lerp(kcValues[1], kcValues[2], (r - 0.8) / 0.2);
+  }
+
+  if (r < 0.5) return lerp(kcValues[0], kcValues[1], (r - 0.1) / 0.4);
+  if (r < 0.8) return lerp(kcValues[1], kcValues[2], (r - 0.5) / 0.3);
+  return lerp(kcValues[2], kcValues[3], (r - 0.8) / 0.2);
+};
+
 window.rzwbStep = (prev, dayWx, irrMm, params, field) => {
   const { fcs, fcd, taw_s, taw_d, raw_s, raw_d } = params;
   const a = window.agrd(field.crop);
@@ -43,12 +72,7 @@ window.rzwbStep = (prev, dayWx, irrMm, params, field) => {
     if(gdd !== null) {
       const gddTarget = a.gd[a.gd.length-1];
       const ratio = Math.min(1, gdd / gddTarget);
-      if(a.kc?.length === 4) {
-        if(ratio < 0.1)      kc = a.kc[0];
-        else if(ratio < 0.5) kc = a.kc[0] + (a.kc[1]-a.kc[0])*(ratio/0.5);
-        else if(ratio < 0.8) kc = a.kc[1] + (a.kc[2]-a.kc[1])*((ratio-0.5)/0.3);
-        else                 kc = a.kc[2] + (a.kc[3]-a.kc[2])*Math.min(1,(ratio-0.8)/0.2);
-      }
+      kc = window.interpolateCropKc(a.kc, ratio);
     }
   }
 
@@ -57,16 +81,15 @@ window.rzwbStep = (prev, dayWx, irrMm, params, field) => {
   const ks_d = prev.Dr_d <= raw_d ? 1.0
     : Math.max(0, (taw_d - prev.Dr_d) / Math.max(1, taw_d - raw_d));
 
-  const et0 = dayWx.et0 > 0 ? dayWx.et0
-    : a.et * (dayWx.tmax > 38 ? 1.45 : dayWx.tmax > 33 ? 1.2 : 1.0);
+  const et0Resolved = window.resolveDailyET0(dayWx, field);
+  const et0 = et0Resolved.value;
 
   const isFallow = field.status === 'fallow';
   const ETc_s = isFallow ? et0 * 0.20 : et0 * kc * rootS * ks_s;
   const ETc_d = isFallow ? et0 * 0.03 : et0 * kc * rootD * ks_d;
 
-  const rain = dayWx.rain || 0;
-  const eff  = rain > 30 ? 0.70 : rain > 15 ? 0.82 : rain > 5 ? 0.92 : 1.0;
-  const Pe   = +(rain * eff).toFixed(1);
+  const rain = Math.max(0, Number(dayWx.rain) || 0);
+  const Pe   = +window.calcEffectiveRain(rain).toFixed(1);
 
   const Dr_s_before = +prev.Dr_s.toFixed(1);
   const Dr_d_before = +prev.Dr_d.toFixed(1);
@@ -130,7 +153,7 @@ window.rzwbStep = (prev, dayWx, irrMm, params, field) => {
     kc:   +kc.toFixed(3),
     Ks_s: +ks_s.toFixed(3), Ks_d: +ks_d.toFixed(3),
     ETc_s: +ETc_s.toFixed(1), ETc_d: +ETc_d.toFixed(1),
-    et0: +et0.toFixed(1), rain: +rain.toFixed(1),
+    et0: +et0.toFixed(1), et0Source: et0Resolved.source, rain: +rain.toFixed(1),
     Pe, irr: +irrMm.toFixed(1),
     perc: +percToDeep.toFixed(1),
     percDeep: percBelowRoot,
@@ -223,7 +246,7 @@ window.resolveRZWBBootstrapState = (field, params, today, cutoff90str) => {
     const sat_moist_d = Math.min(fcd, (agroDeep || agroMid * 0.88) * fcd);
     initDr_s = Math.min(taw_s, Math.max(0, fcs - sat_moist_s));
     initDr_d = Math.min(taw_d, Math.max(0, fcd - sat_moist_d));
-    bootstrapSource = 'satellite';
+    bootstrapSource = 'open-meteo-soil-model';
     bootstrapDate   = satDateStr;
     satCalibrated   = true;
 
@@ -235,6 +258,7 @@ window.resolveRZWBBootstrapState = (field, params, today, cutoff90str) => {
     anchorRecord = {
       date: bootstrapDate,
       source: 'satellite-anchor',
+      sourceProvider: 'open-meteo-soil-model',
       Dr_s: surfAnchor.Dr, Dr_d: deepAnchor.Dr,
       pct_s: surfAnchor.pct, pct_d: deepAnchor.pct,
       moist_s: surfAnchor.moist, moist_d: deepAnchor.moist,
@@ -262,15 +286,15 @@ window.resolveRZWBBootstrapState = (field, params, today, cutoff90str) => {
 // "zaten ledger'da var" olduğunu bilmez/umursamaz; bu filtrelemeyi
 // (existingDates hariç tutma VEYA repair'de tam yeniden inşa) ÇAĞIRAN
 // TARAF, wxAll'ı önceden filtreleyerek yapar.
-window.simulateRZWBForward = (initDr_s, initDr_d, simStart, today, wxAll, irrMap, params, field) => {
+window.simulateRZWBForward = (initDr_s, initDr_d, simStart, today, wxAll, irrMap, params, field, initialState = null) => {
   const simDays = wxAll.filter(d => d.date >= simStart && d.date <= today);
-  let prev = { Dr_s: initDr_s, Dr_d: initDr_d };
+  let prev = window.toRZWBState(initialState, initDr_s, initDr_d);
   const records = [];
   for (const dayWx of simDays) {
     const irrMm = irrMap[dayWx.date] || 0;
     const step = window.rzwbStep(prev, dayWx, irrMm, params, field);
     records.push({ date: dayWx.date, ...step });
-    prev = { Dr_s: step.Dr_s, Dr_d: step.Dr_d };
+    prev = window.toRZWBState(step, step.Dr_s, step.Dr_d);
   }
   return records;
 };
@@ -328,7 +352,8 @@ window.calcSoilRZWB = async (field, force = false) => {
   const lastRec  = ledger.length ? ledger[ledger.length - 1] : null;
   const isBootstrap = !lastRec;
 
-  let simStart, initDr_s, initDr_d, satCalibrated = false, bootstrapInfo = null;
+  let simStart, initDr_s, initDr_d, initSurplus_s = 0, initSurplus_d = 0,
+    satCalibrated = false, bootstrapInfo = null;
 
   if(isBootstrap) {
     // ══ FAZ 4: bootstrap çözümlemesi artık paylaşılan
@@ -376,6 +401,8 @@ window.calcSoilRZWB = async (field, force = false) => {
   } else {
     initDr_s = lastRec.Dr_s;
     initDr_d = lastRec.Dr_d;
+    initSurplus_s = Number.isFinite(lastRec.surplus_s) ? Math.max(0, lastRec.surplus_s) : 0;
+    initSurplus_d = Number.isFinite(lastRec.surplus_d) ? Math.max(0, lastRec.surplus_d) : 0;
     const nextDay = new Date(lastRec.date + 'T12:00:00');
     nextDay.setDate(nextDay.getDate() + 1);
     simStart = window.dateKey(nextDay);
@@ -390,10 +417,13 @@ window.calcSoilRZWB = async (field, force = false) => {
   const existingDates = new Set(ledger.map(r => r.date));
   const wxForSim = wxAll.filter(d => !existingDates.has(d.date));
 
-  const newRecords = window.simulateRZWBForward(initDr_s, initDr_d, simStart, today, wxForSim, irrMap, params, field);
+  const initialState = { Dr_s: initDr_s, Dr_d: initDr_d, surplus_s: initSurplus_s, surplus_d: initSurplus_d };
+  const newRecords = window.simulateRZWBForward(
+    initDr_s, initDr_d, simStart, today, wxForSim, irrMap, params, field, initialState
+  );
   let prev = newRecords.length
-    ? { Dr_s: newRecords[newRecords.length - 1].Dr_s, Dr_d: newRecords[newRecords.length - 1].Dr_d }
-    : { Dr_s: initDr_s, Dr_d: initDr_d };
+    ? window.toRZWBState(newRecords[newRecords.length - 1])
+    : initialState;
 
   if(newRecords.length) {
     const merged = [...ledger, ...newRecords].filter(r => r.date >= cutoff90str && r.date <= today);
@@ -421,19 +451,19 @@ window.calcSoilRZWB = async (field, force = false) => {
     // ── ÖNCELİK 6 (repairFrom > 0): önceki GEÇERLİ kayıttan devam et ──
     // (davranış DEĞİŞMEDİ — bu dal zaten doğruydu)
     const repairedLedger = ledger.slice(0, repairFrom);
-    let repairPrev = { Dr_s: ledger[repairFrom - 1].Dr_s, Dr_d: ledger[repairFrom - 1].Dr_d };
+    let repairPrev = window.toRZWBState(ledger[repairFrom - 1]);
 
     for(let i = repairFrom; i < ledger.length; i++) {
       const rec = ledger[i];
       const dayWx = wxByDate[rec.date];
       if(!dayWx) {
         repairedLedger.push(rec);
-        repairPrev = { Dr_s: rec.Dr_s, Dr_d: rec.Dr_d };
+        repairPrev = window.toRZWBState(rec);
         continue;
       }
       const step = window.rzwbStep(repairPrev, dayWx, irrMap[rec.date] || 0, params, field);
       repairedLedger.push({ ...rec, ...step });
-      repairPrev = { Dr_s: step.Dr_s, Dr_d: step.Dr_d };
+      repairPrev = window.toRZWBState(step);
     }
 
     ledger = repairedLedger;
@@ -646,31 +676,35 @@ window.scl = (pct) => {
 
 window.calcIrrigationNeed = (field, s) => {
   const p = s.params || window.getRZWBParams(field);
-  const { fcs, taw_s, raw_s, mad } = p;
+  const { fcs, taw_s, taw_d, raw_s, raw_d, mad } = p;
   const Dr_s       = s.surface.Dr ?? Math.max(0, fcs - s.surface.moist);
-  const Ks         = s.surface.Ks ?? 1;
+  const Dr_d       = s.deep?.Dr ?? 0;
+  const DrTotal    = Dr_s + Dr_d;
+  const rawTotal   = raw_s + raw_d;
+  const tawTotal   = taw_s + taw_d;
+  const Ks         = Math.min(s.surface.Ks ?? 1, s.deep?.Ks ?? 1);
   const triggerPct = Math.max(0, Math.min(100, Math.round(((fcs - raw_s) / Math.max(1, fcs)) * 100)));
-  const targetMoist = fcs * 0.90;
-  const deficitMm   = Math.round(Math.max(0, targetMoist - s.surface.moist));
+  const targetDepletion = tawTotal * 0.10;
+  const deficitMm   = Math.round(Math.max(0, DrTotal - targetDepletion));
   const wx      = WXC[field.id]?.days || simWX(field.lat, field.lon);
   const today   = tstr();
   const futWx   = wx.filter(d => d.date > today).slice(0, 7);
   const futR    = futWx.reduce((t, d) => t + d.rain, 0);
-  const futET   = futWx.reduce((t, d) => t + (d.et0 || s.et || window.agrd(field.crop).et), 0);
-  const netBalance = futR - futET;
-  const effRain    = Math.min(deficitMm, futR * 0.7);
+  const futPe   = futWx.reduce((t, d) => t + window.calcEffectiveRain(d.rain), 0);
+  const currentKc = Math.max(0, Number(s.kc) || 0.7);
+  const futET   = futWx.reduce((t, d) => t + window.resolveDailyET0(d, field).value * currentKc, 0);
+  const netBalance = futPe - futET;
+  const effRain    = Math.min(deficitMm, futPe);
   const recommendedMm = Math.round(Math.max(0, deficitMm - effRain));
   const lastLog     = s.log?.[s.log.length - 1];
   const dailyUse    = lastLog
-    ? Math.max(0.5, (lastLog.ETc_s ?? lastLog.et_surf ?? s.et * 0.35))
-    : Math.max(0.5, (s.ETc ?? s.et) * 0.35);
-  const criticalMoist     = (p.wps ?? 15) + 10;
-  const daysUntilCritical = s.surface.moist > criticalMoist
-    ? Math.round((s.surface.moist - criticalMoist) / dailyUse) : 0;
+    ? Math.max(0.5, (lastLog.ETc_s ?? 0) + (lastLog.ETc_d ?? 0))
+    : Math.max(0.5, s.ETc ?? s.et);
+  const daysUntilCritical = Math.max(0, Math.round((rawTotal - DrTotal) / dailyUse));
   const stressLabel = Ks < 0.5 ? 'Ağır stres' : Ks < 0.8 ? 'Orta stres'
     : Ks < 1 ? 'Hafif stres' : 'Stres yok';
-  const belowRaw   = Dr_s > raw_s;
-  const critical   = s.surface.moist <= criticalMoist;
+  const belowRaw   = DrTotal > rawTotal;
+  const critical   = DrTotal >= tawTotal * 0.90;
   const stressed   = Ks < 0.8;
   let urgency, label;
   if (critical)                        { urgency = 'kritik'; label = 'ACİL — kök bölgesi kritik, hemen sulayın'; }
@@ -683,8 +717,10 @@ window.calcIrrigationNeed = (field, s) => {
     urgency, label, Ks, stressLabel,
     currentPct: s.surface.pct, triggerPct, madPct: Math.round(mad * 100),
     Dr_s: +Dr_s.toFixed(1), raw_s: +raw_s.toFixed(1), taw_s: +taw_s.toFixed(1),
+    DrTotal: +DrTotal.toFixed(1), rawTotal: +rawTotal.toFixed(1), tawTotal: +tawTotal.toFixed(1),
     deficitMm, recommendedMm,
-    netBalance7d: Math.round(netBalance), futRain7d: Math.round(futR), futET7d: Math.round(futET),
+    netBalance7d: Math.round(netBalance), futRain7d: Math.round(futR),
+    futEffectiveRain7d: Math.round(futPe), futET7d: Math.round(futET),
     daysUntilCritical,
   };
 };

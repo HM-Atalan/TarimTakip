@@ -2,15 +2,25 @@
 // phenology.js – Fenoloji, hasat tahmini, GDD
 // ============================================================
 
+window.calcDailyGDD = (cropParams, day) => {
+  const tmax = Number(day?.tmax);
+  const tmin = Number(day?.tmin);
+  if (![tmax, tmin].every(Number.isFinite) || tmax < tmin) return null;
+  const tavg = (tmax + tmin) / 2;
+  return Math.max(0, Math.min(tavg, cropParams.tm) - cropParams.tb);
+};
+
 window.calcGDD = (field, untilDate = tstr()) => {
   const a = window.agrd(field.crop);
   if(!field.plantDate) return null;
   const wxDays = window.getBestWXDays(field);
   let acc = 0;
+  const seen = new Set();
   wxDays.filter(d => d.date >= field.plantDate && d.date <= untilDate).forEach(d => {
-    const tavg = (d.tmax + d.tmin) / 2;
-    const tavgClamped = Math.min(tavg, a.tm);
-    acc += Math.max(0, tavgClamped - a.tb);
+    if (seen.has(d.date)) return;
+    seen.add(d.date);
+    const daily = window.calcDailyGDD(a, d);
+    if (daily !== null) acc += daily;
   });
   return Math.round(acc);
 };
@@ -42,7 +52,7 @@ window.calcHarvest = (field) => {
   const wxAll = window.getBestWXDays(field);
   const fut = wxAll.filter(d=>d.date>tstr()).slice(0,14);
   const avgDGDD = fut.length>0
-    ? fut.reduce((s,d)=>s+Math.max(0, Math.min((d.tmax+d.tmin)/2, a.tm)-a.tb),0)/fut.length
+    ? fut.reduce((s,d)=>s+(window.calcDailyGDD(a, d) ?? 0),0)/fut.length
     : Math.max(1, a.to - a.tb)*0.55;
   const dGDD = avgDGDD>0 ? Math.round(remain/avgDGDD) : a.td;
   const dCal = Math.max(0, a.td - Math.round((Date.now()-new Date(field.plantDate+'T00:00:00'))/(864e5)));

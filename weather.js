@@ -15,7 +15,11 @@ window.fetchWXHistory = async (field) => {
   }
   try {
     const endDate   = new Date(); endDate.setDate(endDate.getDate() - 1);
-    const startDate = new Date(); startDate.setDate(startDate.getDate() - 90);
+    // RZWB keeps its own 90-day ledger window, but phenology/GDD seasons in
+    // the crop table extend well beyond 90 days. Keep up to one full year of
+    // weather so long-season crops are not silently calculated from a partial
+    // temperature history.
+    const startDate = new Date(); startDate.setDate(startDate.getDate() - 366);
     const ed = window.dateKey(endDate);
     const sd = window.dateKey(startDate);
     const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${field.lat}&longitude=${field.lon}` +
@@ -40,7 +44,7 @@ window.fetchWXHistory = async (field) => {
     merged.sort((a, b) => a.date.localeCompare(b.date));
     WX_HISTORY[id] = { days: merged, updatedAt: now };
     window.saveWXHistoryLocal(id, merged);
-    console.log(`📅 ${field.name}: ${merged.length} günlük arşiv verisi (90g)`);
+    console.log(`📅 ${field.name}: ${merged.length} günlük arşiv verisi (en fazla 366g)`);
     return merged;
   } catch(e) {
     console.warn('WXHistory hatası:', e.message);
@@ -85,7 +89,10 @@ window.simWX = (lat, lon) => {
     const base=16+Math.sin(d.getMonth()/2)*13+(lat>38?-3:3);
     const tmax=Math.round(base+sd%10-2);
     const rain=sd<18?+(sd*1.4).toFixed(1):sd<28?+((sd-18)*0.3).toFixed(1):0;
-    days.push({date:window.dateKey(d),tmax,tmin:tmax-Math.round(5+sd%7),rain,wind:Math.round(8+sd%22),code:rain>5?63:rain>0?80:sd>60?2:0,et0:+((tmax-5)*0.15).toFixed(1)});
+    const tmin = tmax-Math.round(5+sd%7);
+    const date = window.dateKey(d);
+    const et0 = window.calcFallbackET0({ date, tmax, tmin }, lat);
+    days.push({date,tmax,tmin,rain,wind:Math.round(8+sd%22),code:rain>5?63:rain>0?80:sd>60?2:0,et0:+et0.toFixed(1),et0Source:'fao56-hargreaves-fallback'});
   }
   return days;
 };
@@ -169,5 +176,5 @@ window.renderWX = (field) => {
     <div class="kpi"><div class="kpi-l">Yağışlı Gün</div><div class="kpi-v">${rD}<small>/14</small></div></div>
     <div class="kpi"><div class="kpi-l">ET₀ Toplam</div><div class="kpi-v">${Math.round(totalET)}<small>mm</small></div></div>
   </div>
-  <div style="font-size:11px;color:var(--text3);margin-top:6px;">📅 GDD hesaplaması için ${histDays} günlük hava geçmişi kullanılıyor (son 6 ay)</div>`;
+  <div style="font-size:11px;color:var(--text3);margin-top:6px;">📅 GDD hesaplaması için ${histDays} günlük hava geçmişi kullanılıyor (en fazla 366 gün)</div>`;
 };

@@ -88,7 +88,14 @@ window.fetchSat = async (field) => {
   const ndwiRaw=(rainf*0.6+(R.soilM3||0.2)*0.4)-0.1;
   R.ndwi=Math.max(-0.5,Math.min(0.8,ndwiRaw)).toFixed(3);
   R.lst=R.soilT0||R.soilT6||'—';
-  R.isEst=!R.s2date;
+  // Earth Search is queried only for acquisition metadata; no Sentinel-2
+  // spectral asset is downloaded in this application. Therefore the indices
+  // below remain model estimates even when a recent S2 scene exists.
+  R.isEst=true;
+  R.indexSource='weather-soil-model-estimate';
+  R.soilMoistureSource=(Number.isFinite(R.soilM3) || Number.isFinite(R.soilMDeep))
+    ? 'open-meteo-model' : 'unavailable';
+  R.s2MetadataOnly=!!R.s2date;
 
   SATC[id]={data:R, at:Date.now()};
   invSoil(id);
@@ -107,7 +114,7 @@ window.renderSat = (field, R) => {
   const bar=(v,max,color)=>`<div style="height:7px;border-radius:4px;background:var(--bg3);overflow:hidden;margin-top:5px;"><div style="height:100%;width:${Math.min(100,Math.max(0,(parseFloat(v)+0.5)/(max+0.5)*100))}%;background:${color};border-radius:4px;"></div></div>`;
 
   const nel=qs('#sat-ndvi');
-  if(nel) nel.innerHTML=`<div style="text-align:center;padding:8px 0;"><div style="font-size:28px;font-weight:800;color:${nc.color};">${R.ndvi}</div><span class="tag ${nc.tag}" style="margin-top:4px;display:inline-flex;">${nc.l}</span></div>${bar(R.ndvi,0.95,nc.bar)}<div style="font-size:10px;color:var(--text3);margin-top:4px;">-1 (çıplak) ← 0 → +1 (yoğun bitki)</div><div class="tag ${R.isEst?'ta':'tg'}" style="font-size:9px;margin-top:5px;display:inline-flex;">${R.isEst?'⚠️ Model tahmini':'📡 S2: '+R.s2date}</div>`;
+  if(nel) nel.innerHTML=`<div style="text-align:center;padding:8px 0;"><div style="font-size:28px;font-weight:800;color:${nc.color};">${R.ndvi}</div><span class="tag ${nc.tag}" style="margin-top:4px;display:inline-flex;">${nc.l}</span></div>${bar(R.ndvi,0.95,nc.bar)}<div style="font-size:10px;color:var(--text3);margin-top:4px;">-1 (çıplak) ← 0 → +1 (yoğun bitki)</div><div class="tag ta" style="font-size:9px;margin-top:5px;display:inline-flex;">⚠️ Model tahmini${R.s2date?' · S2 geçiş metadata: '+R.s2date:''}</div>`;
 
   const eel=qs('#sat-evi');
   if(eel) eel.innerHTML=`<div style="text-align:center;padding:8px 0;"><div style="font-size:28px;font-weight:800;color:var(--green2);">${R.evi}</div><span class="tag tg" style="margin-top:4px;display:inline-flex;">${parseFloat(R.evi)>0.4?'İyi Vejetasyon':'Gelişmekte'}</span></div>${bar(R.evi,0.9,'var(--green2)')}<div style="font-size:10px;color:var(--text3);margin-top:4px;">Atmosfer düzeltmeli (0–0.9)</div>`;
@@ -156,7 +163,7 @@ window.renderSat = (field, R) => {
     else                   msg='🌱 Normal gelişim seyri. Uydu indeksleri dönemle tutarlı.';
     const sm=R.soilM3?`Yüzey nemi (3-9cm): ${(parseFloat(R.soilM3)*100).toFixed(0)}% · Derin nem (9-27cm): ${R.soilMDeep?(parseFloat(R.soilMDeep)*100).toFixed(0)+'%':'—'}`:'';
     const vpdm=R.vpd?(parseFloat(R.vpd)>2.5?' · ⚠️ VPD yüksek (transpirasyon stresi)':' · VPD normal'):'';
-    iel.innerHTML=`<div class="ritem" style="background:var(--glt);"><div class="rico" style="background:var(--gbg);color:var(--green2);font-size:16px;">🛰️</div><div class="rbody"><div class="rtitle" style="margin-bottom:5px;">Uydu Tabanlı Vejetasyon Değerlendirmesi</div><div class="rsub">${msg}${sm?'<br/>'+sm+vpdm:''}</div><div style="font-size:10px;color:var(--text3);margin-top:6px;">NDVI:${R.ndvi} · EVI:${R.evi} · NDWI:${R.ndwi} · LST:${R.lst}°C${R.solar?' · Solar:'+R.solar+'MJ/m²':''} · ${R.isEst?'Model tahmini':'Gerçek uydu verisi'}</div></div></div>`;
+    iel.innerHTML=`<div class="ritem" style="background:var(--glt);"><div class="rico" style="background:var(--gbg);color:var(--green2);font-size:16px;">🛰️</div><div class="rbody"><div class="rtitle" style="margin-bottom:5px;">Model Tabanlı Vejetasyon Değerlendirmesi</div><div class="rsub">${msg}${sm?'<br/>'+sm+vpdm:''}</div><div style="font-size:10px;color:var(--text3);margin-top:6px;">NDVI:${R.ndvi} · EVI:${R.evi} · NDWI:${R.ndwi} · LST:${R.lst}°C${R.solar?' · Solar:'+R.solar+'MJ/m²':''} · Model tahmini${R.s2date?' · S2 yalnız metadata:'+R.s2date:''}</div></div></div>`;
   }
 
   const lnkel=qs('#sat-links');
@@ -179,7 +186,7 @@ window.satCtxStr = (field) => {
   if(!R) return 'Uydu verisi henüz alınmadı (🛰️ Uydu sekmesinden güncelleyin).';
   const surfPct = R.soilM3 ? (parseFloat(R.soilM3)*100).toFixed(0)+'%' : '—';
   const deepPct = R.soilMDeep ? (parseFloat(R.soilMDeep)*100).toFixed(0)+'%' : '—';
-  return `NDVI:${R.ndvi}(${ndviCls(R.ndvi).l}) EVI:${R.evi} NDWI:${R.ndwi} LST:${R.lst}°C ET₀:${R.et0||'—'}mm Solar:${R.solar||'—'}MJ/m² YüzeyNem(3-9cm):${surfPct} DerinNem(9-27cm):${deepPct} VPD:${R.vpd||'—'}kPa NASA30gYağış:${R.nasaRain30||'—'}mm S2geçiş:${R.s2count||0}(son:${R.s2date||'—'}) Kaynak:${R.isEst?'ModelTahmini':'GerçekUydu'}`;
+  return `NDVI:${R.ndvi}(${ndviCls(R.ndvi).l}) EVI:${R.evi} NDWI:${R.ndwi} LST:${R.lst}°C ET₀:${R.et0||'—'}mm Solar:${R.solar||'—'}MJ/m² YüzeyNem(3-9cm):${surfPct} DerinNem(9-27cm):${deepPct} VPD:${R.vpd||'—'}kPa NASA30gYağış:${R.nasaRain30||'—'}mm S2geçişMetadata:${R.s2count||0}(son:${R.s2date||'—'}) Kaynak:ModelTahmini`;
 };
 
 window.fetchAllSatellites = async () => {

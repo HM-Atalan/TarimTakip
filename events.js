@@ -274,7 +274,7 @@ window.renderEvTab = (field) => {
       return`<tr>
         <td style="white-space:nowrap;">${fd(e.date)}</td>
         <td><span>${EVI[e.type]||'📝'}</span> ${e.type}${e.planned?'<br/><span class="tag tb" style="font-size:9px;">Planlandı</span>':''}</td>
-        <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${extra?`<small style="color:var(--text3);">${extra}</small><br/>`:''}${e.notes||'—'}</td>
+        <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${extra?`<small style="color:var(--text3);">${window.esc(extra)}</small><br/>`:''}${window.esc(e.notes||'—')}</td>
         <td>${e.qty||'—'} ${e.unit||''}</td>
         <td>${e.cost?e.cost.toLocaleString('tr-TR')+'₺':'—'}</td>
         <td style="font-weight:600;">${total?Math.round(total).toLocaleString('tr-TR')+'₺':'—'}</td>

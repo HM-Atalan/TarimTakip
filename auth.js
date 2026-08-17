@@ -52,9 +52,10 @@ window.onAuthChange = async (user) => {
 window.updateChip = (user) => {
   if(!user) return;
   const av=qs('#user-avatar'); const nm=qs('#user-name');
-  if(user.photoURL) av.innerHTML=`<img src="${user.photoURL}" style="width:22px;height:22px;border-radius:50%;"/>`;
+  const photoURL = window.safeHttpUrl(user.photoURL);
+  if(photoURL) av.innerHTML=`<img src="${window.esc(photoURL)}" alt="" style="width:22px;height:22px;border-radius:50%;"/>`;
   else av.textContent=(user.displayName||user.email||'?')[0].toUpperCase();
   if(nm) nm.textContent=user.displayName||user.email||'';
   const ai=qs('#account-info');
-  if(ai) ai.innerHTML=`<div style="font-size:13px;"><strong>${user.displayName||''}</strong><br/>${user.email||''}</div>`;
+  if(ai) ai.innerHTML=`<div style="font-size:13px;"><strong>${window.esc(user.displayName||'')}</strong><br/>${window.esc(user.email||'')}</div>`;
 };

@@ -5,6 +5,22 @@
 const qs = s => document.querySelector(s);
 const gid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
 
+window.esc = (value) => String(value ?? '')
+  .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+  .replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+
+window.safeCssColor = (value, fallback = '#40916c') => {
+  const color = String(value || '').trim();
+  return /^(#[0-9a-f]{3,8}|rgba?\([\d.,%\s]+\)|hsla?\([\d.,%\s]+\))$/i.test(color) ? color : fallback;
+};
+
+window.safeHttpUrl = (value) => {
+  try {
+    const url = new URL(String(value || ''), window.location?.href || 'https://localhost/');
+    return ['http:', 'https:'].includes(url.protocol) ? url.href : '';
+  } catch (_) { return ''; }
+};
+
 window.dateKey = (date = new Date()) => {
   const d = new Date(date);
   const y = d.getFullYear();
@@ -14,6 +30,46 @@ window.dateKey = (date = new Date()) => {
 };
 
 window.tstr = () => window.dateKey();
+
+// FAO-56 Eq. 52 (Hargreaves) fallback for days where the primary
+// Penman-Monteith ET0 value is genuinely unavailable. Ra is calculated in
+// MJ m-2 day-1 and converted to equivalent evaporation (mm day-1).
+window.calcFallbackET0 = (dayWx, latitude) => {
+  const tmax = Number(dayWx?.tmax);
+  const tmin = Number(dayWx?.tmin);
+  const lat = Number(latitude);
+  const date = new Date(`${dayWx?.date || ''}T12:00:00`);
+  if (![tmax, tmin, lat].every(Number.isFinite) || Number.isNaN(date.getTime()) || tmax < tmin) return 0;
+
+  const start = new Date(date.getFullYear(), 0, 0);
+  const doy = Math.floor((date - start) / 86400000);
+  const phi = Math.max(-90, Math.min(90, lat)) * Math.PI / 180;
+  const dr = 1 + 0.033 * Math.cos((2 * Math.PI / 365) * doy);
+  const delta = 0.409 * Math.sin((2 * Math.PI / 365) * doy - 1.39);
+  const acosArg = Math.max(-1, Math.min(1, -Math.tan(phi) * Math.tan(delta)));
+  const ws = Math.acos(acosArg);
+  const raMJ = (24 * 60 / Math.PI) * 0.0820 * dr
+    * (ws * Math.sin(phi) * Math.sin(delta) + Math.cos(phi) * Math.cos(delta) * Math.sin(ws));
+  const raMm = Math.max(0, raMJ) * 0.408;
+  const tmean = (tmax + tmin) / 2;
+  return Math.max(0, 0.0023 * (tmean + 17.8) * Math.sqrt(Math.max(0, tmax - tmin)) * raMm);
+};
+
+window.resolveDailyET0 = (dayWx, field) => {
+  if (Number.isFinite(dayWx?.et0) && dayWx.et0 >= 0) {
+    return { value: dayWx.et0, source: 'fao56-penman-monteith' };
+  }
+  return {
+    value: window.calcFallbackET0(dayWx, field?.lat),
+    source: 'fao56-hargreaves-fallback',
+  };
+};
+
+window.calcEffectiveRain = (rainValue) => {
+  const rain = Math.max(0, Number(rainValue) || 0);
+  const coefficient = rain > 30 ? 0.70 : rain > 15 ? 0.82 : rain > 5 ? 0.92 : 1.0;
+  return rain * coefficient;
+};
 
 const fd = s => s ? new Date(s+'T12:00:00').toLocaleDateString('tr-TR',{day:'numeric',month:'short',year:'numeric'}) : '—';
 
@@ -111,13 +167,14 @@ window.parseIrrMm = (evt, fcs, field = null) => {
       mm = qty;
   }
 
-  // Fiziksel güvenlik sınırı: tek uygulamada yüzey tarla kapasitesinin
-  // 1.5 katını aşan giriş, muhtemelen yanlış birim/yazım hatasıdır.
+  // Anormal values are reported but not silently changed. Mutating a recorded
+  // event breaks both data integrity and the water ledger; validation belongs
+  // in the UI, while the model must account for the entered amount.
   const maxSingleApp = Math.max(1, fcs) * 1.5;
   if(mm > maxSingleApp) {
-    console.warn(`⚠️ Sulama girişi mantık dışı yüksek (${mm.toFixed(1)}mm) → ${maxSingleApp.toFixed(0)}mm ile sınırlandırıldı.`, evt);
+    console.warn(`⚠️ Sulama girişi olağandışı yüksek (${mm.toFixed(1)}mm; uyarı eşiği ${maxSingleApp.toFixed(0)}mm). Değer değiştirilmeden muhasebeleştirildi.`, evt);
   }
-  return Math.max(0, Math.min(mm, maxSingleApp));
+  return Math.max(0, mm);
 };
 
 window.calcMoistureState = (fc, taw, Dr) => {

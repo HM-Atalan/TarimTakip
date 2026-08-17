@@ -17,7 +17,7 @@ window.renderSB = async () => {
     const d = document.createElement('div');
     d.className = 'fi' + (f.id === CUR?.id ? ' on' : '');
     d.onclick = () => { showField(f.id); clSBmob(); };
-    d.innerHTML = `<div class="fi-dot" style="background:${f.color||'#40916c'};"></div><div class="fi-info"><div class="fi-name">${f.name}</div><div class="fi-sub">${f.crop||'Ürün yok'} · <span class="tag ${sc.tag}" style="font-size:9px;">${sc.l} %${s.surface?.pct||s.pct}%</span></div></div>`;
+    d.innerHTML = `<div class="fi-dot" style="background:${window.safeCssColor(f.color)};"></div><div class="fi-info"><div class="fi-name">${window.esc(f.name)}</div><div class="fi-sub">${window.esc(f.crop||'Ürün yok')} · <span class="tag ${sc.tag}" style="font-size:9px;">${sc.l} %${s.surface?.pct||s.pct}%</span></div></div>`;
     el.appendChild(d);
   });
 };
@@ -31,10 +31,10 @@ window.renderFKPIs = async (field) => {
   const he = calcHarvest(field);
   const el=qs('#fp-tags');
   if(el) el.innerHTML=`
-    ${field.crop?`<span class="tag tg">${field.crop}</span>`:''}
+    ${field.crop?`<span class="tag tg">${window.esc(field.crop)}</span>`:''}
     ${field.qty?`<span class="tag tgr">${field.qty} ${field.qunit}</span>`:''}
     <span class="tag tgr">${field.area} ${field.areaUnit||'dönüm'}</span>
-    ${field.location?`<span class="tag tgr">📍 ${field.location}</span>`:''}
+    ${field.location?`<span class="tag tgr">📍 ${window.esc(field.location)}</span>`:''}
     <span class="tag ${sc.tag}">${sc.l} %${s.surface.pct}</span>
     ${field.irrigation?`<span class="tag tb">💧 ${field.irrigation}</span>`:''}
     ${field.fencing?`<span class="tag tgr">🔒 ${field.fencing}</span>`:''}`;
@@ -66,12 +66,12 @@ window.renderDash = async () => {
     qs('#devents').innerHTML = ''; qs('#dplanned').innerHTML = ''; return;
   }
   const fieldsWithSoil = await window.computeAllSoils();
-  df.innerHTML = fieldsWithSoil.map(({f,s,sc,ph,he})=>{
-    return`<div class="evrow" style="cursor:pointer;" onclick="showField('${f.id}')">
-      <div class="evico" style="background:${f.color||'#40916c'}22;font-size:14px;">🌿</div>
+  df.innerHTML = fieldsWithSoil.map(({f,s,sc,ph,he}, fieldIndex)=>{
+    return`<div class="evrow" data-field-index="${fieldIndex}" style="cursor:pointer;">
+      <div class="evico" style="background:${window.safeCssColor(f.color)}22;font-size:14px;">🌿</div>
       <div class="evbody">
-        <div class="evtitle">${f.name} ${f.status==='fallow'?'<span class="tag ta">Nadas</span>':f.status==='planned'?'<span class="tag tb">Planlanan</span>':''}</div>
-        <div class="evsub">${f.crop||'Ürün yok'} · ${f.area}${f.areaUnit||'dön'} · ${f.location||'—'}</div>
+        <div class="evtitle">${window.esc(f.name)} ${f.status==='fallow'?'<span class="tag ta">Nadas</span>':f.status==='planned'?'<span class="tag tb">Planlanan</span>':''}</div>
+        <div class="evsub">${window.esc(f.crop||'Ürün yok')} · ${window.esc(f.area)}${window.esc(f.areaUnit||'dön')} · ${window.esc(f.location||'—')}</div>
         ${ph?`<div class="evsub" style="margin-top:2px;">📍 ${ph.stage}${he&&!he.already?' · Hasat ~'+he.daysLeft+'g':he?.already?' · 🟢 Hasat zamanı!':''}</div>`:''}
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;">
@@ -81,10 +81,14 @@ window.renderDash = async () => {
       </div>
     </div>`;
   }).join('');
+  df.querySelectorAll('[data-field-index]').forEach(row => {
+    const item = fieldsWithSoil[Number(row.dataset.fieldIndex)];
+    if (item) row.addEventListener('click', () => showField(item.f.id));
+  });
   const allEvs = [];
   DB.fields.forEach(f=>(f.events||[]).filter(e=>!e.planned).forEach(e=>allEvs.push({...e,fn:f.name})));
   allEvs.sort((a,b)=>b.date.localeCompare(a.date));
-  qs('#devents').innerHTML = allEvs.slice(0,4).map(e=>`<div class="evrow"><div class="evico" style="background:${EVC[e.type]||'#eee'};font-size:12px;">${EVI[e.type]||'📝'}</div><div class="evbody"><div class="evtitle">${e.fn} — ${e.type}</div><div class="evsub">${fd(e.date)}${e.notes?' · '+e.notes.slice(0,40):''}</div></div>${e.total?`<span class="evcost">${Math.round(e.total).toLocaleString()}₺</span>`:''}</div>`).join('')||'<div style="color:var(--text3);font-size:13px;">Kayıt yok.</div>';
+  qs('#devents').innerHTML = allEvs.slice(0,4).map(e=>`<div class="evrow"><div class="evico" style="background:${EVC[e.type]||'#eee'};font-size:12px;">${EVI[e.type]||'📝'}</div><div class="evbody"><div class="evtitle">${window.esc(e.fn)} — ${window.esc(e.type)}</div><div class="evsub">${fd(e.date)}${e.notes?' · '+window.esc(e.notes.slice(0,40)):''}</div></div>${e.total?`<span class="evcost">${Math.round(e.total).toLocaleString()}₺</span>`:''}</div>`).join('')||'<div style="color:var(--text3);font-size:13px;">Kayıt yok.</div>';
   const planned = [];
   DB.fields.forEach(f=>(f.events||[]).filter(e=>e.planned&&e.date>=tstr()).forEach(e=>planned.push({...e,fn:f.name,fc:f.color})));
   planned.sort((a,b)=>a.date.localeCompare(b.date));
@@ -251,19 +255,19 @@ window.renderSoil = async (field) => {
 window.renderLocInfo = (field) => {
   const el=qs('#fp-locinfo'); if(!el) return;
   const infraHTML = [];
-  if(field.irrigation) infraHTML.push(`<span class="tag tg">💧 ${field.irrigation}</span>`);
-  if(field.fencing) infraHTML.push(`<span class="tag ${field.fencing==='Yok'?'tr':'tgr'}">🔒 Çit: ${field.fencing}</span>`);
-  if(field.waterSource) infraHTML.push(`<span class="tag tb">🚿 Su: ${field.waterSource}</span>`);
+  if(field.irrigation) infraHTML.push(`<span class="tag tg">💧 ${window.esc(field.irrigation)}</span>`);
+  if(field.fencing) infraHTML.push(`<span class="tag ${field.fencing==='Yok'?'tr':'tgr'}">🔒 Çit: ${window.esc(field.fencing)}</span>`);
+  if(field.waterSource) infraHTML.push(`<span class="tag tb">🚿 Su: ${window.esc(field.waterSource)}</span>`);
   if(field.plantingAge) infraHTML.push(`<span class="tag tp2">🌳 Dikim yaşı: ${field.plantingAge} yıl</span>`);
   
   el.innerHTML=`<table class="tbl">
     <tr><td style="color:var(--text3);">Enlem</td><td>${field.lat?.toFixed(5)}°N</td></tr>
     <tr><td style="color:var(--text3);">Boylam</td><td>${field.lon?.toFixed(5)}°E</td></tr>
-    <tr><td style="color:var(--text3);">Mevki</td><td>${field.location||'—'}</td></tr>
+    <tr><td style="color:var(--text3);">Mevki</td><td>${window.esc(field.location||'—')}</td></tr>
     <tr><td style="color:var(--text3);">Alan</td><td>${field.area} ${field.areaUnit||'dönüm'}</td></tr>
     <tr><td style="color:var(--text3);">Ekim/Dikim</td><td>${fd(field.plantDate)}</td></tr>
     <tr><td style="color:var(--text3);">Hasat (Plan)</td><td>${fd(field.harvestDate)}</td></tr>
-    ${field.notes?`<tr><td style="color:var(--text3);">Not</td><td style="font-size:11px;">${field.notes.slice(0,120)}</td></tr>`:''}
+    ${field.notes?`<tr><td style="color:var(--text3);">Not</td><td style="font-size:11px;">${window.esc(field.notes.slice(0,120))}</td></tr>`:''}
   </table>
   ${infraHTML.length?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:10px;">${infraHTML.join('')}</div>`:''}
   ${field.polygon?.length >= 3 ? '<div style="font-size:11px;color:var(--green2);margin-top:6px;">📐 Tarla sınırı: '+field.polygon.length+' köşe noktalı poligon</div>' : ''}`;
@@ -404,7 +408,7 @@ window.renderRecTab = async (field) => {
 
   const ar2=qs('#rec-ai');
   if(ar2) ar2.innerHTML=field.aiRecs?.length
-    ? `<div class="bubble bb" style="white-space:pre-line;">${field.aiRecs[0].text}</div><div style="font-size:10px;color:var(--text3);margin-top:4px;">${fd(field.aiRecs[0].date)} tarihli analiz</div>`
+    ? `<div class="bubble bb" style="white-space:pre-line;">${window.esc(field.aiRecs[0].text)}</div><div style="font-size:10px;color:var(--text3);margin-top:4px;">${fd(field.aiRecs[0].date)} tarihli analiz</div>`
     : '<div style="color:var(--text3);font-size:13px;">🤖 AI Analiz butonu ile tüm veriler harmanlanarak bütünsel uzman yorumu oluşturulur.</div>';
 };
 
