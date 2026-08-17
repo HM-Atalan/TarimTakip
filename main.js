@@ -155,7 +155,6 @@ document.addEventListener('DOMContentLoaded',()=>{
   setTimeout(()=>{ if(!window.FB_MODE) noFBNotice(); }, 1500);
   qs('#main')?.addEventListener('click',()=>{ if(window.innerWidth<=768) qs('#sb')?.classList.remove('open'); });
   document.addEventListener('keydown',e=>{ if(e.key==='Escape') closePhViewer(); });
-  if('serviceWorker' in navigator && location.protocol.startsWith('http')) {
-    navigator.serviceWorker.register('./service-worker.js').catch(e=>console.warn('Çevrimdışı destek başlatılamadı:',e.message));
-  }
+  if('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(items=>items.forEach(item=>item.unregister()));
+  if('indexedDB' in window) indexedDB.deleteDatabase('tarimtakip-local');
 });

@@ -41,10 +41,11 @@ Bu komut bütün üretim JavaScript dosyalarının sözdizimini ve kalıcı regr
 - AI yanıtları güvenli HTML dönüşümü öncesinde tamamen kaçırılıyor.
 - UID izolasyonlu, varsayılan-red Firestore kuralları eklendi.
 - Blaze gerektiren Cloud Functions ve Firebase Storage projeden çıkarıldı.
-- Fotoğraflar ücretsiz yerel IndexedDB'de tutulur; JSON yedeği fotoğrafları da içerir ve eski gömülü fotoğraflar otomatik taşınır.
+- Fotoğraf dosyaları uygulamada, Firebase'de veya cihaz depolamasında tutulmaz; Google Drive Picker ile seçilen dosyaların yalnız kimlik ve açıklama metadata'sı Firestore'a yazılır.
 - Tarla kayıtlarına revizyon tabanlı iyimser eşzamanlılık, bekleyen kayıt durumu ve olay/fotoğraf korumalı çakışma birleştirme eklendi.
 - JSON içe aktarmaya dosya boyutu, şema, koordinat, tarih, kimlik, kayıt sayısı ve metin uzunluğu kontrolleri eklendi.
-- PWA manifesti, uygulama kabuğu önbelleği, görünür klavye odağı, hareket azaltma ve temel sekme/diyalog semantiği eklendi.
+- PWA/service worker çevrimdışı katmanı kaldırıldı; uygulama yalnız çevrimiçi çalışır. Görünür klavye odağı, hareket azaltma ve temel sekme/diyalog semantiği korunur.
+- Ana sayfaya kayıtlı ürünlerle eşleşen, ürün yoksa popüler ürünleri gösteren resmi açık hal fiyatı paneli eklendi.
 - Firebase Hosting güvenlik başlıkları ve GitHub Actions doğrulama akışı eklendi.
 - Kalıcı doğrulama paketi Spark mimarisini de denetler.
 

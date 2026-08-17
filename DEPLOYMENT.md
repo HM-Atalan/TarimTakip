@@ -7,6 +7,18 @@
 3. Remote Config içinde `GMINIK` adlı parametreyi oluşturup mevcut Gemini API anahtarınızı girin ve değişiklikleri yayınlayın.
 4. Google girişini kullanıyorsanız canlı alan adını Authentication → Authorized domains listesine ekleyin.
 
+## Google Drive Picker
+
+1. Google Cloud Console'da aynı proje için Google Picker API ve Google Drive API'yi etkinleştirin.
+2. Web application türünde OAuth 2.0 Client ID oluşturun; canlı site adresini Authorized JavaScript origins listesine ekleyin.
+3. Bir API key oluşturup HTTP referrer olarak yalnız canlı alan adınızı, API kısıtı olarak Google Picker API'yi seçin.
+4. Firebase Remote Config'e şu parametreleri ekleyip yayınlayın:
+   - `GDRIVE_CLIENT_ID`: Web OAuth istemci kimliği
+   - `GDRIVE_API_KEY`: Kısıtlanmış Picker API anahtarı
+   - `GDRIVE_APP_ID`: Google Cloud proje numarası
+
+Uygulama `drive.file` yetkisini kullanır; kullanıcı yalnız kendi seçtiği dosyalara erişim verir. Fotoğraf dosyası Firestore'a veya cihaz depolamasına kopyalanmaz.
+
 `GMINIK` akışı ilk sürümdeki davranışı korur. Remote Config değerleri tarayıcı tarafından alınabildiği için bu yöntem gerçek bir secret kasası değildir. Anahtarı Gemini API ile sınırlandırın, ücretsiz kota değerlerini düşük tutun ve kullanım ekranını düzenli kontrol edin.
 
 ## Doğrulama ve yayın
@@ -32,15 +44,11 @@ git remote add origin GITHUB_REPO_ADRESI
 git push -u origin main
 ```
 
-## Fotoğraflar
-
-Firebase Storage Spark planında kullanılamadığı için fotoğraflar tarayıcı IndexedDB'sinde saklanır. Başka bir cihaza geçmeden veya tarayıcı verilerini temizlemeden önce Ayarlar → JSON Dışa Aktar ile yedek alın. Dışa aktarılan JSON fotoğrafları da içerir.
-
 ## Yayın sonrası kontrol
 
 - Kayıt olma ve giriş
 - Tarla ve olayların iki cihaz arasında eşitlenmesi
-- Fotoğraf ekleme, sayfayı yenileme ve fotoğrafın aynı cihazda görünmesi
-- Fotoğraflı JSON dışa/içe aktarma
+- Google Drive bağlantısı, fotoğraf seçme ve yeniden yetkilendirme
+- Ana sayfada kayıtlı ürüne göre hal fiyatı ve ürün yokken popüler ürün görünümü
 - Remote Config `GMINIK` üzerinden AI analizi
 - Başka UID ile Firestore erişiminin reddedilmesi

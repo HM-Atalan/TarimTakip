@@ -8,11 +8,9 @@
 <meta name="theme-color" content="#2d6a4f"/>
 <title>TarımTakip</title>
 <meta name="description" content="Tarla, hava, toprak nemi, fenoloji, sulama ve üretim kayıtlarını tek yerde takip edin."/>
-<link rel="manifest" href="manifest.webmanifest"/>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%232d6a4f'/%3E%3Cpath d='M12 46h40M16 42c6-18 18-28 34-25-2 17-14 27-34 25z' fill='%23d8f3dc'/%3E%3Cpath d='M18 42c8-8 16-14 28-21' stroke='%232d6a4f' stroke-width='4' fill='none'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 <script type="module" src="firebase-config.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -26,8 +24,7 @@
       TarımTakip
     </div>
     <div id="no-fb-note" style="display:none;">
-      ⚠️ Firebase yapılandırılmamış. Yerel modda kullanabilirsiniz.
-      <br/><br/><button class="btn btnp" onclick="window.enterLocalMode()" style="width:100%;justify-content:center;">Yerel Modda Kullan</button>
+      ⚠️ Çevrimiçi bağlantı veya Firebase hizmeti kullanılamıyor. Lütfen internet bağlantınızı kontrol edip sayfayı yenileyin.
     </div>
     <div id="auth-form-wrap">
       <div class="auth-tabs">
@@ -106,6 +103,10 @@
       <div class="card"><div class="ct">Son Olaylar</div><div id="devents"></div></div>
       <div class="card"><div class="ct">Planlanan Görevler</div><div id="dplanned"></div></div>
     </div>
+  </div>
+  <div class="card" id="market-card">
+    <div class="ct">📈 Güncel Hal Fiyatları <button class="btn btns" onclick="window.refreshMarketPrices()">🔄 Yenile</button></div>
+    <div id="market-prices"><div class="empty">Fiyatlar yükleniyor…</div></div>
   </div>
 </div>
 
@@ -241,7 +242,7 @@
 
   <!-- PHOTO TAB -->
   <div id="tp-ph" class="tp">
-    <div class="card" style="font-size:11px;color:var(--text2);">ℹ️ Fotoğraflarınızı yedeklemek veya başka bir cihaza aktarmak için Ayarlar → JSON Dışa Aktar seçeneğini kullanın. Yeni cihazda JSON İçe Aktar ile fotoğraflarınızı geri yükleyebilirsiniz.</div>
+    <div class="card" style="font-size:11px;color:var(--text2);">ℹ️ Fotoğraflar Google Drive hesabınızdan seçilir. TarımTakip yalnız seçtiğiniz dosyaların bağlantı ve açıklama bilgilerini kaydeder.</div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
       <span style="font-size:14px;font-weight:700;">Fotoğraflar</span>
       <button class="btn btns btnp" onclick="window.openPhotoM()">+ Fotoğraf</button>
@@ -342,7 +343,7 @@
 
   <div class="card">
     <div class="ct">📅 6 Aylık Hava Geçmişi</div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">GDD ve hasat tahminleri için son 6 aya kadar hava verisi otomatik indirilir ve sıkıştırılmış şekilde yerel depolanır. Bu sayede hesaplamalar çok daha güvenilir olur.</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">GDD ve hasat tahminleri için son 6 aya kadar hava geçmişini günceller.</div>
     <button class="btn btnp" onclick="Promise.allSettled(DB.fields.map(f=>window.fetchWXHistory(f))).then(()=>toast('Hava geçmişleri güncellendi ✓'))">🔄 Geçmişleri Güncelle</button>
   </div>
 </div>
@@ -587,10 +588,10 @@
   <button class="mclose" onclick="window.closeM('photo')">✕</button>
   <div class="mtitle">📷 Fotoğraf Ekle & AI Analiz</div>
   <div class="fg">
-    <label>Fotoğraf * <span style="font-size:11px;color:var(--text3);">(Otomatik sıkıştırılır ~150KB)</span></label>
-    <input type="file" id="p-file" accept="image/*" onchange="window.prevPhoto(event)"/>
+    <label>Google Drive Fotoğrafı *</label>
+    <button type="button" class="btn btnp" onclick="window.chooseDrivePhoto()">☁️ Google Drive'dan Seç</button>
     <div id="p-prev" style="margin-top:6px;"></div>
-    <div id="p-size-info" style="font-size:11px;color:var(--text3);margin-top:3px;"></div>
+    <div id="p-size-info" style="font-size:11px;color:var(--text3);margin-top:3px;">Yalnız seçtiğiniz fotoğrafa erişim izni istenir.</div>
   </div>
   <div class="fr">
     <div class="fg"><label>Tarih</label><input type="date" id="p-date"/></div>
@@ -620,10 +621,12 @@
 <script defer src="globals.js"></script>
 <script defer src="utils.js"></script>
 <script defer src="weather.js"></script>
+<script defer src="market.js"></script>
 <script defer src="soilModel.js"></script>
 <script defer src="satellite.js"></script>
 <script defer src="phenology.js"></script>
 <script defer src="events.js"></script>
+<script defer src="googleDrive.js"></script>
 <script defer src="photos.js"></script>
 <script defer src="ai.js"></script>
 <script defer src="fieldCrud.js"></script>

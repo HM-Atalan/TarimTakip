@@ -28,12 +28,12 @@ test('Firebase deployment is Spark-only and includes deny-by-default Firestore r
   assert.equal(config.storage,undefined);
 });
 
-test('PWA and accessible viewport are configured', () => {
+test('application is online-only and accessible viewport is configured', () => {
   const html=read('index.html');
-  assert.ok(html.includes('manifest.webmanifest'));
+  assert.ok(!html.includes('manifest.webmanifest'));
   assert.ok(!html.includes('user-scalable=no'));
-  assert.ok(fs.existsSync(path.join(root,'service-worker.js')));
-  assert.equal(JSON.parse(read('manifest.webmanifest')).name,'TarımTakip');
+  assert.ok(!fs.existsSync(path.join(root,'service-worker.js')));
+  assert.ok(read('main.js').includes('getRegistrations()'));
 });
 
 test('moisture maintenance is in settings and startup prepares the model before rendering', () => {
@@ -42,8 +42,6 @@ test('moisture maintenance is in settings and startup prepares the model before 
   const settings=html.slice(html.indexOf('<!-- SETTINGS -->'));
   assert.ok(!dashboard.includes('reset-moisture-btn'));
   assert.ok(settings.includes('reset-moisture-btn'));
-  const auth=read('auth.js');
-  assert.ok(auth.indexOf('await window.prepareMoistureModels') < auth.indexOf('await renderAll()'));
   const sync=read('fieldCrud.js').slice(read('fieldCrud.js').indexOf('window.syncFromDB'));
   assert.ok(sync.indexOf('await window.prepareMoistureModels') < sync.indexOf('await renderAll()'));
 });
@@ -54,15 +52,24 @@ test('startup moisture persistence prefers completed local ledger and avoids sat
   assert.ok(soil.includes('await window.fbSaveRZWB(uid, field.id, ledger)'));
   assert.ok(!read('auth.js').includes('fetchAllSatellites()'));
   assert.ok(!read('fieldCrud.js').includes('fetchAllSatellites()'));
-  assert.ok(read('main.js').includes('await window.fetchStartupSoilAnchors(fields)'));
-  assert.ok(read('main.js').includes('await window.rebuildAllMoistureModels(fields)'));
+  assert.ok(read('main.js').includes('await window.fetchStartupSoilAnchors(migrationTargets)'));
+  assert.ok(read('main.js').includes('await window.rebuildAllMoistureModels(anchored)'));
+  assert.ok(read('main.js').includes("localStorage.getItem('tt_rzwb_version_'+field.id)!==window.MOISTURE_MODEL_VERSION"));
   assert.ok(read('satellite.js').includes("lats=targets.map(field=>Number(field.lat)).join(',')"));
-  assert.ok(read('service-worker.js').includes("tarimtakip-v2"));
 });
 
-test('photos use local IndexedDB instead of Blaze-only Firebase Storage', () => {
+test('photos use Google Drive metadata and no local binary storage', () => {
   const photos=read('photos.js');
-  assert.ok(photos.includes("indexedDB.open('tarimtakip-local'"));
-  assert.ok(photos.includes('storeLocalPhoto'));
+  assert.ok(photos.includes('pendingDrivePhoto'));
+  assert.ok(read('googleDrive.js').includes('google.picker.PickerBuilder'));
+  assert.ok(read('googleDrive.js').includes("scope:'https://www.googleapis.com/auth/drive.file'"));
+  assert.ok(!photos.includes('storeLocalPhoto'));
   assert.ok(!read('firebase-config.js').includes('firebase-storage.js'));
+});
+
+test('dashboard market prices use an official anonymous open-data endpoint', () => {
+  assert.ok(read('index.html').includes('market-prices'));
+  const market=read('market.js');
+  assert.ok(market.includes('https://openapi.izmir.bel.tr/api/ibb/halfiyatlari/sebzemeyve/'));
+  assert.ok(market.includes('https://www.hal.gov.tr/Sayfalar/FiyatDetaylari.aspx'));
 });

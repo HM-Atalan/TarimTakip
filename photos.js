@@ -2,61 +2,17 @@
 // photos.js – Fotoğraf yönetimi ve analizi
 // ============================================================
 
-window.openPhotoDB = () => new Promise((resolve,reject) => {
-  const request=indexedDB.open('tarimtakip-local',1);
-  request.onupgradeneeded=()=>{ if(!request.result.objectStoreNames.contains('photos')) request.result.createObjectStore('photos'); };
-  request.onsuccess=()=>resolve(request.result); request.onerror=()=>reject(request.error);
-});
-window.storeLocalPhoto = async (id,data) => {
-  const db=await window.openPhotoDB();
-  return new Promise((resolve,reject)=>{ const tx=db.transaction('photos','readwrite'); tx.objectStore('photos').put(data,id); tx.oncomplete=()=>{db.close();resolve();}; tx.onerror=()=>reject(tx.error); });
-};
-window.getLocalPhoto = async (id) => {
-  if(!id) return '';
-  const db=await window.openPhotoDB();
-  return new Promise((resolve,reject)=>{ const tx=db.transaction('photos','readonly'); const req=tx.objectStore('photos').get(id); req.onsuccess=()=>{db.close();resolve(req.result||'');}; req.onerror=()=>reject(req.error); });
-};
-window.deleteLocalPhoto = async (id) => {
-  if(!id) return;
-  const db=await window.openPhotoDB();
-  return new Promise((resolve,reject)=>{ const tx=db.transaction('photos','readwrite'); tx.objectStore('photos').delete(id); tx.oncomplete=()=>{db.close();resolve();}; tx.onerror=()=>reject(tx.error); });
-};
-
-window.prevPhoto = async (e) => {
-  const file=e.target.files[0]; if(!file) return;
-  const si=qs('#p-size-info'); if(si) si.textContent='Sıkıştırılıyor...';
-  pendPh=await compressImg(file,150,0.82);
-  const kb=Math.round(pendPh.length*0.75/1024);
-  qs('#p-prev').innerHTML=`<img src="${pendPh}" style="width:100%;max-height:140px;object-fit:cover;border-radius:var(--r);margin-top:6px;"/>`;
-  if(si) si.textContent=`~${kb} KB (sıkıştırıldı)`;
-  if(window.EXIF) {
-    EXIF.getData(file, function() {
-      const dateTime = EXIF.getTag(this, 'DateTimeOriginal');
-      if(dateTime) {
-        const parts = dateTime.split(' ')[0].split(':');
-        if(parts.length === 3) {
-          const exifDate = `${parts[0]}-${parts[1]}-${parts[2]}`;
-          qs('#p-date').value = exifDate;
-          toast(`Fotoğraf tarihi: ${exifDate}`, false);
-        }
-      }
-    });
-  }
-};
-
-window.openPhotoM = () => { pendPh=null; qs('#p-prev').innerHTML=''; qs('#p-ai').innerHTML=''; qs('#p-date').value=tstr(); qs('#p-note').value=''; if(qs('#p-size-info'))qs('#p-size-info').textContent=''; qs('#p-file').value=''; qs('#m-photo').classList.add('on'); };
+window.openPhotoM = () => { pendPh=null; window.pendingDrivePhoto=null; qs('#p-prev').innerHTML=''; qs('#p-ai').innerHTML=''; qs('#p-date').value=tstr(); qs('#p-note').value=''; if(qs('#p-size-info'))qs('#p-size-info').textContent='Yalnız seçtiğiniz fotoğrafa erişim izni istenir.'; qs('#m-photo').classList.add('on'); };
 
 window.savePhoto = async () => {
-  if(!pendPh){ toast('Fotoğraf seçin',true); return; } if(!CUR) return;
+  if(!window.pendingDrivePhoto){ toast('Google Drive’dan bir fotoğraf seçin',true); return; } if(!CUR) return;
   CUR.photos=CUR.photos||[];
   const aiText=qs('#p-ai')?.innerText||'';
-  const photo={id:gid(),localPhotoId:gid(),date:qs('#p-date').value||tstr(),type:qs('#p-type').value,note:qs('#p-note').value,ai:aiText.length>10?aiText:''};
-  try { await window.storeLocalPhoto(photo.localPhotoId,pendPh); }
-  catch(e){ toast('Fotoğraf cihazda saklanamadı: '+e.message,true); return; }
+  const photo={id:gid(),...window.pendingDrivePhoto,date:qs('#p-date').value||tstr(),type:qs('#p-type').value,note:qs('#p-note').value,ai:aiText.length>10?aiText:''};
   CUR.photos.push(photo);
   const fi=DB.fields.findIndex(f=>f.id===CUR.id); if(fi>=0) DB.fields[fi]=CUR;
   await saveFieldToDB(CUR);
-  closeM('photo'); pendPh=null; renderPhTab(CUR); toast('Fotoğraf kaydedildi');
+  closeM('photo'); pendPh=null; window.pendingDrivePhoto=null; renderPhTab(CUR); toast('Drive fotoğrafı kaydedildi');
 };
 
 window.renderPhTab = (field) => {
@@ -65,7 +21,7 @@ window.renderPhTab = (field) => {
   grid.innerHTML=field.photos.map((p,idx)=>{
     return `
     <div style="aspect-ratio:1;border-radius:var(--r);overflow:hidden;background:var(--bg3);border:1px solid var(--bdr);position:relative;cursor:pointer;" onclick="openPhV(${idx})">
-      <img data-local-photo="${window.esc(p.localPhotoId||'')}" src="${window.esc(window.safePhotoUrl(p.url||p.data))}" alt="${window.esc(p.type||'Tarla fotoğrafı')}" loading="lazy" style="width:100%;height:100%;object-fit:cover;"/>
+      <img data-drive-photo="${window.esc(p.driveFileId||'')}" src="icon.svg" alt="${window.esc(p.type||'Tarla fotoğrafı')}" loading="lazy" style="width:100%;height:100%;object-fit:cover;"/>
       <div class="ph-thumb-ov">
         <button class="btn btns" onclick="event.stopPropagation();openPhV(${idx})">🔍</button>
         <button class="btn btns btnd" onclick="event.stopPropagation();delPhoto(${idx})">🗑️</button>
@@ -73,17 +29,17 @@ window.renderPhTab = (field) => {
       <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.55);color:#fff;font-size:9px;padding:3px 5px;">${window.esc(fd(p.date))} · ${window.esc(p.type||'')}</div>
     </div>`;
   }).join('');
-  grid.querySelectorAll('img[data-local-photo]').forEach(async img=>{
-    if(!img.dataset.localPhoto) return;
-    try{ const data=await window.getLocalPhoto(img.dataset.localPhoto); if(data) img.src=data; }catch(e){ console.warn('Yerel fotoğraf okunamadı:',e.message); }
+  grid.querySelectorAll('img[data-drive-photo]').forEach(async img=>{
+    if(!img.dataset.drivePhoto) return;
+    try{ const p=field.photos.find(photo=>photo.driveFileId===img.dataset.drivePhoto); if(window.DRIVE_STATE.token&&p) img.src=await window.getDrivePhotoData(p); }catch(e){ console.warn('Drive fotoğrafı okunamadı:',e.message); }
   });
 };
 
 window.openPhV = async (idx) => {
   if(!CUR?.photos?.[idx]) return;
   curPhIdx=idx; const p=CUR.photos[idx];
-  const src=p.localPhotoId?await window.getLocalPhoto(p.localPhotoId):window.safePhotoUrl(p.url||p.data);
-  qs('#ph-viewer-img').src=src;
+  try{ qs('#ph-viewer-img').src=await window.getDrivePhotoData(p); }
+  catch(e){ toast('Fotoğraf için Google Drive bağlantısı gerekli: '+e.message,true); return; }
   qs('#ph-viewer-info').textContent=`${fd(p.date)} · ${p.type}${p.note?' · '+p.note:''}${p.ai&&p.ai.length>10?'\n🤖 '+p.ai.slice(0,150)+'...':''}`;
   qs('#ph-viewer').classList.add('on');
 };
@@ -102,16 +58,14 @@ window.editPhNote = () => {
 window.delCurPh = async () => {
   if(curPhIdx===null||!CUR?.photos) return;
   if(!confirm('Bu fotoğrafı silmek istediğinizden emin misiniz?')) return;
-  const [removed]=CUR.photos.splice(curPhIdx,1);
-  if(removed?.localPhotoId) try{ await window.deleteLocalPhoto(removed.localPhotoId); }catch(e){ toast('Yerel fotoğraf temizleme uyarısı: '+e.message,true); }
+  CUR.photos.splice(curPhIdx,1);
   const fi=DB.fields.findIndex(f=>f.id===CUR.id); if(fi>=0) DB.fields[fi]=CUR;
   await saveFieldToDB(CUR); closePhViewer(); renderPhTab(CUR); toast('Silindi');
 };
 
 window.delPhoto = async (idx) => {
   if(!CUR?.photos||!confirm('Bu fotoğrafı silmek istediğinizden emin misiniz?')) return;
-  const [removed]=CUR.photos.splice(idx,1);
-  if(removed?.localPhotoId) try{ await window.deleteLocalPhoto(removed.localPhotoId); }catch(e){ toast('Yerel fotoğraf temizleme uyarısı: '+e.message,true); }
+  CUR.photos.splice(idx,1);
   const fi=DB.fields.findIndex(f=>f.id===CUR.id); if(fi>=0) DB.fields[fi]=CUR;
   await saveFieldToDB(CUR); renderPhTab(CUR); toast('Silindi');
 };

@@ -1,5 +1,5 @@
 // ============================================================
-// auth.js – Kimlik doğrulama (Firebase / yerel mod)
+// auth.js – Çevrimiçi Firebase kimlik doğrulama
 // ============================================================
 
 window.swAuthTab = (tab, el) => {
@@ -28,16 +28,7 @@ window.showAErr = (m,msg) => { const el=qs('#'+m+'-err'); if(el){ el.style.displ
 
 window.noFBNotice = () => { qs('#no-fb-note').style.display='block'; qs('#auth-form-wrap').style.display='none'; };
 
-window.enterLocalMode = async () => {
-  LOCAL=true; qs('#auth-screen').classList.add('hidden');
-  loadLocalDB();
-  await window.prepareMoistureModels(DB.fields);
-  await renderAll();
-  DB.fields.forEach(f=>fetchWX(f));
-  toast('Yerel modda çalışıyorsunuz');
-};
-
-window.doSignOut = async () => { if(window.FB_MODE&&window.FB_USER) await window.fbSignOut(); else{ LOCAL=false; DB.fields=[]; } qs('#auth-screen')?.classList.remove('hidden'); };
+window.doSignOut = async () => { if(window.FB_MODE&&window.FB_USER) await window.fbSignOut(); DB.fields=[]; qs('#auth-screen')?.classList.remove('hidden'); };
 
 window.onAuthChange = async (user) => {
   if(user){
@@ -45,7 +36,7 @@ window.onAuthChange = async (user) => {
     updateChip(user);
     await syncFromDB();
   }else{
-    if(!LOCAL) qs('#auth-screen')?.classList.remove('hidden');
+    qs('#auth-screen')?.classList.remove('hidden');
   }
 };
 

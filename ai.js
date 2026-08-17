@@ -119,7 +119,7 @@ window.runAI = async () => {
   if(!SATC[CUR.id]||(Date.now()-SATC[CUR.id].at>3600000)){ addB('sys','🛰️ Uydu verisi alınıyor...'); await fetchSat(CUR); }
   goTab('ai');
   const chat=qs('#ai-chat'); if(chat) chat.innerHTML='';
-  const photoCount=(CUR.photos||[]).filter(p=>p.localPhotoId||p.data).length;
+  const photoCount=(CUR.photos||[]).filter(p=>p.driveFileId).length;
   const memoryLen = window.getAIMemory(CUR.id).length;
   addB('sys',`🔬 Tüm veriler + uydu + ${photoCount} fotoğraf + ${memoryLen} önceki konuşma işleniyor...`);
   addB('load','');
@@ -157,7 +157,8 @@ KURALLAR:
 
     const parts=[{text:prompt}];
     for(const [i,p] of (CUR.photos||[]).entries()){
-      const photoData=p.localPhotoId?await window.getLocalPhoto(p.localPhotoId):p.data;
+      let photoData='';
+      try{ if(p.driveFileId&&window.DRIVE_STATE.token) photoData=await window.getDrivePhotoData(p); }catch(e){ console.warn('AI için Drive fotoğrafı alınamadı:',e.message); }
       if(photoData&&photoData.startsWith('data:')){
         try{
           const b64=photoData.split(',')[1];

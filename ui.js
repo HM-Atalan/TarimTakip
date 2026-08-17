@@ -60,6 +60,7 @@ window.renderDash = async () => {
   <div class="kpi"><div class="kpi-l">Toplam Maliyet</div><div class="kpi-v">${Math.round(tc).toLocaleString('tr-TR')}</div><div class="kpi-s">₺</div></div>
   <div class="kpi"><div class="kpi-l">Ekili Tarla</div><div class="kpi-v">${activeCount}<small>/${DB.fields.length}</small></div></div>
   <div class="kpi"><div class="kpi-l">Nadas</div><div class="kpi-v">${fallowCount}</div></div>`;
+  window.renderMarketPanel().catch(error=>console.warn('Piyasa fiyatları:',error.message));
   const df = qs('#dfields');
   if(!DB.fields.length){
     df.innerHTML = '<div class="empty">🌾<br/>Tarla yok.<br/>"+ Yeni Tarla" ile başlayın.</div>';

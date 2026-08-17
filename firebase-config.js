@@ -63,6 +63,12 @@ window.getGeminiKey = async () => {
   return GEMINI_KEY || null;
 };
 
+window.getRemoteSetting = async (name) => {
+  if(remoteConfigPromise) await remoteConfigPromise;
+  if(!remoteConfig) return '';
+  return getValue(remoteConfig,String(name)).asString()||'';
+};
+
 window.fbSaveField = async (uid, field) => {
   if(!db) return;
   const ref = doc(db, 'users', uid, 'fields', field.id);

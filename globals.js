@@ -14,7 +14,6 @@ window.AI_MEMORY = {};
 window.pendPh = null;
 window.curTab = 'map';
 window.curPhIdx = null;
-window.LOCAL = false;
 window.WX_HISTORY = {};
 window.RZWB_CACHE = {};
 window.REP_FILTER = { period: 'all', year: new Date().getFullYear(), month: null };

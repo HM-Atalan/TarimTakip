@@ -127,7 +127,6 @@ window.delField = async (id) => {
   const target=DB.fields.find(f=>f.id===id);
   try { await deleteFieldFromDB(id); }
   catch(e){ toast('Tarla buluttan silinemedi; kayıt korundu: '+e.message,true); return; }
-  if(target?.photos) await Promise.allSettled(target.photos.filter(p=>p.localPhotoId).map(p=>window.deleteLocalPhoto(p.localPhotoId)));
   DB.fields=DB.fields.filter(f=>f.id!==id);
   saveLocalDB();
   delete WXC[id]; delete SATC[id]; invSoil(id);
@@ -226,14 +225,9 @@ window.calcPolyArea = (ring) => {
 
 window.saveFieldToDB = async (field) => {
   const uid=window.FB_USER?.uid;
-  // Eski sürümden gelen gömülü fotoğrafları ilk kayıtta ücretsiz IndexedDB'ye taşı.
-  if(Array.isArray(field.photos)) {
-    for(const photo of field.photos) {
-      if(photo.data && !photo.localPhotoId) {
-        photo.localPhotoId=gid(); await window.storeLocalPhoto(photo.localPhotoId,photo.data); delete photo.data;
-      }
-    }
-  }
+  if(Array.isArray(field.photos)) field.photos=field.photos.filter(photo=>photo?.driveFileId).map(photo=>{
+    const {data,localPhotoId,url,...metadata}=photo; return metadata;
+  });
   const clean=JSON.parse(JSON.stringify(field));
   delete clean._soilCache; delete clean._syncStatus;
   field._syncStatus=uid&&window.FB_MODE?'pending':undefined;
@@ -283,6 +277,11 @@ window.syncFromDB = async () => {
   try {
     const fields = await window.fbLoadFields(uid);
     DB.fields = window.mergeCloudFields(fields || []);
+    for(const field of DB.fields){
+      const previousCount=field.photos?.length||0;
+      field.photos=(field.photos||[]).filter(photo=>photo?.driveFileId);
+      if(field.photos.length!==previousCount) await window.saveFieldToDB(field);
+    }
     saveLocalDB();
     invSoilAll();
     await window.prepareMoistureModels(DB.fields);
@@ -308,9 +307,6 @@ window.loadSettings = () => {
 
 window.expData = async () => {
   const fields=JSON.parse(JSON.stringify(DB.fields));
-  for(const field of fields) for(const photo of (field.photos||[])) {
-    if(photo.localPhotoId) try{ photo.data=await window.getLocalPhoto(photo.localPhotoId); }catch(e){ console.warn('Fotoğraf yedeğe eklenemedi:',e.message); }
-  }
   const blob=new Blob([JSON.stringify({version:2,exportedAt:new Date().toISOString(),fields},null,2)],{type:'application/json'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='tarim_'+tstr()+'.json'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 };
@@ -333,15 +329,15 @@ window.validateImport = (data) => {
     const photos=Array.isArray(raw.photos)?raw.photos.slice(0,100).filter(photo=>photo&&typeof photo==='object').map(photo=>({
       id:String(photo.id||gid()).slice(0,80),date:/^\d{4}-\d{2}-\d{2}$/.test(photo.date)?photo.date:tstr(),
       type:String(photo.type||'genel').slice(0,40),note:String(photo.note||'').slice(0,1000),
-      ...(/^[a-z0-9_-]{6,80}$/i.test(String(photo.localPhotoId||''))?{localPhotoId:String(photo.localPhotoId)}:{}),
-      ...(window.safePhotoUrl(photo.url)?{url:window.safePhotoUrl(photo.url)}:{}),
-      ...(window.safePhotoUrl(photo.data).startsWith('data:')?{data:window.safePhotoUrl(photo.data)}:{})
-    })):[];
+      driveFileId:String(photo.driveFileId||'').slice(0,200),driveName:String(photo.driveName||'Fotoğraf').slice(0,240),
+      mimeType:/^image\//.test(String(photo.mimeType||''))?String(photo.mimeType):'image/jpeg',
+      driveUrl:window.safeHttpUrl(photo.driveUrl)
+    })).filter(photo=>photo.driveFileId):[];
     return {...raw,id,name,lat,lon,area:Math.max(0,Number(raw.area)||0),notes:String(raw.notes||'').slice(0,5000),events,photos,_syncStatus:'pending'};
   });
 };
 
-window.impData = (e) => { const f=e.target.files[0]; if(!f) return; if(f.size>25*1024*1024){ toast('Dosya 25 MB sınırını aşıyor.',true); return; } const r=new FileReader(); r.onload=async ev=>{ try{ DB.fields=window.validateImport(JSON.parse(ev.target.result)); for(const field of DB.fields) for(const photo of (field.photos||[])){ if(photo.data){ photo.localPhotoId=photo.localPhotoId||gid(); await window.storeLocalPhoto(photo.localPhotoId,photo.data); delete photo.data; } } saveLocalDB(); renderAll(); toast('Doğrulanmış veriler ve yerel fotoğraflar içe aktarıldı'); }catch(err){ toast('İçe aktarma hatası: '+err.message,true); } finally { e.target.value=''; } }; r.readAsText(f); };
+window.impData = (e) => { const f=e.target.files[0]; if(!f) return; if(f.size>25*1024*1024){ toast('Dosya 25 MB sınırını aşıyor.',true); return; } const r=new FileReader(); r.onload=async ev=>{ try{ DB.fields=window.validateImport(JSON.parse(ev.target.result)); saveLocalDB(); renderAll(); toast('Doğrulanmış veriler içe aktarıldı'); }catch(err){ toast('İçe aktarma hatası: '+err.message,true); } finally { e.target.value=''; } }; r.readAsText(f); };
 
 window.exportToCSV = () => {
   if(!DB.fields.length){ toast('Aktarılacak veri yok', true); return; }
