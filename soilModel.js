@@ -655,21 +655,29 @@ window.debugSoilModel = async (field = window.CUR) => {
 };
 
 window.computeAllSoils = async (force = false) => {
+  if (window.SOIL_COMPUTE_PROMISE) return window.SOIL_COMPUTE_PROMISE;
   const now = Date.now();
   if (!force && window.SOIL_CACHE.data && (now - window.SOIL_CACHE.lastUpdated < 300000)) {
     return window.SOIL_CACHE.data;
   }
-  if(force) window.RZWB_CACHE = {};
-  const soilData = await Promise.all(DB.fields.map(async f => {
-    invSoil(f.id);
-    const s = await calcSoil(f);
-    const sc = scl(s.surface.pct);
-    const ph = calcPheno(f);
-    const he = calcHarvest(f);
-    return { f, s, sc, ph, he };
-  }));
-  window.SOIL_CACHE = { data: soilData, lastUpdated: Date.now() };
-  return soilData;
+  window.SOIL_COMPUTE_PROMISE = (async () => {
+    if(force) window.RZWB_CACHE = {};
+    const soilData = await Promise.all(DB.fields.map(async f => {
+      invSoil(f.id);
+      const s = await calcSoil(f);
+      const sc = scl(s.surface.pct);
+      const ph = calcPheno(f);
+      const he = calcHarvest(f);
+      return { f, s, sc, ph, he };
+    }));
+    window.SOIL_CACHE = { data: soilData, lastUpdated: Date.now() };
+    return soilData;
+  })();
+  try {
+    return await window.SOIL_COMPUTE_PROMISE;
+  } finally {
+    window.SOIL_COMPUTE_PROMISE = null;
+  }
 };
 
 window.invSoil = (fid) => { Object.keys(SC).filter(k=>k.startsWith(fid+'_')).forEach(k=>delete SC[k]); };

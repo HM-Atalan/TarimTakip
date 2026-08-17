@@ -6,11 +6,17 @@
 window.agrd = (crop) => { return CROP_AGR[crop] || CROP_AGR.default; };
 window.importFieldFile = window.importFF;
 window.deleteCurrentPh = window.delCurPh;
-window.MOISTURE_MODEL_VERSION = 'rzwb-startup-anchor-v3';
+window.MOISTURE_MODEL_VERSION = 'rzwb-startup-anchor-v4';
+window.MOISTURE_PREPARE_PROMISE = null;
 
 // İlk ekran çizilmeden önce yerel hava geçmişini yükler ve nem defterini
 // zorla doğrular. Eksik/bozuk kısa defterler otomatik yeniden oluşturulur.
 window.prepareMoistureModels = async (fields = window.DB?.fields || []) => {
+  // Firebase oturum açılışı ve ekran çizimi aynı anda bu fonksiyona
+  // ulaşabilir. Aynı defteri iki ayrı akışta silip yeniden kurmak, açılışta
+  // kısa süreli %100/yanlış sonucun kalıcılaşmasına neden oluyordu.
+  if(window.MOISTURE_PREPARE_PROMISE) return window.MOISTURE_PREPARE_PROMISE;
+  window.MOISTURE_PREPARE_PROMISE = (async () => {
   if(!fields.length) return [];
   fields.forEach(field=>{
     if(WX_HISTORY[field.id]?.days?.length) return;
@@ -34,7 +40,13 @@ window.prepareMoistureModels = async (fields = window.DB?.fields || []) => {
       console.warn('Tek seferlik açılış nem onarımı ertelendi:',error.message);
     }
   }
-  return window.computeAllSoils(true);
+    return window.computeAllSoils(true);
+  })();
+  try {
+    return await window.MOISTURE_PREPARE_PROMISE;
+  } finally {
+    window.MOISTURE_PREPARE_PROMISE = null;
+  }
 };
 
 window.resetMoistureModels = async () => {

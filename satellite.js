@@ -33,7 +33,10 @@ window.fetchStartupSoilAnchors = async (fields = window.DB?.fields || []) => {
   targets.forEach((field,index)=>{
     const location=locations[index]||locations[0];
     const times=location?.hourly?.time||[];
-    const nowHour=new Date().toISOString().slice(0,13);
+    // Open-Meteo saatleri Europe/Istanbul yerel saatidir; UTC ISO saatiyle
+    // eşleştirmek 3 saat eski nem ankrajı seçebiliyordu.
+    const localNow=new Date();
+    const nowHour=`${window.dateKey(localNow)}T${String(localNow.getHours()).padStart(2,'0')}`;
     let hourIndex=times.findIndex(value=>String(value).slice(0,13)===nowHour);
     if(hourIndex<0) hourIndex=Math.min(new Date().getHours(),Math.max(0,times.length-1));
     const soilM3=Number(location?.hourly?.soil_moisture_3_to_9cm?.[hourIndex]);
